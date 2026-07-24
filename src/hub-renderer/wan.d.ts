@@ -1,4 +1,4 @@
-export type ModuleId = "cliproxy" | "net";
+export type ModuleId = "cliproxy" | "net" | "ssh";
 
 export interface SuperAppSettings {
   lastModule: ModuleId | null;
@@ -46,6 +46,7 @@ export interface SuperAppApi {
   moduleState: () => Promise<{
     cliproxy: Record<string, unknown>;
     net: Record<string, unknown>;
+    ssh: Record<string, unknown>;
   }>;
   getVersion: () => Promise<string>;
   getUpdateStatus: () => Promise<UpdateStatus>;

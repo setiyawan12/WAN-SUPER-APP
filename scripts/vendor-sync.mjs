@@ -41,6 +41,23 @@ execSync(
   { stdio: "inherit" }
 );
 
+// WANN SSH (sibling): build bundle via electron-vite lalu vendor hasilnya.
+// Berbeda dari cliproxy/net (source verbatim) — ssh dipaketkan dulu oleh toolchain-nya.
+const sshSrc = path.join(mono, "wann-ssh");
+if (existsSync(sshSrc)) {
+  execSync("npm run build", { cwd: sshSrc, stdio: "inherit" });
+  for (const part of ["main", "preload", "renderer"]) {
+    const from = path.join(sshSrc, "out", part);
+    const to = path.join(root, "modules/ssh", part);
+    mkdirSync(to, { recursive: true });
+    // Hanya sub-folder hasil build yang di-sync; adapter/ & package.json lokal (patch
+    // Super App) TIDAK disentuh.
+    execSync(`rsync -a --delete "${from}/" "${to}/"`, { stdio: "inherit" });
+  }
+} else {
+  console.warn("[vendor-sync] sibling wann-ssh tidak ditemukan — lewati modul ssh");
+}
+
 const handbook = path.join(mono, "HANDBOOK-WAN-SUPER-APP.md");
 if (existsSync(handbook)) {
   cpSync(handbook, path.join(root, "HANDBOOK-WAN-SUPER-APP.md"));

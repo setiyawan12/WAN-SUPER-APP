@@ -88,4 +88,16 @@ if (existsSync(clipAdapter)) {
   await copyDir(clipAdapter, path.join(root, "out/modules/cliproxy/adapter"));
 }
 
-console.log("[copy-assets] hub preload, cliproxy backend/preload, net module → out/");
+// SSH module (CJS bundle: main + preload + renderer + adapter).
+// Same CJS-boundary reason as net: root package.json is "type":"module", so the
+// local package.json re-declares out/modules/ssh as CommonJS.
+await copyFile(
+  path.join(root, "modules/ssh/package.json"),
+  path.join(root, "out/modules/ssh/package.json")
+);
+await copyDir(path.join(root, "modules/ssh/main"), path.join(root, "out/modules/ssh/main"));
+await copyDir(path.join(root, "modules/ssh/preload"), path.join(root, "out/modules/ssh/preload"));
+await copyDir(path.join(root, "modules/ssh/renderer"), path.join(root, "out/modules/ssh/renderer"));
+await copyDir(path.join(root, "modules/ssh/adapter"), path.join(root, "out/modules/ssh/adapter"));
+
+console.log("[copy-assets] hub preload, cliproxy backend/preload, net module, ssh module → out/");

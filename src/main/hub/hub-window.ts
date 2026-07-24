@@ -44,6 +44,10 @@ function netPreloadPath(): string {
   return path.join(__dirname, "../../modules/net/electron/launcher-preload.js");
 }
 
+function sshPreloadPath(): string {
+  return path.join(__dirname, "../../modules/ssh/preload/index.js");
+}
+
 function loadHubContent(win: BrowserWindow): void {
   const devUrl = process.env.VITE_DEV_SERVER_URL_HUB;
   if (devUrl) {
@@ -68,6 +72,17 @@ function loadNetContent(win: BrowserWindow): void {
   void win.loadFile(
     path.join(__dirname, "../../modules/net/electron/launcher.html")
   );
+}
+
+function loadSshContent(win: BrowserWindow): void {
+  const devUrl = process.env.VITE_DEV_SERVER_URL_SSH;
+  if (devUrl) {
+    void win.loadURL(devUrl);
+  } else {
+    void win.loadFile(
+      path.join(__dirname, "../../modules/ssh/renderer/index.html")
+    );
+  }
 }
 
 function bindShellChrome(win: BrowserWindow): void {
@@ -243,6 +258,23 @@ export function ensureModuleShell(
     });
     shellView = "cliproxy";
     loadCliproxyContent(win);
+    return win;
+  }
+
+  if (id === "ssh") {
+    const win = createShellWindow({
+      title: "WAN Super App — WANN SSH",
+      preload: sshPreloadPath(),
+      startHidden: opts.startHidden,
+      minWidth: 900,
+      minHeight: 560,
+      width: getSettings().windowBoundsHub?.width ?? 1200,
+      height: getSettings().windowBoundsHub?.height ?? 780,
+      // wann-ssh WAJIB sandbox:true (Bab 18 handbook SSH).
+      sandbox: true,
+    });
+    shellView = "ssh";
+    loadSshContent(win);
     return win;
   }
 

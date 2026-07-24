@@ -70,7 +70,8 @@ export function App() {
   const [state, setState] = useState<{
     cliproxy: Record<string, unknown>;
     net: Record<string, unknown>;
-  }>({ cliproxy: {}, net: {} });
+    ssh: Record<string, unknown>;
+  }>({ cliproxy: {}, net: {}, ssh: {} });
 
   const refresh = useCallback(async () => {
     if (!window.superApp) return;
@@ -165,6 +166,8 @@ export function App() {
   const clipRunning = !!state.cliproxy.running;
   const netRunning = !!state.net.running;
   const tunnels = Number(state.net.liveTunnels ?? state.net.tunnels ?? 0);
+  const sshRunning = !!state.ssh.running;
+  const sshVault = String(state.ssh.vault ?? "");
 
   const updateHint = useMemo(() => {
     if (update.message) return update.message;
@@ -269,6 +272,25 @@ export function App() {
           <div className="actions">
             <button disabled={opening === "net"} onClick={() => void openModule("net")}>
               {opening === "net" ? "Opening…" : "Buka WAN NET"}
+            </button>
+          </div>
+        </section>
+
+        <section className="card ssh">
+          <h2>WANN SSH</h2>
+          <p className="desc">
+            SSH client dengan encrypted vault (Argon2id + AES-256-GCM), TOFU
+            host-key, terminal xterm.js, dan sinkronisasi cloud opsional (Firebase).
+          </p>
+          <div className="pills">
+            <span className={`pill ${sshRunning ? "on" : "off"}`}>
+              {sshRunning ? "Running" : "Idle"}
+            </span>
+            {sshVault && <span className="pill">vault: {sshVault}</span>}
+          </div>
+          <div className="actions">
+            <button disabled={opening === "ssh"} onClick={() => void openModule("ssh")}>
+              {opening === "ssh" ? "Opening…" : "Buka WANN SSH"}
             </button>
           </div>
         </section>

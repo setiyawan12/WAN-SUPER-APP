@@ -19,6 +19,11 @@ files:
   - out/**
   - package.json
 
+# Native module dari modul WANN SSH tidak boleh di dalam asar (.node butuh dlopen).
+asarUnpack:
+  - "**/node_modules/argon2/**"
+  - "**/node_modules/ssh2/**"
+
 mac:
   # cloudflared (arm64) downloaded by CI into modules/net/cloudflared
   extraResources:

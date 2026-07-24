@@ -20,10 +20,11 @@ const require = createRequire(import.meta.url);
 
 let cliproxyHandle: ModuleHandle | null = null;
 let netHandle: ModuleHandle | null = null;
+let sshHandle: ModuleHandle | null = null;
 let cleanedUp = false;
 
 function getHandles() {
-  return { cliproxy: cliproxyHandle, net: netHandle };
+  return { cliproxy: cliproxyHandle, net: netHandle, ssh: sshHandle };
 }
 
 async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<ModuleHandle> {
@@ -67,6 +68,26 @@ async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<
       netHandle.show();
     }
     handle = netHandle!;
+  } else if (id === "ssh") {
+    if (!sshHandle) {
+      const bootPath = path.join(__dirname, "../modules/ssh/adapter/boot.cjs");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require(bootPath) as {
+        bootSsh: (o: {
+          show: boolean;
+          embedOnly?: boolean;
+          moduleRoot: string;
+        }) => Promise<ModuleHandle>;
+      };
+      sshHandle = await mod.bootSsh({
+        show: show && openInNewWindow,
+        embedOnly: !openInNewWindow,
+        moduleRoot: path.join(__dirname, "../modules/ssh"),
+      });
+    } else if (show && openInNewWindow) {
+      sshHandle.show();
+    }
+    handle = sshHandle!;
   } else {
     throw new Error(`Unknown module: ${id}`);
   }

@@ -4,10 +4,11 @@
 
 # WAN Super App
 
-**Satu shell Electron. Dua modul kelas produksi. Nol ribet.**
+**Satu shell Electron. Tiga modul kelas produksi. Nol ribet.**
 
-CLIProxyAPI desktop (Chat · Cowork · Neuron · VS Code / JetBrains) berpadu dengan
-WAN NET (Cloudflare tunnel + inspector) dalam satu aplikasi native yang elegan.
+CLIProxyAPI desktop (Chat · Cowork · Neuron · VS Code / JetBrains), WAN NET
+(Cloudflare tunnel + inspector), dan WANN SSH (SSH client + encrypted vault)
+berpadu dalam satu aplikasi native yang elegan.
 
 <br/>
 
@@ -43,14 +44,15 @@ WAN NET (Cloudflare tunnel + inspector) dalam satu aplikasi native yang elegan.
 
 ## Sekilas
 
-WAN Super App membungkus **dua aplikasi mandiri** ke dalam satu shell Electron:
+WAN Super App membungkus **tiga aplikasi mandiri** ke dalam satu shell Electron:
 
 | Modul | Berbasis | Kemampuan |
 |-------|----------|-----------|
-| **WAN CLIProxyAPI** | `wan-cliproxyapi` | Chat AI, Cowork Mode, Neuron Activity, sinkronisasi VS Code / JetBrains |
+| **WANN X RENN CLIProxyAPI** | `wan-cliproxyapi` | Chat AI, Cowork Mode, Neuron Activity, sinkronisasi VS Code / JetBrains |
 | **WAN NET** | `wan-net` | Cloudflare Tunnel + inspector lalu-lintas |
+| **WANN SSH** | `wann-ssh` | SSH client + encrypted vault (Argon2id + AES-256-GCM), TOFU host-key, terminal xterm.js, sync cloud opsional (Firebase) |
 
-> **Alur pemakaian:** Buka app → **Hub** (2 kartu) → pilih modul → UI & fungsi persis seperti app aslinya.
+> **Alur pemakaian:** Buka app → **Hub** (3 kartu) → pilih modul → UI & fungsi persis seperti app aslinya.
 
 Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP.md)**.
 
@@ -58,8 +60,9 @@ Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP
 
 ## Fitur Utama
 
-- 🧩 **Dua modul, satu binary** — tidak perlu memasang dua aplikasi terpisah.
-- 🪟 **Hub terpusat** — landing dengan dua kartu modul, dukungan mode window/replace.
+- 🧩 **Tiga modul, satu binary** — tidak perlu memasang tiga aplikasi terpisah.
+- 🪟 **Hub terpusat** — landing dengan tiga kartu modul, dukungan mode window/replace.
+- 🔐 **SSH aman** — vault zero-knowledge (Argon2id + AES-256-GCM), auto-lock, TOFU host-key.
 - 🔄 **Auto-update in-app** — feed langsung dari GitHub Releases.
 - 🖥️ **Cross-platform** — macOS (arm64), Windows (NSIS), Linux (AppImage/deb).
 - 🎨 **Branding premium** — ikon monogram + tray template icon adaptif dark/light.
@@ -73,7 +76,12 @@ Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP
 |----------|-------|
 | Node.js  | **20+** |
 | OS       | macOS · Windows · Linux |
-| Electron | `^31` (dikelola otomatis) |
+| Electron | `^43` (dikelola otomatis) |
+
+> **Native module (WANN SSH → `argon2`).** `npm install` menjalankan `postinstall`
+> (`electron-builder install-app-deps`) untuk menyiapkan native module terhadap ABI
+> Electron. Toolchain build: macOS = Xcode Command Line Tools · Windows = VS 2022
+> Build Tools (C++) + Python 3.x · Linux = build-essential, python3, libsecret-1-dev.
 
 ---
 
@@ -112,7 +120,7 @@ npm run dev
 | `npm start` | Build lalu jalankan Electron |
 | `npm run typecheck` | Type-check tanpa emit (main + cliproxy) |
 | `npm run dist` | Bundling installer via `electron-builder` |
-| `npm run vendor:sync` | Rsync dari sibling `wan-cliproxyapi` / `wan-net` |
+| `npm run vendor:sync` | Rsync dari sibling `wan-cliproxyapi` / `wan-net`; build + vendor bundle `wann-ssh` |
 | `npm run clean` | Hapus folder `out/` |
 
 ---
@@ -120,22 +128,25 @@ npm run dev
 ## Arsitektur Singkat
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                   WAN Super App (Electron)                │
-│  ┌────────────────────────────────────────────────────┐  │
-│  │   Main Process — app.whenReady · tray · lifecycle  │  │
-│  └───────────────┬───────────────────┬────────────────┘  │
-│                  │                   │                    │
-│        ┌─────────▼────────┐ ┌────────▼─────────┐          │
-│        │   Hub Renderer   │ │  Module Windows  │          │
-│        │   (2 cards)      │ │  cliproxy / net  │          │
-│        └──────────────────┘ └──────────────────┘          │
-└──────────────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────────────────┐
+│                     WAN Super App (Electron)                    │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │     Main Process — app.whenReady · tray · lifecycle      │  │
+│  └───────────────┬────────────────────────┬─────────────────┘  │
+│                  │                        │                     │
+│        ┌─────────▼────────┐ ┌─────────────▼──────────────┐      │
+│        │   Hub Renderer   │ │       Module Windows       │      │
+│        │    (3 cards)     │ │   cliproxy / net / ssh     │      │
+│        └──────────────────┘ └────────────────────────────┘      │
+└────────────────────────────────────────────────────────────────┘
 ```
 
+- **CLIProxyAPI** dimuat via dynamic `import` (ESM, `super-boot.js`).
 - **WAN NET** dimuat via `createRequire` (`boot.cjs`, CommonJS).
-- **CLIProxyAPI** dimuat via dynamic `import` (ESM).
-- Hanya Super App yang memiliki `app.whenReady`, tray, dan proses quit.
+- **WANN SSH** dimuat via `createRequire` (`modules/ssh/adapter/boot.cjs`); bundle
+  di-*build* electron-vite lalu di-*vendor* (CJS + native `argon2`).
+- Setiap modul meng-guard lifecycle di balik `WAN_SUPER_APP_EMBED` — hanya Super App
+  yang memiliki `app.whenReady`, tray, dan proses quit.
 
 ---
 
@@ -143,9 +154,10 @@ npm run dev
 
 ```
 src/main/           # Super App shell (hub, tray, lifecycle)
-src/hub-renderer/   # Hub UI (2 cards)
+src/hub-renderer/   # Hub UI (3 cards)
 modules/cliproxy/   # Working copy CLIProxyAPI + super-boot
 modules/net/        # Working copy WAN NET + embed API
+modules/ssh/        # Bundle WANN SSH (main/preload/renderer) + adapter/boot.cjs
 vendor/             # Snapshot read-only sumber modul
 build/              # Ikon, entitlements, notarize
 scripts/            # Build helper (copy-assets, dev, vendor-sync)
@@ -160,16 +172,28 @@ scripts/            # Build helper (copy-assets, dev, vendor-sync)
 | Hub settings | `{userData}/super-app.json` |
 | CLIProxyAPI home | `~/.wan-super-app/cliproxyapi` |
 | WAN NET config | `{userData}/wan-net-cfg.json` |
+| WANN SSH store | `{userData}/wann-ssh.json` (item/outbox/vault-meta) |
+| WANN SSH Firebase config | `{userData}/firebase-config.json` (opsional, sync cloud) |
 
 > `{userData}` di macOS = `~/Library/Application Support/WAN Super App/`.
+>
+> ⚠️ Vault WANN SSH terikat ke `{userData}` Super App (appId `com.wan.superapp`), berbeda
+> dari app `wann-ssh` standalone (`com.wann.wannssh`). Data tidak otomatis terbagi —
+> gunakan Firebase sync bila perlu berbagi antar-app.
 
 ---
 
 ## Catatan Teknis
 
-- Electron dipin ke `^31` — kompatibel dengan wan-net (CJS) dan cliproxy (ESM shell).
-- Modul Net dimuat lewat `createRequire` (`boot.cjs`); cliproxy lewat dynamic `import`.
-- Hanya Super App yang mengelola `app.whenReady`, tray, dan quit.
+- Electron dipin ke `^43` — kompatibel dengan wan-net (CJS), cliproxy (ESM shell), dan
+  wann-ssh (bundle CJS + native `argon2` N-API yang ABI-stabil lintas versi Electron).
+- Net & SSH dimuat lewat `createRequire` (`boot.cjs`); cliproxy lewat dynamic `import`.
+- Modul SSH: main/preload/renderer di-*bundle* electron-vite lalu di-*vendor* ke
+  `modules/ssh/`; `package.json` lokal menandai subtree sebagai CommonJS.
+- Native `argon2`/`ssh2` di-`asarUnpack` saat packaging (lihat `electron-builder.yml`).
+- Hanya Super App yang mengelola `app.whenReady`, tray, dan quit; setiap modul di-guard
+  `WAN_SUPER_APP_EMBED`.
+- Handbook integrasi modul SSH: **[HANDBOOK-INTEGRASI-WANN-SSH.md](./HANDBOOK-INTEGRASI-WANN-SSH.md)**.
 
 ---
 
@@ -418,6 +442,8 @@ echo "Release:  https://github.com/setiyawan12/WAN-SUPER-APP/releases/tag/v0.1.5
 | Release kosong / partial | Salah satu OS job gagal | Perbaiki job gagal, push **tag versi baru** |
 | Update tak melihat versi baru | Assets belum ready / versi app ≥ release | Tunggu publish selesai; pastikan versi app terpasang < tag rilis |
 | Salah commit ter-tag | Tag di commit lama | `git tag -d vX.Y.Z` lokal, buat ulang di commit benar |
+| WANN SSH gagal buka / `argon2` error | Native module belum disiapkan untuk Electron | Jalankan `npm install` (memicu `postinstall` → `electron-builder install-app-deps`) |
+| Jendela SSH blank / `Cannot use import statement` | `modules/ssh` di-treat ESM | Pastikan `modules/ssh/package.json` (`"type":"commonjs"`) ikut ter-copy ke `out/` |
 
 **Hapus tag salah** (hati-hati — mengganggu yang sudah mengunduh):
 

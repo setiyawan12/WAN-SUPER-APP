@@ -12,7 +12,11 @@ import {
 
 export function registerHubIpc(opts: {
   openModule: (id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>;
-  getHandles: () => { cliproxy: ModuleHandle | null; net: ModuleHandle | null };
+  getHandles: () => {
+    cliproxy: ModuleHandle | null;
+    net: ModuleHandle | null;
+    ssh: ModuleHandle | null;
+  };
 }): void {
   ipcMain.handle("super:getSettings", () => getSettings());
 
@@ -38,7 +42,7 @@ export function registerHubIpc(opts: {
   });
 
   ipcMain.handle("super:openModule", async (_e, id: ModuleId) => {
-    if (id !== "cliproxy" && id !== "net") {
+    if (id !== "cliproxy" && id !== "net" && id !== "ssh") {
       return { ok: false, error: "unknown module" };
     }
     try {
@@ -61,10 +65,12 @@ export function registerHubIpc(opts: {
     const h = opts.getHandles();
     const cliproxy = h.cliproxy;
     const net = h.net;
+    const ssh = h.ssh;
     let cliproxyStatus: Record<string, unknown> = {
       running: !!cliproxy?.isRunning(),
     };
     let netStatus: Record<string, unknown> = { running: !!net?.isRunning() };
+    let sshStatus: Record<string, unknown> = { running: !!ssh?.isRunning() };
     try {
       if (cliproxy?.getStatus) cliproxyStatus = { ...cliproxyStatus, ...(await cliproxy.getStatus()) };
     } catch {
@@ -75,7 +81,12 @@ export function registerHubIpc(opts: {
     } catch {
       /* ignore */
     }
-    return { cliproxy: cliproxyStatus, net: netStatus };
+    try {
+      if (ssh?.getStatus) sshStatus = { ...sshStatus, ...(await ssh.getStatus()) };
+    } catch {
+      /* ignore */
+    }
+    return { cliproxy: cliproxyStatus, net: netStatus, ssh: sshStatus };
   });
 
   ipcMain.handle("super:getVersion", () => app.getVersion());

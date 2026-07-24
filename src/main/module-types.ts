@@ -2,7 +2,7 @@
 
 import type { BrowserWindow } from "electron";
 
-export type ModuleId = "cliproxy" | "net";
+export type ModuleId = "cliproxy" | "net" | "ssh";
 
 export interface ModuleHandle {
   id: ModuleId;

@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
 let openModuleFn: ((id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>) | null =
   null;
-let getHandles: (() => { cliproxy: ModuleHandle | null; net: ModuleHandle | null }) | null =
+let getHandles: (() => { cliproxy: ModuleHandle | null; net: ModuleHandle | null; ssh: ModuleHandle | null }) | null =
   null;
 
 function loadIcon(): Electron.NativeImage {
@@ -36,7 +36,7 @@ function loadIcon(): Electron.NativeImage {
 
 export function setTrayCallbacks(opts: {
   openModule: (id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>;
-  getHandles: () => { cliproxy: ModuleHandle | null; net: ModuleHandle | null };
+  getHandles: () => { cliproxy: ModuleHandle | null; net: ModuleHandle | null; ssh: ModuleHandle | null };
 }): void {
   openModuleFn = opts.openModule;
   getHandles = opts.getHandles;
@@ -45,7 +45,7 @@ export function setTrayCallbacks(opts: {
 
 export function rebuildTrayMenu(): void {
   if (!tray) return;
-  const handles = getHandles?.() ?? { cliproxy: null, net: null };
+  const handles = getHandles?.() ?? { cliproxy: null, net: null, ssh: null };
   const settings = getSettings();
 
   const menu = Menu.buildFromTemplate([
@@ -75,6 +75,19 @@ export function rebuildTrayMenu(): void {
         },
         {
           label: handles.net?.isRunning() ? "Running" : "Not started",
+          enabled: false,
+        },
+      ],
+    },
+    {
+      label: "WANN SSH",
+      submenu: [
+        {
+          label: "Buka dashboard",
+          click: () => void openModuleFn?.("ssh", { show: true }),
+        },
+        {
+          label: handles.ssh?.isRunning() ? "Running" : "Not started",
           enabled: false,
         },
       ],
