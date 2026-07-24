@@ -188,6 +188,126 @@ button.ghost {
   font-size: 0.85rem;
 }
 
+.update-card {
+  margin-top: 20px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  padding: 18px 20px;
+  background: linear-gradient(160deg, rgba(124, 108, 255, 0.12), var(--bg1));
+  box-shadow: var(--shadow);
+}
+
+.update-card.phase-available,
+.update-card.phase-downloaded {
+  border-color: rgba(62, 207, 142, 0.35);
+}
+
+.update-card.phase-error {
+  border-color: rgba(255, 107, 138, 0.4);
+}
+
+.update-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.update-head h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.update-sub {
+  margin: 4px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.update-sub code {
+  font-size: 0.78rem;
+  color: #c9c4ff;
+}
+
+.update-pill.phase-available,
+.update-pill.phase-downloaded {
+  color: #d7ffe9;
+  border-color: rgba(62, 207, 142, 0.45);
+  background: rgba(62, 207, 142, 0.12);
+}
+
+.update-pill.phase-checking,
+.update-pill.phase-downloading {
+  color: #d8e4ff;
+  border-color: rgba(124, 108, 255, 0.45);
+  background: rgba(124, 108, 255, 0.14);
+}
+
+.update-pill.phase-error {
+  color: #ffd0da;
+  border-color: rgba(255, 107, 138, 0.45);
+  background: rgba(255, 107, 138, 0.12);
+}
+
+.update-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.update-meta .muted {
+  display: block;
+  color: var(--muted);
+  font-size: 0.75rem;
+  margin-bottom: 2px;
+}
+
+.update-meta strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+.update-msg {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  min-height: 1.2em;
+}
+
+.update-progress {
+  margin: 0 0 14px;
+}
+
+.update-progress .bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.update-progress .fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  transition: width 0.2s ease;
+}
+
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.update-actions {
+  margin-top: 4px;
+}
+
 .settings {
   margin-top: 28px;
   border: 1px solid var(--border);

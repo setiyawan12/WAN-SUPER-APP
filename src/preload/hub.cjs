@@ -8,4 +8,19 @@ contextBridge.exposeInMainWorld("superApp", {
   showHub: () => ipcRenderer.invoke("super:showHub"),
   moduleState: () => ipcRenderer.invoke("super:moduleState"),
   getVersion: () => ipcRenderer.invoke("super:getVersion"),
+  getUpdateStatus: () => ipcRenderer.invoke("super:getUpdateStatus"),
+  checkForUpdates: () => ipcRenderer.invoke("super:checkForUpdates"),
+  downloadUpdate: () => ipcRenderer.invoke("super:downloadUpdate"),
+  installUpdate: () => ipcRenderer.invoke("super:installUpdate"),
+  onUpdateStatus: (cb) => {
+    const handler = (_event, status) => {
+      try {
+        cb(status);
+      } catch {
+        /* ignore renderer callback errors */
+      }
+    };
+    ipcRenderer.on("super:updateStatus", handler);
+    return () => ipcRenderer.removeListener("super:updateStatus", handler);
+  },
 });

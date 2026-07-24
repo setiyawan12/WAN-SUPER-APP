@@ -10,6 +10,7 @@ import {
 } from "./hub/hub-window.js";
 import { getSettings, setSetting } from "./hub/hub-settings.js";
 import { registerHubIpc } from "./hub/hub-ipc.js";
+import { initAppUpdater, onUpdateStatus } from "./hub/app-updater.js";
 import { createTray, setTrayCallbacks, rebuildTrayMenu } from "./tray.js";
 import { shutdownAll } from "./lifecycle.js";
 import type { ModuleHandle, ModuleId } from "./module-types.js";
@@ -94,6 +95,9 @@ if (!app.requestSingleInstanceLock()) {
     setTrayCallbacks({ openModule, getHandles });
     registerHubIpc({ openModule, getHandles });
     createTray();
+    // GitHub Releases feed (electron-builder.yml publish). Auto-check after hub mounts.
+    initAppUpdater({ autoCheck: true });
+    onUpdateStatus(() => rebuildTrayMenu());
     createHubWindow(settings.autoLaunch && settings.startHidden);
 
     if (process.platform !== "linux") {

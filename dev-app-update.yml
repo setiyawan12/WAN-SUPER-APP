@@ -1,0 +1,6 @@
+# Used by electron-updater only when running unpackaged (npm run dev / npm start).
+# Production builds embed app-update.yml from electron-builder publish config.
+provider: github
+owner: setiyawan12
+repo: WAN-SUPER-APP
+updaterCacheDirName: wan-super-app-updater

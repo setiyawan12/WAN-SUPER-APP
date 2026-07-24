@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { showHubWindow } from "./hub/hub-window.js";
 import { getSettings, setSetting } from "./hub/hub-settings.js";
+import { checkForAppUpdates, getUpdateStatus, installAppUpdate } from "./hub/app-updater.js";
 import type { ModuleHandle, ModuleId } from "./module-types.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -84,6 +85,24 @@ export function rebuildTrayMenu(): void {
             openAsHidden: getSettings().startHidden,
           });
         }
+      },
+    },
+    {
+      label: (() => {
+        const u = getUpdateStatus();
+        if (u.phase === "downloaded") return `Pasang update ${u.availableVersion ?? ""}…`.trim();
+        if (u.phase === "available") return `Update tersedia (${u.availableVersion})…`;
+        if (u.phase === "downloading") return `Mengunduh update… ${Math.round(u.percent)}%`;
+        return "Check for Update…";
+      })(),
+      click: () => {
+        showHubWindow();
+        const u = getUpdateStatus();
+        if (u.phase === "downloaded") {
+          installAppUpdate();
+          return;
+        }
+        void checkForAppUpdates();
       },
     },
     { type: "separator" },

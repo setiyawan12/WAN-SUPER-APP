@@ -12,6 +12,28 @@ export interface SuperAppSettings {
   windowBoundsHub?: { width: number; height: number; x?: number; y?: number };
 }
 
+export type UpdatePhase =
+  | "idle"
+  | "checking"
+  | "available"
+  | "not-available"
+  | "downloading"
+  | "downloaded"
+  | "error";
+
+export interface UpdateStatus {
+  phase: UpdatePhase;
+  currentVersion: string;
+  availableVersion: string | null;
+  percent: number;
+  bytesPerSecond: number;
+  transferred: number;
+  total: number;
+  message: string | null;
+  isPackaged: boolean;
+  lastCheckedAt: number | null;
+}
+
 export interface SuperAppApi {
   getSettings: () => Promise<SuperAppSettings>;
   setSetting: <K extends keyof SuperAppSettings>(
@@ -26,6 +48,11 @@ export interface SuperAppApi {
     net: Record<string, unknown>;
   }>;
   getVersion: () => Promise<string>;
+  getUpdateStatus: () => Promise<UpdateStatus>;
+  checkForUpdates: () => Promise<UpdateStatus>;
+  downloadUpdate: () => Promise<UpdateStatus>;
+  installUpdate: () => Promise<{ ok: boolean; error?: string }>;
+  onUpdateStatus: (cb: (status: UpdateStatus) => void) => () => void;
 }
 
 declare global {

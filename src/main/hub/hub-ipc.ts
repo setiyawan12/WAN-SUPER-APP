@@ -3,6 +3,12 @@ import { getSettings, setSetting, setSettings, type SuperAppSettings } from "./h
 import { showHubWindow } from "./hub-window.js";
 import type { ModuleHandle, ModuleId } from "../module-types.js";
 import { rebuildTrayMenu } from "../tray.js";
+import {
+  checkForAppUpdates,
+  downloadAppUpdate,
+  getUpdateStatus,
+  installAppUpdate,
+} from "./app-updater.js";
 
 export function registerHubIpc(opts: {
   openModule: (id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>;
@@ -73,4 +79,9 @@ export function registerHubIpc(opts: {
   });
 
   ipcMain.handle("super:getVersion", () => app.getVersion());
+
+  ipcMain.handle("super:getUpdateStatus", () => getUpdateStatus());
+  ipcMain.handle("super:checkForUpdates", async () => checkForAppUpdates());
+  ipcMain.handle("super:downloadUpdate", async () => downloadAppUpdate());
+  ipcMain.handle("super:installUpdate", () => installAppUpdate());
 }
