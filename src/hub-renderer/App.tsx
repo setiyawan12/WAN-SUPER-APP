@@ -188,8 +188,46 @@ export function App() {
     <div className="app">
       <header className="header">
         <div className="brand">
-          <h1>WAN Super App</h1>
-          <p>Pilih modul App.</p>
+          <div className="brand-row">
+            <div className="brand-mark" aria-hidden="true">
+              <svg viewBox="0 0 64 64" width="40" height="40">
+                <defs>
+                  <linearGradient id="wmGold" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#F8E7B8" />
+                    <stop offset="50%" stopColor="#C9A227" />
+                    <stop offset="100%" stopColor="#F0D78A" />
+                  </linearGradient>
+                  <linearGradient id="wmAurora" x1="14" y1="12" x2="52" y2="54" gradientUnits="userSpaceOnUse">
+                    <stop offset="0%" stopColor="#7C5CFF" />
+                    <stop offset="100%" stopColor="#5EEAD4" />
+                  </linearGradient>
+                </defs>
+                <rect x="2" y="2" width="60" height="60" rx="16" fill="#0B0A12" stroke="url(#wmGold)" strokeWidth="1.8" />
+                <path
+                  d="M16 20 L24 46 L32 30 L40 46 L48 20"
+                  fill="none"
+                  stroke="url(#wmGold)"
+                  strokeWidth="4.2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M16 20 L24 46 L32 30 L40 46 L48 20"
+                  fill="none"
+                  stroke="url(#wmAurora)"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity="0.95"
+                />
+                <circle cx="32" cy="30" r="1.8" fill="#FFF8E7" />
+              </svg>
+            </div>
+            <div>
+              <h1>WAN Super App</h1>
+              <p>Pilih modul App.</p>
+            </div>
+          </div>
         </div>
         <div className="version">v{version}</div>
       </header>

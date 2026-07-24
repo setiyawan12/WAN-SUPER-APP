@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <defs>
+    <!-- Obsidian base -->
+    <linearGradient id="bg" x1="120" y1="40" x2="900" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#14121F"/>
+      <stop offset="42%" stop-color="#0B0A12"/>
+      <stop offset="100%" stop-color="#1A1230"/>
+    </linearGradient>
+
+    <!-- Champagne / gold metal -->
+    <linearGradient id="gold" x1="180" y1="140" x2="860" y2="880" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#F8E7B8"/>
+      <stop offset="28%" stop-color="#E8C872"/>
+      <stop offset="58%" stop-color="#C9A227"/>
+      <stop offset="82%" stop-color="#F0D78A"/>
+      <stop offset="100%" stop-color="#A67C1A"/>
+    </linearGradient>
+
+    <linearGradient id="goldSoft" x1="280" y1="220" x2="760" y2="780" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#FFF6D8"/>
+      <stop offset="45%" stop-color="#E8C872"/>
+      <stop offset="100%" stop-color="#B8912E"/>
+    </linearGradient>
+
+    <!-- Aurora accent for mark core -->
+    <linearGradient id="aurora" x1="300" y1="260" x2="740" y2="780" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7C5CFF"/>
+      <stop offset="45%" stop-color="#B388FF"/>
+      <stop offset="100%" stop-color="#5EEAD4"/>
+    </linearGradient>
+
+    <radialGradient id="glow" cx="50%" cy="38%" r="55%">
+      <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.35"/>
+      <stop offset="45%" stop-color="#C9A227" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="sheen" cx="32%" cy="22%" r="55%">
+      <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="40%" stop-color="#FFFFFF" stop-opacity="0.05"/>
+      <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="28" stdDeviation="36" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+
+    <filter id="innerGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge>
+        <feMergeNode in="b"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <clipPath id="squircle">
+      <rect x="64" y="64" width="896" height="896" rx="208" ry="208"/>
+    </clipPath>
+  </defs>
+
+  <!-- Soft outer ambient -->
+  <rect x="48" y="56" width="928" height="928" rx="220" fill="#000000" opacity="0.25"/>
+
+  <!-- App tile -->
+  <g filter="url(#softShadow)">
+    <rect x="64" y="64" width="896" height="896" rx="208" ry="208" fill="url(#bg)"/>
+  </g>
+
+  <g clip-path="url(#squircle)">
+    <!-- Atmosphere -->
+    <rect x="64" y="64" width="896" height="896" fill="url(#glow)"/>
+    <rect x="64" y="64" width="896" height="896" fill="url(#sheen)"/>
+
+    <!-- Fine grid (luxury tech texture) -->
+    <g opacity="0.08" stroke="#F8E7B8" stroke-width="1">
+      <path d="M64 256 H960 M64 384 H960 M64 512 H960 M64 640 H960 M64 768 H960"/>
+      <path d="M256 64 V960 M384 64 V960 M512 64 V960 M640 64 V960 M768 64 V960"/>
+    </g>
+
+    <!-- Gold bezel -->
+    <rect x="92" y="92" width="840" height="840" rx="188" ry="188"
+          stroke="url(#gold)" stroke-width="10" fill="none" opacity="0.95"/>
+    <rect x="112" y="112" width="800" height="800" rx="176" ry="176"
+          stroke="url(#goldSoft)" stroke-width="2" fill="none" opacity="0.35"/>
+
+    <!-- Orbital ring -->
+    <circle cx="512" cy="512" r="268" stroke="url(#gold)" stroke-width="3" opacity="0.28" fill="none"/>
+    <circle cx="512" cy="512" r="268" stroke="url(#aurora)" stroke-width="1.5" opacity="0.35" fill="none"
+            stroke-dasharray="8 14"/>
+
+    <!-- Monogram W — geometric luxury mark -->
+    <g filter="url(#innerGlow)">
+      <!-- Outer gold W stroke -->
+      <path
+        d="M250 330 L340 700 L512 430 L684 700 L774 330"
+        stroke="url(#gold)"
+        stroke-width="58"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"/>
+      <!-- Inner aurora core -->
+      <path
+        d="M250 330 L340 700 L512 430 L684 700 L774 330"
+        stroke="url(#aurora)"
+        stroke-width="26"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"
+        opacity="0.92"/>
+      <!-- Highlight edge -->
+      <path
+        d="M250 330 L340 700 L512 430 L684 700 L774 330"
+        stroke="#FFF8E7"
+        stroke-width="6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        fill="none"
+        opacity="0.55"/>
+    </g>
+
+    <!-- Crown node (premium accent) -->
+    <circle cx="512" cy="430" r="18" fill="url(#goldSoft)"/>
+    <circle cx="512" cy="430" r="8" fill="#FFF8E7"/>
+
+    <!-- Corner gem accents -->
+    <g fill="url(#gold)" opacity="0.85">
+      <circle cx="220" cy="220" r="7"/>
+      <circle cx="804" cy="220" r="7"/>
+      <circle cx="220" cy="804" r="7"/>
+      <circle cx="804" cy="804" r="7"/>
+    </g>
+  </g>
+</svg>

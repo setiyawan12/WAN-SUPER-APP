@@ -16,13 +16,20 @@ let getHandles: (() => { cliproxy: ModuleHandle | null; net: ModuleHandle | null
   null;
 
 function loadIcon(): Electron.NativeImage {
-  // Compiled to out/main/tray.js — icons copied next to it
+  // Compiled to out/main/tray.js — icons copied next to it.
+  // Prefer monochrome tray mark; on macOS mark as template for light/dark menu bar.
   for (const name of ["tray.png", "icon.png"]) {
     const iconPath = path.join(__dirname, name);
-    if (fs.existsSync(iconPath)) {
-      const img = nativeImage.createFromPath(iconPath);
-      return process.platform === "darwin" ? img.resize({ width: 18, height: 18 }) : img;
+    if (!fs.existsSync(iconPath)) continue;
+    const img = nativeImage.createFromPath(iconPath);
+    if (img.isEmpty()) continue;
+    if (process.platform === "darwin") {
+      const sized = img.resize({ width: 18, height: 18 });
+      // Template = system tints the glyph (menu bar light/dark).
+      sized.setTemplateImage(true);
+      return sized;
     }
+    return img.resize({ width: 24, height: 24 });
   }
   return nativeImage.createEmpty();
 }
