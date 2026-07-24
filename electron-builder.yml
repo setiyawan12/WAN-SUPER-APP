@@ -8,8 +8,8 @@ directories:
 # EDIT owner/repo to your GitHub repository before tagging a release.
 publish:
   provider: github
-  owner: YOUR_GH_USERNAME
-  repo: wan-super-app
+  owner: setiyawan12
+  repo: WAN-SUPER-APP
 
 files:
   - out/**
