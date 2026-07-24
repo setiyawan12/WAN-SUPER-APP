@@ -36,6 +36,8 @@ let _cfg         = DEFAULT_CFG;
 let _inspPort    = 0;
 let _tray        = null;
 let _launcherWin = null;
+/** true when Super App replace-mode attached an external shell window. */
+let _launcherIsExternal = false;
 let _settingsWin = null;
 let _isQuitting  = false;
 
@@ -279,6 +281,7 @@ function _showLauncherWin() {
 }
 
 function createLauncherWindow() {
+  _launcherIsExternal = false;
   _launcherWin = new BrowserWindow({
     width          : 760,
     height         : 560,
@@ -561,15 +564,51 @@ function openLauncherWindow() {
   _showLauncherWin();
 }
 
+/**
+ * Super App replace-mode: use an external shell BrowserWindow as the launcher.
+ * Does not create a second NET window.
+ */
+function attachLauncherWindow(win) {
+  // Drop ownership of a previous dedicated launcher if any.
+  if (_launcherWin && !_launcherWin.isDestroyed() && !_launcherIsExternal && _launcherWin !== win) {
+    try { _launcherWin.destroy(); } catch {}
+  }
+  _launcherIsExternal = true;
+  _launcherWin = win;
+  win.on('closed', () => {
+    if (_launcherWin === win) {
+      _launcherWin = null;
+      _launcherIsExternal = false;
+    }
+  });
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+  if (process.platform === 'darwin') {
+    setTimeout(() => {
+      if (_launcherWin && !_launcherWin.isDestroyed()) {
+        try { _launcherWin.webContents.invalidate(); } catch {}
+      }
+    }, 50);
+  }
+  // Push current tunnel snapshot to the newly attached shell.
+  try { pushUpdate(); } catch {}
+}
+
 function shutdownAll() {
   _isQuitting = true;
   cleanup();
+  // Only destroy windows we own. Super App shell is destroyed by the shell layer.
   if (_launcherWin && !_launcherWin.isDestroyed()) {
-    try { _launcherWin.destroy(); } catch {}
+    try {
+      if (!_launcherIsExternal) _launcherWin.destroy();
+    } catch {}
   }
   if (_settingsWin && !_settingsWin.isDestroyed()) {
     try { _settingsWin.destroy(); } catch {}
   }
+  _launcherWin = null;
+  _launcherIsExternal = false
   _launcherWin = null;
   _settingsWin = null;
   _netBooted = false;
@@ -594,6 +633,7 @@ module.exports = {
   initRuntime,
   openLauncherWindow,
   showLauncher: openLauncherWindow,
+  attachLauncherWindow,
   shutdownAll,
   cleanup,
   getStatus,

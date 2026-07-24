@@ -6,6 +6,8 @@ export interface SuperAppSettings {
   autoLaunch: boolean;
   startHidden: boolean;
   keepAliveWhenLeaving: boolean;
+  /** true = own window per module; false = replace hub page with module UI */
+  openInNewWindow: boolean;
   theme: "aurora-dark";
   windowBoundsHub?: { width: number; height: number; x?: number; y?: number };
 }

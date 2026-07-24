@@ -10,12 +10,15 @@ const path = require('path');
 let handle = null;
 
 /**
- * @param {{ show?: boolean, moduleRoot?: string }} opts
+ * @param {{ show?: boolean, moduleRoot?: string, embedOnly?: boolean }} opts
  */
 async function bootNet(opts = {}) {
   const show = opts.show !== false;
+  const embedOnly = !!opts.embedOnly;
+
   if (handle) {
-    if (show) handle.show();
+    // Window mode re-open: focus dedicated launcher. Replace mode uses presentIn.
+    if (show && !embedOnly) handle.show();
     return handle;
   }
 
@@ -26,7 +29,7 @@ async function bootNet(opts = {}) {
   const net = require(mainPath);
 
   await net.initRuntime();
-  if (show) net.openLauncherWindow();
+  if (show && !embedOnly) net.openLauncherWindow();
 
   handle = {
     id: 'net',
@@ -39,6 +42,15 @@ async function bootNet(opts = {}) {
           if (String(w.getTitle() || '').includes('NET')) w.hide();
         }
       } catch {}
+    },
+    /**
+     * Replace-mode: bind Super App shell window as the NET launcher.
+     * @param {import('electron').BrowserWindow} win
+     */
+    presentIn: (win) => {
+      if (typeof net.attachLauncherWindow === 'function') {
+        net.attachLauncherWindow(win);
+      }
     },
     shutdown: async () => {
       try {

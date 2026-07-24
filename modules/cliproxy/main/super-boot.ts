@@ -6,7 +6,7 @@ import { BrowserWindow, dialog } from "electron";
 import { prepareBackendEnv, ensureFreePort, backendPort } from "./config.js";
 import { getSettings } from "./app-settings.js";
 import { registerIpc } from "./ipc.js";
-import { createWindow, showWindow, setQuitting } from "./window.js";
+import { showWindow, setQuitting, attachMainWindow } from "./window.js";
 import { startVsCodeAutoSync, stopVsCodeAutoSync } from "./vscode-sync.js";
 import { registerQuickChat, unregisterQuickChat } from "./quick-chat.js";
 import { broadcast } from "./events.js";
@@ -14,6 +14,11 @@ import { broadcast } from "./events.js";
 export interface CliproxyBootOpts {
   show?: boolean;
   moduleRoot?: string;
+  /**
+   * When true, do not create a dedicated CLIProxy BrowserWindow.
+   * Super App will call presentIn(shell) for replace-mode.
+   */
+  embedOnly?: boolean;
 }
 
 export interface ModuleHandleLike {
@@ -23,6 +28,7 @@ export interface ModuleHandleLike {
   shutdown: () => Promise<void>;
   isRunning: () => boolean;
   getStatus: () => Record<string, unknown>;
+  presentIn: (win: BrowserWindow) => void;
 }
 
 let booted = false;
@@ -34,6 +40,7 @@ const loadBackend = (rel: string): Promise<any> =>
 
 export async function bootCliproxy(opts: CliproxyBootOpts = {}): Promise<ModuleHandleLike> {
   const show = opts.show !== false;
+  const embedOnly = !!opts.embedOnly;
 
   if (!booted) {
     const settings = getSettings();
@@ -74,21 +81,25 @@ export async function bootCliproxy(opts: CliproxyBootOpts = {}): Promise<ModuleH
     booted = true;
   }
 
-  if (show) {
-    createWindow(false);
+  // Window mode: create/show dedicated window. Replace mode: Super App shells it.
+  if (show && !embedOnly) {
     showWindow();
   }
 
   return {
     id: "cliproxy",
     show: () => {
-      createWindow(false);
+      // Window mode: focus existing or create once.
+      // Replace mode callers should use presentIn / ensureModuleShell instead.
       showWindow();
     },
     hide: () => {
       for (const w of BrowserWindow.getAllWindows()) {
-        if (w.getTitle().includes("CLIProxyAPI")) w.hide();
+        if (!w.isDestroyed() && w.getTitle().includes("CLIProxyAPI")) w.hide();
       }
+    },
+    presentIn: (win: BrowserWindow) => {
+      attachMainWindow(win);
     },
     shutdown: async () => {
       if (shuttingDown) return;
@@ -102,6 +113,7 @@ export async function bootCliproxy(opts: CliproxyBootOpts = {}): Promise<ModuleH
       } catch {
         /* nothing to stop */
       }
+      // Do not destroy Super App shell windows; Super App owns that lifecycle.
       booted = false;
       shuttingDown = false;
     },

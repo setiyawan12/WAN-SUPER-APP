@@ -2,7 +2,12 @@ import { app, BrowserWindow, dialog } from "electron";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import { createHubWindow, setHubQuitting, showHubWindow } from "./hub/hub-window.js";
+import {
+  createHubWindow,
+  ensureModuleShell,
+  setHubQuitting,
+  showHubWindow,
+} from "./hub/hub-window.js";
 import { getSettings, setSetting } from "./hub/hub-settings.js";
 import { registerHubIpc } from "./hub/hub-ipc.js";
 import { createTray, setTrayCallbacks, rebuildTrayMenu } from "./tray.js";
@@ -22,6 +27,7 @@ function getHandles() {
 
 async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<ModuleHandle> {
   const show = opts.show !== false;
+  const openInNewWindow = getSettings().openInNewWindow !== false;
   let handle: ModuleHandle;
 
   if (id === "cliproxy") {
@@ -31,10 +37,12 @@ async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<
       ).href;
       const mod = await import(bootUrl);
       cliproxyHandle = await mod.bootCliproxy({
-        show,
+        // In replace mode we never create a dedicated module window.
+        show: show && openInNewWindow,
+        embedOnly: !openInNewWindow,
         moduleRoot: path.join(__dirname, "../modules/cliproxy"),
       });
-    } else if (show) {
+    } else if (show && openInNewWindow) {
       cliproxyHandle.show();
     }
     handle = cliproxyHandle!;
@@ -43,18 +51,31 @@ async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<
       const bootPath = path.join(__dirname, "../modules/net/adapter/boot.cjs");
       // eslint-disable-next-line @typescript-eslint/no-require-imports
       const mod = require(bootPath) as {
-        bootNet: (o: { show: boolean; moduleRoot: string }) => Promise<ModuleHandle>;
+        bootNet: (o: {
+          show: boolean;
+          embedOnly?: boolean;
+          moduleRoot: string;
+        }) => Promise<ModuleHandle>;
       };
       netHandle = await mod.bootNet({
-        show,
+        show: show && openInNewWindow,
+        embedOnly: !openInNewWindow,
         moduleRoot: path.join(__dirname, "../modules/net"),
       });
-    } else if (show) {
+    } else if (show && openInNewWindow) {
       netHandle.show();
     }
     handle = netHandle!;
   } else {
     throw new Error(`Unknown module: ${id}`);
+  }
+
+  // Replace mode: swap hub shell content with the selected module UI.
+  if (show && !openInNewWindow) {
+    const shell = ensureModuleShell(id, { startHidden: false });
+    if (handle.presentIn) {
+      await handle.presentIn(shell);
+    }
   }
 
   setSetting("lastModule", id);

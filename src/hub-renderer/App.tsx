@@ -7,6 +7,7 @@ const EMPTY_SETTINGS: SuperAppSettings = {
   autoLaunch: false,
   startHidden: false,
   keepAliveWhenLeaving: true,
+  openInNewWindow: true,
   theme: "aurora-dark",
 };
 
@@ -77,7 +78,7 @@ export function App() {
 
       <div className="grid">
         <section className="card clip">
-          <h2>WAN CLIProxyAPI</h2>
+          <h2>WANN X RENN CLIProxyAPI</h2>
           <p className="desc">
             Chat AI, Cowork Mode, Neuron Activity, VS Code &amp; JetBrains integration.
             Backend Express + CLIProxyAPI.
@@ -121,6 +122,20 @@ export function App() {
 
       <section className="settings">
         <h3>Preferences</h3>
+        <div className="row">
+          <label>
+            <span>Open modules in new window</span>
+            <small>
+              On: tiap modul buka window sendiri (default). Off: ganti halaman Hub
+              dengan UI modul.
+            </small>
+          </label>
+          <input
+            type="checkbox"
+            checked={settings.openInNewWindow}
+            onChange={(e) => void toggle("openInNewWindow", e.target.checked)}
+          />
+        </div>
         <div className="row">
           <label>
             <span>Reopen last module on launch</span>

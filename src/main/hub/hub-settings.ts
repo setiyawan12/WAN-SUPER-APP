@@ -9,6 +9,11 @@ export interface SuperAppSettings {
   autoLaunch: boolean;
   startHidden: boolean;
   keepAliveWhenLeaving: boolean;
+  /**
+   * true  = open modules in their own BrowserWindow (default, current behavior)
+   * false = replace hub window content with the selected module UI
+   */
+  openInNewWindow: boolean;
   theme: "aurora-dark";
   windowBoundsHub?: { width: number; height: number; x?: number; y?: number };
 }
@@ -19,6 +24,7 @@ const DEFAULTS: SuperAppSettings = {
   autoLaunch: false,
   startHidden: false,
   keepAliveWhenLeaving: true,
+  openInNewWindow: true,
   theme: "aurora-dark",
 };
 
@@ -38,6 +44,8 @@ function sanitize(raw: Partial<SuperAppSettings> | null | undefined): SuperAppSe
     autoLaunch: !!merged.autoLaunch,
     startHidden: !!merged.startHidden,
     keepAliveWhenLeaving: merged.keepAliveWhenLeaving !== false,
+    // default true when missing (older super-app.json)
+    openInNewWindow: merged.openInNewWindow !== false,
     theme: "aurora-dark",
   };
 }

@@ -1,46 +1,80 @@
-name: Build WAN Super App
+name: Release
 
+# Builds signed/unsigned installers and publishes them to GitHub Releases.
+# Trigger: push a version tag (v0.1.1, v1.0.0, …) or run manually from Actions.
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional version override (e.g. 0.1.1). Empty = package.json version."
+        required: false
+        type: string
 
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "20"
+
 jobs:
   # ── macOS (DMG + ZIP, signed + notarized) ────────────────────────────────────
   build-mac:
+    name: macOS (arm64)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20          # npm 10.x — avoids the npm 11 arborist dedupe bug
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Download cloudflared (darwin-arm64)
         run: |
-          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz | tar xz
+          curl -fsSL https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-darwin-arm64.tgz | tar xz
           chmod +x cloudflared
           mv cloudflared modules/net/cloudflared
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci || npm install
 
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: npm version ${GITHUB_REF_NAME#v} --no-git-tag-version --allow-same-version
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VER="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          npm version "$VER" --no-git-tag-version --allow-same-version
+          echo "Building version $VER"
 
-      - name: Build renderers + main (tsc + vite + copy-assets)
+      - name: Build (main + renderers + assets)
         run: npm run build
 
-      - name: Import signing certificate
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Import Apple signing certificate
         env:
           APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
           APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
         run: |
+          if [ -z "$APPLE_CERT_P12" ]; then
+            echo "APPLE_CERT_P12 not set — mac build will be unsigned"
+            exit 0
+          fi
           KEYCHAIN_PATH=$RUNNER_TEMP/build.keychain
           KEYCHAIN_PASSWORD=$(openssl rand -base64 16)
 
@@ -48,8 +82,8 @@ jobs:
           security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-          echo "$APPLE_CERT_P12" | base64 --decode > $RUNNER_TEMP/cert.p12
-          security import $RUNNER_TEMP/cert.p12 \
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" \
             -k "$KEYCHAIN_PATH" \
             -P "$APPLE_CERT_PASSWORD" \
             -T /usr/bin/codesign \
@@ -58,7 +92,7 @@ jobs:
           security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
 
-      - name: Package, Sign & Notarize (DMG + ZIP)
+      - name: Package, sign & notarize (DMG + ZIP)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -74,16 +108,20 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.zip
+            dist/latest-mac.yml
+          if-no-files-found: warn
 
   # ── Windows (NSIS .exe, unsigned) ────────────────────────────────────────────
   build-win:
+    name: Windows (x64)
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Download cloudflared (windows-amd64)
         shell: pwsh
@@ -91,15 +129,28 @@ jobs:
           Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "modules/net/cloudflared.exe"
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci || npm install
 
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Resolve version
+        id: ver
         shell: bash
-        run: npm version ${GITHUB_REF_NAME#v} --no-git-tag-version --allow-same-version
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VER="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          npm version "$VER" --no-git-tag-version --allow-same-version
+          echo "Building version $VER"
 
-      - name: Build renderers + main
+      - name: Build (main + renderers + assets)
         run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Package EXE (unsigned)
         env:
@@ -111,32 +162,52 @@ jobs:
         if: always()
         with:
           name: win-installer
-          path: dist/*.exe
+          path: |
+            dist/*.exe
+            dist/latest.yml
+          if-no-files-found: warn
 
   # ── Linux (DEB + AppImage) ───────────────────────────────────────────────────
   build-linux:
+    name: Linux (x64)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
 
       - name: Download cloudflared (linux-amd64)
         run: |
-          curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o modules/net/cloudflared
+          curl -fsSL -o modules/net/cloudflared \
+            https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64
           chmod +x modules/net/cloudflared
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci || npm install
 
-      - name: Set version from tag
-        if: startsWith(github.ref, 'refs/tags/v')
-        run: npm version ${GITHUB_REF_NAME#v} --no-git-tag-version --allow-same-version
+      - name: Resolve version
+        id: ver
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VER="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VER="${GITHUB_REF_NAME#v}"
+          else
+            VER="$(node -p "require('./package.json').version")"
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          npm version "$VER" --no-git-tag-version --allow-same-version
+          echo "Building version $VER"
 
-      - name: Build renderers + main
+      - name: Build (main + renderers + assets)
         run: npm run build
+
+      - name: Typecheck
+        run: npm run typecheck
 
       - name: Package DEB + AppImage
         env:
@@ -150,3 +221,46 @@ jobs:
           path: |
             dist/*.deb
             dist/*.AppImage
+            dist/latest-linux.yml
+          if-no-files-found: warn
+
+  # ── Finalize GitHub Release notes ────────────────────────────────────────────
+  finalize-release:
+    name: Finalize release
+    needs: [build-mac, build-win, build-linux]
+    if: always() && startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure GitHub Release exists & is published
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          VER="${TAG#v}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --draft=false --title "WAN Super App $TAG" || true
+          else
+            gh release create "$TAG" \
+              --title "WAN Super App $TAG" \
+              --notes "Release **$TAG** of WAN Super App.
+
+Installers are uploaded by electron-builder from the macOS / Windows / Linux jobs.
+
+### Downloads
+- **macOS**: \`.dmg\` / \`.zip\` (arm64)
+- **Windows**: NSIS \`.exe\`
+- **Linux**: \`.deb\` / \`.AppImage\`
+
+### Changelog
+See commit history for \`$TAG\`." \
+              --verify-tag || \
+            gh release create "$TAG" \
+              --title "WAN Super App $TAG" \
+              --generate-notes \
+              --verify-tag || true
+          fi
+          echo "Release page: https://github.com/${{ github.repository }}/releases/tag/$TAG"

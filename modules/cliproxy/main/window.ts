@@ -2,7 +2,7 @@ import { BrowserWindow, shell } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { setMainWindow } from "./events.js";
+import { getMainWindow, setMainWindow } from "./events.js";
 import { getSetting, setSetting } from "./app-settings.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -12,7 +12,21 @@ export function setQuitting(v: boolean): void {
   isQuitting = v;
 }
 
+function showExisting(win: BrowserWindow): BrowserWindow {
+  if (win.isMinimized()) win.restore();
+  if (!win.isVisible()) win.show();
+  win.focus();
+  return win;
+}
+
+/** Create the main CLIProxy window, or reuse the existing one (single-instance). */
 export function createWindow(startHidden = false): BrowserWindow {
+  const existing = getMainWindow();
+  if (existing && !existing.isDestroyed()) {
+    if (!startHidden) showExisting(existing);
+    return existing;
+  }
+
   const saved = getSetting("windowBounds");
   const iconPath = path.join(__dirname, "icon.png");
 
@@ -74,15 +88,38 @@ export function createWindow(startHidden = false): BrowserWindow {
     }
   });
 
-  win.on("closed", () => setMainWindow(null));
+  win.on("closed", () => {
+    if (getMainWindow() === win) setMainWindow(null);
+  });
   setMainWindow(win);
   return win;
 }
 
 export function showWindow(): void {
-  const win = BrowserWindow.getAllWindows()[0];
-  if (win) {
-    win.show();
-    win.focus();
+  const win = getMainWindow();
+  if (win && !win.isDestroyed()) {
+    showExisting(win);
+    return;
   }
+  createWindow(false);
+}
+
+/**
+ * Super App replace-mode: treat an external shell BrowserWindow as the
+ * CLIProxy main window (do not create a second window).
+ */
+export function attachMainWindow(win: BrowserWindow): void {
+  if (!win || win.isDestroyed()) return;
+  const prev = getMainWindow();
+  if (prev === win) {
+    showExisting(win);
+    return;
+  }
+  setMainWindow(win);
+  // When the shell is destroyed/rebuilt, drop our reference if it still points here.
+  win.on("closed", () => {
+    if (getMainWindow() === win) setMainWindow(null);
+  });
+  if (!win.isVisible()) win.show();
+  win.focus();
 }

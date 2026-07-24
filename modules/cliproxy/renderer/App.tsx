@@ -114,7 +114,7 @@ export function App() {
             </svg>
           </div>
           <div className="brand-text">
-            <span className="brand-title">WAN Super App</span>
+            <span className="brand-title">WANN X RENN</span>
             <span className="brand-sub">CLIProxyAPI</span>
           </div>
         </div>
