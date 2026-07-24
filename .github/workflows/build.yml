@@ -240,23 +240,27 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           TAG="${GITHUB_REF_NAME}"
-          VER="${TAG#v}"
+          NOTES_FILE="${RUNNER_TEMP}/release-notes.md"
+          {
+            echo "Release **${TAG}** of WAN Super App."
+            echo ""
+            echo "Installers are uploaded by electron-builder from the macOS / Windows / Linux jobs."
+            echo ""
+            echo "### Downloads"
+            echo "- **macOS**: \`.dmg\` / \`.zip\` (arm64)"
+            echo "- **Windows**: NSIS \`.exe\`"
+            echo "- **Linux**: \`.deb\` / \`.AppImage\`"
+            echo ""
+            echo "### Changelog"
+            echo "See commit history for \`${TAG}\`."
+          } > "$NOTES_FILE"
+
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --draft=false --title "WAN Super App $TAG" || true
+            gh release edit "$TAG" --draft=false --title "WAN Super App $TAG" --notes-file "$NOTES_FILE" || true
           else
             gh release create "$TAG" \
               --title "WAN Super App $TAG" \
-              --notes "Release **$TAG** of WAN Super App.
-
-Installers are uploaded by electron-builder from the macOS / Windows / Linux jobs.
-
-### Downloads
-- **macOS**: \`.dmg\` / \`.zip\` (arm64)
-- **Windows**: NSIS \`.exe\`
-- **Linux**: \`.deb\` / \`.AppImage\`
-
-### Changelog
-See commit history for \`$TAG\`." \
+              --notes-file "$NOTES_FILE" \
               --verify-tag || \
             gh release create "$TAG" \
               --title "WAN Super App $TAG" \
