@@ -30,9 +30,11 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # Notarization runs automatically when APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
-  # + APPLE_TEAM_ID env vars are present (see .github/workflows/build.yml).
-  notarize: true
+  # Notarize via notarytool. teamId must be explicit (electron-builder 24 does
+  # NOT auto-read APPLE_TEAM_ID for it); APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+  # are still read from env by @electron/notarize.
+  notarize:
+    teamId: ${env.APPLE_TEAM_ID}
 
 win:
   extraResources:
