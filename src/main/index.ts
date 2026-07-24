@@ -98,6 +98,7 @@ if (!app.requestSingleInstanceLock()) {
     // GitHub Releases feed (electron-builder.yml publish). Auto-check after hub mounts.
     initAppUpdater({ autoCheck: true });
     onUpdateStatus(() => rebuildTrayMenu());
+    // Always land on the hub home page first.
     createHubWindow(settings.autoLaunch && settings.startHidden);
 
     if (process.platform !== "linux") {
@@ -107,11 +108,21 @@ if (!app.requestSingleInstanceLock()) {
       });
     }
 
-    if (settings.reopenLastModule && settings.lastModule) {
+    // Reopen last module only as a separate window. In replace-mode
+    // (openInNewWindow=false) auto-open would steal the hub shell and skip home.
+    const canReopenAsWindow =
+      settings.reopenLastModule &&
+      !!settings.lastModule &&
+      settings.openInNewWindow !== false;
+    if (canReopenAsWindow) {
       try {
-        await openModule(settings.lastModule, {
+        await openModule(settings.lastModule!, {
           show: !(settings.autoLaunch && settings.startHidden),
         });
+        // Keep hub as the focused home window when both are visible.
+        if (!(settings.autoLaunch && settings.startHidden)) {
+          showHubWindow();
+        }
       } catch (err) {
         console.warn("[super] reopen last module failed:", err);
       }

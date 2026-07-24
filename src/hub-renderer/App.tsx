@@ -344,11 +344,15 @@ export function App() {
         <div className="row">
           <label>
             <span>Reopen last module on launch</span>
-            <small>Buka modul terakhir saat Super App start</small>
+            <small>
+              Hanya jika &quot;Open modules in new window&quot; aktif: buka modul
+              terakhir di window terpisah, Hub tetap jadi halaman utama.
+            </small>
           </label>
           <input
             type="checkbox"
             checked={settings.reopenLastModule}
+            disabled={!settings.openInNewWindow}
             onChange={(e) => void toggle("reopenLastModule", e.target.checked)}
           />
         </div>
