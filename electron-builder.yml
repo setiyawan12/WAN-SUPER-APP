@@ -45,6 +45,8 @@ win:
     - nsis
 
 linux:
+  # Required for the .deb package (Debian needs a maintainer). Edit to your own.
+  maintainer: WAN <absenkudev@gmail.com>
   extraResources:
     - from: modules/net/cloudflared
       to: cloudflared
