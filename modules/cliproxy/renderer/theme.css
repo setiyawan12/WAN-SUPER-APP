@@ -1,0 +1,212 @@
+/*
+ * Aurora dark — Soft Glass pass.
+ * Colored but calm: violet/cyan atmosphere, tinted glass, no jewelry overload.
+ * VS Code variable names stay mapped so ported components inherit.
+ */
+:root {
+  color-scheme: dark;
+
+  /* Palette — ink base with soft violet/cyan life */
+  --wan-bg: #090a12;
+  --wan-bg-2: #0f111c;
+  --wan-surface: rgba(140, 130, 220, 0.06);
+  --wan-surface-2: rgba(160, 150, 240, 0.09);
+  --wan-surface-3: rgba(170, 160, 255, 0.13);
+  --wan-border: rgba(180, 170, 255, 0.1);
+  --wan-border-strong: rgba(190, 180, 255, 0.18);
+  --wan-text: #f0f0f8;
+  --wan-muted: #a0a4c0;
+  --wan-faint: #727694;
+  --wan-pearl: rgba(236, 232, 255, 0.82);
+  --wan-champagne: #c4b8e8; /* cool pearl, not gold */
+
+  --wan-violet: #a78bfa;
+  --wan-indigo: #818cf8;
+  --wan-cyan: #7dd3fc;
+  --wan-accent-grad: linear-gradient(135deg, #b8a4fc 0%, #8b7cf5 48%, #6d63e8 100%);
+  --wan-accent-grad-hover: linear-gradient(135deg, #c9bbff 0%, #9b8df8 48%, #7c72f0 100%);
+  --wan-accent-soft: rgba(167, 139, 250, 0.16);
+  --wan-ring: rgba(167, 139, 250, 0.36);
+  --wan-gold-soft: rgba(125, 211, 252, 0.1);
+
+  --wan-green: #5eead4;
+  --wan-red: #fb7185;
+  --wan-amber: #f0c674;
+
+  --wan-radius: 14px;
+  --wan-radius-sm: 10px;
+  --wan-radius-xs: 8px;
+  --wan-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 14px 36px -18px rgba(0, 0, 0, 0.7);
+  --wan-shadow-sm:
+    0 1px 0 rgba(255, 255, 255, 0.035) inset,
+    0 6px 16px -10px rgba(0, 0, 0, 0.55);
+  --wan-shadow-glow: 0 10px 28px -14px rgba(124, 106, 240, 0.38);
+  --wan-hairline: linear-gradient(
+    90deg,
+    transparent,
+    rgba(167, 139, 250, 0.22) 20%,
+    rgba(125, 211, 252, 0.16) 50%,
+    rgba(167, 139, 250, 0.22) 80%,
+    transparent
+  );
+
+  /* --- Map onto VS Code variable names the ported CSS still uses --- */
+  --vscode-font-family:
+    "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI Variable",
+    "Segoe UI", "Inter", system-ui, sans-serif;
+  --vscode-font-size: 13px;
+  --vscode-editor-font-family:
+    "SF Mono", "JetBrains Mono", "Cascadia Code", ui-monospace, Menlo, Consolas, monospace;
+
+  --vscode-editor-background: var(--wan-bg);
+  --vscode-sideBar-background: var(--wan-surface);
+  --vscode-foreground: var(--wan-text);
+  --vscode-descriptionForeground: var(--wan-muted);
+
+  --vscode-focusBorder: var(--wan-violet);
+  --vscode-panel-border: var(--wan-border);
+
+  --vscode-button-background: var(--wan-accent-grad);
+  --vscode-button-foreground: #ffffff;
+  --vscode-button-hoverBackground: var(--wan-accent-grad-hover);
+  --vscode-button-secondaryBackground: var(--wan-surface-2);
+  --vscode-button-secondaryForeground: var(--wan-text);
+  --vscode-button-secondaryHoverBackground: var(--wan-surface-3);
+
+  --vscode-input-background: rgba(255, 255, 255, 0.04);
+  --vscode-input-foreground: var(--wan-text);
+  --vscode-input-border: var(--wan-border-strong);
+
+  --vscode-list-activeSelectionBackground: var(--wan-accent-soft);
+  --vscode-list-activeSelectionForeground: #ffffff;
+
+  --vscode-textLink-foreground: #a5b4fc;
+  --vscode-textCodeBlock-background: rgba(0, 0, 0, 0.4);
+  --vscode-toolbar-hoverBackground: rgba(255, 255, 255, 0.06);
+  --vscode-toolbar-activeBackground: var(--wan-accent-soft);
+
+  --vscode-charts-green: var(--wan-green);
+  --vscode-testing-iconPassed: var(--wan-green);
+  --vscode-testing-iconFailed: var(--wan-red);
+  --vscode-editorWarning-foreground: var(--wan-amber);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--wan-bg);
+  color: var(--wan-text);
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  letter-spacing: 0.01em;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Keep app chrome above the fixed wash layer */
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/*
+ * Soft aurora — visible color, gentle motion. Not a light show.
+ * z-index 0 sits above body bg, under #root.
+ */
+body::before {
+  content: "";
+  position: fixed;
+  inset: -12%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(58% 48% at 10% -4%, rgba(167, 139, 250, 0.3), transparent 64%),
+    radial-gradient(48% 40% at 94% 10%, rgba(56, 189, 248, 0.16), transparent 62%),
+    radial-gradient(46% 42% at 78% 98%, rgba(99, 102, 241, 0.18), transparent 66%),
+    radial-gradient(40% 36% at 18% 90%, rgba(192, 132, 252, 0.1), transparent 68%),
+    var(--wan-bg);
+  animation: auroraDrift 32s ease-in-out infinite alternate;
+}
+
+/* Light color veil + soft vignette */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(70% 55% at 60% 30%, rgba(167, 139, 250, 0.06), transparent 70%),
+    radial-gradient(90% 80% at 50% 50%, transparent 45%, rgba(0, 0, 0, 0.22) 100%);
+  animation: auroraDriftAlt 42s ease-in-out infinite alternate;
+}
+
+@keyframes auroraDrift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  100% {
+    transform: translate3d(1.2%, 0.9%, 0) scale(1.04);
+  }
+}
+
+@keyframes auroraDriftAlt {
+  0% {
+    opacity: 0.85;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* Lets the progress ring animate its fill */
+@property --p {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.35);
+}
+
+/* Slim, themed scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+}
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.24);
+  background-clip: content-box;
+}

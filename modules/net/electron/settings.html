@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAN NET Settings</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg      : #0a0b14;
+    --surface : #12131f;
+    --border  : #2a2b3d;
+    --text    : #e0e0f0;
+    --muted   : #888;
+    --accent  : #818cf8;
+    --success : #34d399;
+    --danger  : #f43f5e;
+  }
+
+  body {
+    font-family: system-ui, -apple-system, sans-serif;
+    background : var(--bg);
+    color      : var(--text);
+    padding    : 24px;
+    font-size  : 14px;
+    line-height: 1.5;
+    user-select: none;
+  }
+
+  h1 {
+    font-size  : 18px;
+    font-weight: 600;
+    color      : var(--accent);
+    margin-bottom: 20px;
+    display    : flex;
+    align-items: center;
+    gap        : 8px;
+  }
+
+  .field { margin-bottom: 16px; }
+
+  label {
+    display    : block;
+    font-weight: 500;
+    margin-bottom: 6px;
+    color      : var(--text);
+  }
+
+  .hint {
+    font-size: 12px;
+    color    : var(--muted);
+    margin-top: 4px;
+  }
+
+  input[type="text"], input[type="password"] {
+    width        : 100%;
+    padding      : 8px 12px;
+    background   : var(--surface);
+    border       : 1px solid var(--border);
+    border-radius: 6px;
+    color        : var(--text);
+    font-size    : 14px;
+    outline      : none;
+    transition   : border-color .15s;
+  }
+  input:focus { border-color: var(--accent); }
+
+  .row {
+    display: flex;
+    gap    : 10px;
+    margin-top: 24px;
+  }
+
+  button {
+    flex        : 1;
+    padding     : 9px 0;
+    border      : none;
+    border-radius: 6px;
+    font-size   : 14px;
+    font-weight : 600;
+    cursor      : pointer;
+    transition  : opacity .15s;
+  }
+  button:hover  { opacity: .85; }
+  button:active { opacity: .7; }
+
+  .btn-save   { background: var(--accent); color: #fff; }
+  .btn-cancel { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+
+  #status {
+    margin-top : 14px;
+    font-size  : 13px;
+    min-height : 20px;
+    text-align : center;
+  }
+  .ok  { color: var(--success); }
+  .err { color: var(--danger);  }
+
+  .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+  .info-row {
+    display        : flex;
+    justify-content: space-between;
+    font-size      : 12px;
+    color          : var(--muted);
+    margin-bottom  : 6px;
+  }
+  .info-val { color: var(--text); font-family: monospace; }
+</style>
+</head>
+<body>
+
+<h1>⚡ WAN NET Settings</h1>
+
+<div id="status-info"></div>
+<hr class="divider">
+
+<div class="field">
+  <label for="ports">Local Ports</label>
+  <input type="text" id="ports" placeholder="3000" />
+  <p class="hint">Comma-separated port numbers yang ingin di-tunnel. Contoh: 3000, 8000</p>
+</div>
+
+<div class="field">
+  <label for="pass">Inspector Password <span style="color:var(--muted);font-weight:400">(opsional)</span></label>
+  <input type="password" id="pass" placeholder="Biarkan kosong = tanpa password" autocomplete="new-password" />
+  <p class="hint">Jika diisi, inspector butuh login dengan username <code style="color:var(--accent)">admin</code></p>
+</div>
+
+<div class="row">
+  <button class="btn-cancel" onclick="window.close()">Tutup</button>
+  <button class="btn-save" onclick="save()">Simpan &amp; Restart</button>
+</div>
+
+<div id="status"></div>
+
+<script>
+  const statusEl     = document.getElementById('status');
+  const statusInfoEl = document.getElementById('status-info');
+
+  async function load() {
+    try {
+      const [cfg, st] = await Promise.all([
+        window.electronAPI.getConfig(),
+        window.electronAPI.getStatus(),
+      ]);
+      document.getElementById('ports').value = (cfg.ports || []).join(', ');
+      document.getElementById('pass').value  = cfg.pass || '';
+
+      // Show runtime info
+      const rows = [
+        ['Inspector', `http://localhost:${st.inspPort}`],
+        ['Uptime',    formatUptime(st.uptime)],
+        ...st.tunnels.map(t => [`:${t.localPort}`, t.publicUrl || '(connecting…)']),
+      ];
+      statusInfoEl.innerHTML = rows.map(([k,v]) =>
+        `<div class="info-row"><span>${k}</span><span class="info-val">${v}</span></div>`
+      ).join('');
+    } catch (e) {
+      statusInfoEl.innerHTML = '<div class="info-row"><span style="color:var(--danger)">Could not load status</span></div>';
+    }
+  }
+
+  async function save() {
+    const rawPorts = document.getElementById('ports').value;
+    const pass     = document.getElementById('pass').value.trim();
+
+    const ports = rawPorts.split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => n > 0 && n < 65536);
+
+    if (ports.length === 0) {
+      showStatus('Masukkan minimal satu port yang valid.', 'err'); return;
+    }
+
+    try {
+      const result = await window.electronAPI.saveConfig({ ports, pass });
+      if (result.ok) {
+        showStatus('Tersimpan! Restart app untuk menerapkan perubahan.', 'ok');
+      } else {
+        showStatus('Gagal menyimpan konfigurasi.', 'err');
+      }
+    } catch (e) {
+      showStatus('Error: ' + e.message, 'err');
+    }
+  }
+
+  function showStatus(msg, cls) {
+    statusEl.textContent = msg;
+    statusEl.className   = cls;
+  }
+
+  function formatUptime(secs) {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    return [h && `${h}j`, m && `${m}m`, `${s}d`].filter(Boolean).join(' ');
+  }
+
+  load();
+</script>
+</body>
+</html>

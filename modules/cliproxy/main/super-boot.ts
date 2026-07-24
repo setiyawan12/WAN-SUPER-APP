@@ -1,0 +1,114 @@
+/**
+ * Super App entry for CLIProxyAPI (lazy module boot).
+ * Same order as index.ts, without single-instance / tray / app.whenReady.
+ */
+import { BrowserWindow, dialog } from "electron";
+import { prepareBackendEnv, ensureFreePort, backendPort } from "./config.js";
+import { getSettings } from "./app-settings.js";
+import { registerIpc } from "./ipc.js";
+import { createWindow, showWindow, setQuitting } from "./window.js";
+import { startVsCodeAutoSync, stopVsCodeAutoSync } from "./vscode-sync.js";
+import { registerQuickChat, unregisterQuickChat } from "./quick-chat.js";
+import { broadcast } from "./events.js";
+
+export interface CliproxyBootOpts {
+  show?: boolean;
+  moduleRoot?: string;
+}
+
+export interface ModuleHandleLike {
+  id: "cliproxy";
+  show: () => void;
+  hide: () => void;
+  shutdown: () => Promise<void>;
+  isRunning: () => boolean;
+  getStatus: () => Record<string, unknown>;
+}
+
+let booted = false;
+let ipcRegistered = false;
+let shuttingDown = false;
+
+const loadBackend = (rel: string): Promise<any> =>
+  import(new URL(rel, import.meta.url).href);
+
+export async function bootCliproxy(opts: CliproxyBootOpts = {}): Promise<ModuleHandleLike> {
+  const show = opts.show !== false;
+
+  if (!booted) {
+    const settings = getSettings();
+    prepareBackendEnv(settings.autoStartServer);
+    const port = await ensureFreePort();
+    if (port !== 4317) {
+      console.log(`[cliproxy] default port 4317 busy — using ${port} instead`);
+    }
+
+    try {
+      await loadBackend("./backend/index.js");
+    } catch (err) {
+      dialog.showErrorBox(
+        "WAN Super App — CLIProxyAPI startup error",
+        `The internal server failed to start on port ${port}.\n\n` +
+          `${err instanceof Error ? err.message : String(err)}\n\n` +
+          `If the Renn-Copilot VS Code extension or another copy of this app is ` +
+          `running, quit it and relaunch.`
+      );
+      throw err;
+    }
+
+    try {
+      const { activityBus } = await loadBackend("./backend/activity-bus.js");
+      activityBus.on("hit", (evt: unknown) => broadcast("activity", evt));
+    } catch (err) {
+      console.warn(
+        `[cliproxy] activity bus unavailable: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    if (!ipcRegistered) {
+      registerIpc();
+      ipcRegistered = true;
+    }
+    startVsCodeAutoSync();
+    registerQuickChat();
+    booted = true;
+  }
+
+  if (show) {
+    createWindow(false);
+    showWindow();
+  }
+
+  return {
+    id: "cliproxy",
+    show: () => {
+      createWindow(false);
+      showWindow();
+    },
+    hide: () => {
+      for (const w of BrowserWindow.getAllWindows()) {
+        if (w.getTitle().includes("CLIProxyAPI")) w.hide();
+      }
+    },
+    shutdown: async () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      setQuitting(true);
+      stopVsCodeAutoSync();
+      unregisterQuickChat();
+      try {
+        const mgr = await loadBackend("./backend/cliproxy-manager.js");
+        await mgr.stopServer();
+      } catch {
+        /* nothing to stop */
+      }
+      booted = false;
+      shuttingDown = false;
+    },
+    isRunning: () => booted,
+    getStatus: () => ({
+      running: booted,
+      port: backendPort(),
+    }),
+  };
+}

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WAN NET</title>
+  <link rel="stylesheet" href="launcher.css">
+</head>
+<body>
+
+<!-- ═══ DASHBOARD VIEW ═══════════════════════════════════════════════════════ -->
+<div id="view-dashboard">
+
+  <header class="dash-header">
+    <div class="dash-logo">
+      <button type="button" id="super-back-btn" title="Back to Super App hub"
+        onclick="try{window.superApp&&window.superApp.showHub()}catch(e){}"
+        style="display:none;margin-right:10px;padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:inherit;cursor:pointer;font-size:12px">← Super App</button>
+      <span class="dash-logo-icon">⚡</span>
+      <span class="dash-logo-name">WAN NET</span>
+      <span id="app-version" style="font-size:10px;color:var(--muted,#6b7280);font-weight:400;margin-left:4px;margin-top:2px;letter-spacing:.3px"></span>
+    </div>
+    <script>
+      (function () {
+        try {
+          if (window.superApp && window.superApp.showHub) {
+            var b = document.getElementById('super-back-btn');
+            if (b) b.style.display = 'inline-block';
+          }
+        } catch (e) {}
+      })();
+    </script>
+    <div class="dash-status-wrap">
+      <span id="insp-subtitle">memuat…</span>
+    </div>
+    <div class="dash-spacer"></div>
+    <div class="dash-controls">
+      <button class="cf-chip" id="cf-chip" onclick="handleCFChipClick()" title="Status Cloudflare / Kelola Tunnel">
+        <span id="cf-dot">○</span><span id="cf-label">Login CF</span>
+      </button>
+      <button class="btn-hdr" id="btn-check-update" onclick="checkForUpdate()" title="Check for Update">⬆</button>
+      <button class="btn-hdr danger" id="btn-delete-all" onclick="deleteAll()" style="display:none" title="Hapus semua tunnel">🗑</button>
+      <button class="btn-hdr" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">
+        <svg id="lnch-moon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+        <svg id="lnch-sun"  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button class="btn-hdr" onclick="openSettings()" title="Settings">⚙</button>
+    </div>
+  </header>
+
+  <div class="add-section">
+    <div class="add-bar">
+      <span class="add-bar-icon">⚡</span>
+      <input type="number" id="port-input"
+        placeholder="Port lokal (contoh: 3000)"
+        min="1" max="65535"
+        onkeydown="if(event.key==='Enter') addTunnel()"
+        oninput="onPortInput()"
+      />
+      <input type="text" id="host-input"
+        placeholder="Host lokal (contoh: setiyawan.test)"
+        style="display:none; flex:1; background:transparent; border:none; outline:none; color:var(--fg); font-size:14px; padding:0 4px;"
+        onkeydown="if(event.key==='Enter') addTunnel()"
+      />
+      <button class="btn-start" id="btn-add" onclick="addTunnel()">▶ Start</button>
+    </div>
+
+    <!-- Mode selector — always visible -->
+    <div class="mode-row" id="mode-row">
+      <span class="mode-label">Mode:</span>
+      <button class="mode-pill active" id="mode-quick" onclick="setTunnelMode('quick')">⚡ Quick Tunnel</button>
+      <button class="mode-pill" id="mode-custom" onclick="setTunnelMode('custom')" style="display:none">🔗 Custom Domain</button>
+      <button class="mode-pill" id="mode-host" onclick="setTunnelMode('host')">🖥 Static Host</button>
+      <select class="mode-route-select" id="mode-route-select" style="display:none" onchange="onModeRouteChange()">
+        <option value="">– Pilih subdomain route –</option>
+      </select>
+      <span class="mode-no-routes" id="mode-no-routes" style="display:none">
+        Belum ada route. <a onclick="openCFManager()">Tambah di CF Manager →</a>
+      </span>
+    </div>
+  </div>
+
+  <div id="err-msg"></div>
+  <div class="tunnel-list" id="tunnel-list">
+    <div class="empty"><span class="icon">🌐</span><span>Belum ada tunnel aktif.</span>
+      <span style="font-size:11px">Masukkan port lokal dan klik <b>Start Tunnel</b>.</span></div>
+  </div>
+
+  <!-- Mini global stats — hanya muncul kalau ada request -->
+  <div id="global-stats">
+    <span class="gs-item" id="gs-total">0 req</span>
+    <span class="gs-sep">·</span>
+    <span class="gs-item" id="gs-err">0 err</span>
+    <span class="gs-sep">·</span>
+    <span class="gs-item" id="gs-avg">– ms</span>
+  </div>
+
+  <div class="insp-bar">
+    <span>Inspector:</span>
+    <a class="insp-bar-url" id="insp-link" href="#" onclick="showInspector(); return false;">–</a>
+    <button class="btn-icon" title="Salin URL inspector" onclick="copyInsp()" style="width:22px;height:22px;font-size:11px">⎘</button>
+    <span style="flex:1"></span>
+    <button id="insp-requests" class="insp-req-btn" onclick="showInspector()" title="Buka Inspector">0 req</button>
+  </div>
+</div>
+
+<!-- ═══ INSPECTOR VIEW ════════════════════════════════════════════════════════ -->
+<div id="view-inspector">
+  <div class="insp-topbar">
+    <button class="btn-back" onclick="showDashboard()">
+      <svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="10 12 6 8 10 4"/></svg>
+      Kembali
+    </button>
+    <span class="insp-topbar-title">Request Inspector</span>
+    <span class="insp-topbar-url" id="topbar-url"></span>
+    <span id="insp-filter-label" style="font-size:10px;color:var(--accent);background:rgba(129,140,248,.12);border:1px solid rgba(129,140,248,.3);border-radius:4px;padding:2px 7px;font-family:monospace;cursor:pointer" onclick="clearPortFilter()" title="Klik untuk hapus filter port"></span>
+    <button class="btn-reload" title="Reload" onclick="reloadInsp()">↺</button>
+  </div>
+  <iframe id="insp-frame" src="about:blank"></iframe>
+</div>
+
+<!-- ═══ CF MANAGER MODAL ══════════════════════════════════════════════════════ -->
+<div id="cf-manager-overlay" onclick="closeCFManager()">
+  <div class="cf-manager-box" onclick="event.stopPropagation()">
+    <div class="cf-manager-header">
+      <h3>⚡ Cloudflare Tunnel Manager</h3>
+      <button class="api-setup-toggle" onclick="toggleApiSetup()" id="btn-api-setup">⚙ API Setup</button>
+      <button class="api-setup-toggle" style="color:var(--red);margin-left:4px" onclick="cfLogout()">⏏ Logout CF</button>
+      <button class="btn-cfm-close" onclick="closeCFManager()">✕</button>
+    </div>
+    <!-- API config panel -->
+    <div class="api-setup-panel" id="api-setup-panel">
+      <div class="api-setup-help">
+        Diperlukan untuk mengelola tunnel &amp; CNAME DNS records.<br>
+        Buat token di <a onclick="window.wanNet.openExternal('https://dash.cloudflare.com/profile/api-tokens')">Cloudflare → My Profile → API Tokens</a> dengan izin <b>Cloudflare Tunnel:Edit + DNS:Edit</b>.
+      </div>
+      <div class="api-setup-row">
+        <span class="api-setup-label">API Token</span>
+        <input class="api-setup-input" id="cf-api-token" type="password" placeholder="eyJhbGci… atau Bearer token" autocomplete="off" />
+      </div>
+      <div class="api-setup-row">
+        <span class="api-setup-label">Account ID</span>
+        <input class="api-setup-input" id="cf-account-id" placeholder="32-char hex — dari URL dashboard CF" autocomplete="off" />
+      </div>
+      <div class="api-setup-row">
+        <span class="api-setup-label">Zone ID</span>
+        <input class="api-setup-input" id="cf-zone-id" placeholder="32-char hex — sidebar kanan di dashboard CF" autocomplete="off" />
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn-save-api" onclick="saveApiSetup()">💾 Simpan</button>
+        <span id="api-setup-msg" style="font-size:11px"></span>
+      </div>
+    </div>
+    <div class="cf-manager-body" id="cf-manager-body">
+      <div style="color:var(--muted);font-size:12px;padding:10px 0">Memuat…</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ QR MODAL ═════════════════════════════════════════════════════════════ -->
+<div id="qr-overlay" onclick="closeQR()">
+  <div class="qr-box" onclick="event.stopPropagation()">
+    <h3>📱 QR Code</h3>
+    <img id="qr-img" src="" alt="QR Code">
+    <div id="qr-url-text"></div>
+    <div class="qr-actions">
+      <button class="btn-qr-copy" onclick="copyQR()">⎘ Salin URL</button>
+      <button class="btn-qr-close" onclick="closeQR()">Tutup</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CF LOGIN PICKER MODAL ════════════════════════════════════════════════ -->
+<div id="cf-login-overlay" onclick="closeCFLoginPicker()">
+  <div class="cf-login-box" onclick="event.stopPropagation()">
+
+    <!-- Step 1: Pilih metode -->
+    <div id="cf-picker-step">
+      <h3>Login Cloudflare</h3>
+      <p class="cf-login-sub">Pilih cara autentikasi untuk menggunakan custom domain</p>
+      <div class="cf-login-methods">
+        <button class="cf-method-btn" onclick="startSSOLogin()">
+          <span class="cf-method-icon">🔐</span>
+          <div>
+            <div class="cf-method-title">SSO Login</div>
+            <div class="cf-method-desc">Login via browser Cloudflare, tidak perlu setup manual</div>
+          </div>
+        </button>
+        <button class="cf-method-btn" onclick="showAPITokenStep()">
+          <span class="cf-method-icon">🔑</span>
+          <div>
+            <div class="cf-method-title">API Token</div>
+            <div class="cf-method-desc">Paste token langsung, tanpa login browser. Lebih cepat & stabil</div>
+          </div>
+        </button>
+      </div>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="btn-cf-cancel" onclick="closeCFLoginPicker()">Tutup</button>
+      </div>
+    </div>
+
+    <!-- Step 2: API Token form -->
+    <div id="cf-apitoken-step" class="cf-api-form">
+      <button class="cf-back-btn" onclick="backToPickerStep()">← Kembali</button>
+      <h3 style="margin-bottom:6px">API Token Login</h3>
+      <p class="cf-login-sub">Token tersimpan permanen, tidak perlu login ulang</p>
+      <div class="cf-field">
+        <label>API Token</label>
+        <input id="cf-at-token" type="password" placeholder="eyJhbGci… atau cf_ token" autocomplete="off" />
+        <div class="cf-field-help">
+          Buat di <a onclick="window.wanNet.openExternal('https://dash.cloudflare.com/profile/api-tokens')">Cloudflare → API Tokens</a>
+          dengan izin <b>Cloudflare Tunnel:Edit</b> + <b>DNS:Edit</b>
+        </div>
+      </div>
+      <div class="cf-field">
+        <label>Account ID</label>
+        <input id="cf-at-account" placeholder="32-char hex — dari URL dashboard CF" autocomplete="off" />
+        <div class="cf-field-help">
+          Buka <a onclick="window.wanNet.openExternal('https://dash.cloudflare.com')">dash.cloudflare.com</a>
+          → klik domain → sidebar kanan bagian <b>Account ID</b>
+        </div>
+      </div>
+      <div class="cf-field">
+        <label>Zone ID <span style="opacity:.5;font-weight:400">(opsional — untuk DNS)</span></label>
+        <input id="cf-at-zone" placeholder="32-char hex — sidebar kanan bagian Zone ID" autocomplete="off" />
+        <div class="cf-field-help">
+          Sama halaman dashboard CF → sidebar kanan bagian <b>Zone ID</b>
+        </div>
+      </div>
+      <div id="cf-at-msg" class="cf-login-msg"></div>
+      <div class="cf-login-actions">
+        <button class="btn-cf-cancel" onclick="closeCFLoginPicker()">Batal</button>
+        <button class="btn-cf-submit" id="cf-at-submit" onclick="submitAPIToken()">Masuk</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="copied-toast" id="toast">Disalin!</div>
+
+<!-- ═══ UPDATE DIALOG ═════════════════════════════════════════════════════════ -->
+<div id="update-overlay" style="display:none;position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);align-items:center;justify-content:center">
+  <div style="background:var(--bg2,#161622);border:1px solid rgba(129,140,248,.25);border-radius:16px;padding:28px 28px 24px;width:360px;box-shadow:0 24px 60px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:14px">
+
+    <!-- Header -->
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="upd-icon" style="font-size:24px">⬆️</span>
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:14px;color:var(--fg,#e2e8f0)" id="upd-title">Memeriksa pembaruan…</div>
+        <div style="font-size:11px;color:var(--muted,#6b7280);margin-top:2px" id="upd-version"></div>
+      </div>
+      <button onclick="closeUpdateDialog()" style="background:none;border:none;color:var(--muted,#6b7280);font-size:16px;cursor:pointer;padding:2px 6px;border-radius:4px">✕</button>
+    </div>
+
+    <!-- Status -->
+    <div style="font-size:12px;color:var(--muted,#6b7280);line-height:1.5" id="upd-status"></div>
+
+    <!-- Progress bar (state: downloading) -->
+    <div id="upd-progress-wrap" style="display:none;flex-direction:column;gap:6px">
+      <div style="height:6px;background:rgba(255,255,255,.08);border-radius:99px;overflow:hidden">
+        <div id="upd-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#4f46e5,#7c3aed);border-radius:99px;transition:width .25s ease"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--muted,#6b7280)">
+        <span id="upd-pct">0%</span>
+        <span id="upd-speed"></span>
+      </div>
+    </div>
+
+    <!-- Buttons -->
+    <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px">
+      <!-- Nanti (selalu ada kecuali state checking) -->
+      <button id="upd-later-btn" onclick="closeUpdateDialog()" style="display:none;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:var(--fg,#e2e8f0);padding:7px 16px;border-radius:8px;font-size:12px;cursor:pointer">Nanti</button>
+      <!-- Update Sekarang (state: confirm) -->
+      <button id="upd-now-btn" onclick="startUpdateDownload()" style="display:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;color:#fff;padding:7px 18px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">⬇ Update Sekarang</button>
+      <!-- Restart & Install (state: ready) -->
+      <button id="upd-install-btn" onclick="window.wanNet.installUpdate()" style="display:none;background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;color:#fff;padding:7px 18px;border-radius:8px;font-size:12px;cursor:pointer;font-weight:600">↺ Restart &amp; Install</button>
+    </div>
+  </div>
+</div>
+
+
+<script src="launcher.js"></script>
+</body>
+</html>

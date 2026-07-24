@@ -1,0 +1,18 @@
+node_modules/
+out/
+dist/
+
+# cloudflared binary — downloaded by CI (and by dev) per-platform, not committed
+modules/net/cloudflared
+modules/net/cloudflared.exe
+
+# vendor snapshots are large mirrors of sibling repos; regenerate via vendor:sync
+vendor/
+
+# runtime logs (wan-net / inspector)
+*.log
+**/*log*.json
+
+# OS / editor
+.DS_Store
+npm-debug.log*

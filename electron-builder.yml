@@ -1,0 +1,52 @@
+appId: com.wan.superapp
+productName: WAN Super App
+directories:
+  output: dist
+  buildResources: build
+
+# Published to GitHub Releases by CI (electron-builder --publish always).
+# EDIT owner/repo to your GitHub repository before tagging a release.
+publish:
+  provider: github
+  owner: YOUR_GH_USERNAME
+  repo: wan-super-app
+
+files:
+  - out/**
+  - package.json
+
+mac:
+  # cloudflared (arm64) downloaded by CI into modules/net/cloudflared
+  extraResources:
+    - from: modules/net/cloudflared
+      to: cloudflared
+  target:
+    - target: dmg
+      arch: [arm64]
+    - target: zip
+      arch: [arm64]
+  category: public.app-category.developer-tools
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  # Notarization runs automatically when APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
+  # + APPLE_TEAM_ID env vars are present (see .github/workflows/build.yml).
+  notarize: true
+
+win:
+  extraResources:
+    - from: modules/net/cloudflared.exe
+      to: cloudflared.exe
+  target:
+    - nsis
+
+linux:
+  extraResources:
+    - from: modules/net/cloudflared
+      to: cloudflared
+  target:
+    - AppImage
+    - deb
+  category: Development
+  executableName: wan-super-app
