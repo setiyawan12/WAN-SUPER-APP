@@ -4,6 +4,10 @@ directories:
   output: dist
   buildResources: build
 
+# Custom notarization (retryable notarytool + staple). Replaces electron-builder's
+# built-in notarize, which crashes on Apple's intermittent non-JSON HTTP errors.
+afterSign: build/notarize.cjs
+
 # Published to GitHub Releases by CI (electron-builder --publish always).
 # EDIT owner/repo to your GitHub repository before tagging a release.
 publish:
@@ -30,11 +34,8 @@ mac:
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
-  # Notarize via notarytool. teamId must be explicit (electron-builder 24 does
-  # NOT auto-read APPLE_TEAM_ID for it); APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD
-  # are still read from env by @electron/notarize.
-  notarize:
-    teamId: ${env.APPLE_TEAM_ID}
+  # Notarization handled by the afterSign hook (build/notarize.cjs) with retry.
+  notarize: false
 
 win:
   extraResources:
