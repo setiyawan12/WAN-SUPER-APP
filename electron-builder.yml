@@ -24,6 +24,12 @@ asarUnpack:
   - "**/node_modules/argon2/**"
   - "**/node_modules/ssh2/**"
 
+# JANGAN compile native dari source saat packaging. argon2 memakai prebuild N-API
+# (ABI-stabil lintas Node/Electron) yang sudah dibundel di tarball npm, jadi tidak
+# perlu Visual Studio / build tools di runner CI. Rebuild dari source justru gagal
+# di Windows/Linux tanpa toolchain C++.
+npmRebuild: false
+
 mac:
   # cloudflared (arm64) downloaded by CI into modules/net/cloudflared
   extraResources:
