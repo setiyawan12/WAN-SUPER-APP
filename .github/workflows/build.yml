@@ -21,7 +21,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  NODE_VERSION: "20"
+  # Electron 43+ requires Node >= 22.12. Keep CI on the same major.
+  NODE_VERSION: "22"
 
 jobs:
   # ── macOS (DMG + ZIP, signed + notarized) ────────────────────────────────────
@@ -43,7 +44,13 @@ jobs:
           mv cloudflared modules/net/cloudflared
 
       - name: Install dependencies
-        run: npm ci || npm install
+        # Skip lifecycle scripts so argon2/ssh2 do not compile from source.
+        # argon2 ships N-API prebuilds in the npm tarball; electron binary is
+        # fetched explicitly in the next step.
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Download Electron binary
+        run: node node_modules/electron/install.js
 
       - name: Resolve version
         id: ver
@@ -123,7 +130,14 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - name: Download cloudflared (windows-amd64)
+      - # Windows runners often fail argon2/node-gyp source rebuilds (VS detection).
+        # Use packaged N-API prebuilds instead of compiling native addons.
+        shell: bash
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Download Electron binary
+        shell: bash
+        run: node node_modules/electron/install.js (windows-amd64)
         shell: pwsh
         run: |
           Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "modules/net/cloudflared.exe"
@@ -173,7 +187,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+# Skip lifecycle scripts so argon2 does not compile from source.
+        # electron binary is fetched explicitly in the next step.
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
 
+      - name: Download Electron binary
+        run: node node_modules/electron/install.js
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}

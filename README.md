@@ -74,14 +74,15 @@ Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP
 
 | Komponen | Versi |
 |----------|-------|
-| Node.js  | **20+** |
+| Node.js  | **22.12+** (Electron 43) |
 | OS       | macOS · Windows · Linux |
 | Electron | `^43` (dikelola otomatis) |
 
-> **Native module (WANN SSH → `argon2`).** `npm install` menjalankan `postinstall`
-> (`electron-builder install-app-deps`) untuk menyiapkan native module terhadap ABI
-> Electron. Toolchain build: macOS = Xcode Command Line Tools · Windows = VS 2022
-> Build Tools (C++) + Python 3.x · Linux = build-essential, python3, libsecret-1-dev.
+> **Native module (WANN SSH → `argon2`).** Paket `argon2` membawa prebuild N-API
+> (ABI-stabil), jadi CI/packaging **tidak** rebuild dari source
+> (`electron-builder.yml` → `npmRebuild: false`). Untuk development lokal, cukup
+> `npm install`; jika prebuild gagal load, barulah toolchain C++ diperlukan
+> (macOS Xcode CLT · Windows VS Build Tools · Linux build-essential).
 
 ---
 
