@@ -130,20 +130,20 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
 
-      - # Windows runners often fail argon2/node-gyp source rebuilds (VS detection).
+      - name: Download cloudflared (windows-amd64)
+        shell: pwsh
+        run: |
+          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "modules/net/cloudflared.exe"
+
+      - name: Install dependencies
+        # Windows runners often fail argon2/node-gyp source rebuilds (VS detection).
         # Use packaged N-API prebuilds instead of compiling native addons.
         shell: bash
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
       - name: Download Electron binary
         shell: bash
-        run: node node_modules/electron/install.js (windows-amd64)
-        shell: pwsh
-        run: |
-          Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile "modules/net/cloudflared.exe"
-
-      - name: Install dependencies
-        run: npm ci || npm install
+        run: node node_modules/electron/install.js
 
       - name: Resolve version
         id: ver
@@ -187,12 +187,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-# Skip lifecycle scripts so argon2 does not compile from source.
-        # electron binary is fetched explicitly in the next step.
-        run: npm ci --ignore-scripts || npm install --ignore-scripts
 
-      - name: Download Electron binary
-        run: node node_modules/electron/install.js
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -205,7 +200,12 @@ jobs:
           chmod +x modules/net/cloudflared
 
       - name: Install dependencies
-        run: npm ci || npm install
+        # Skip lifecycle scripts so argon2 does not compile from source.
+        # electron binary is fetched explicitly in the next step.
+        run: npm ci --ignore-scripts || npm install --ignore-scripts
+
+      - name: Download Electron binary
+        run: node node_modules/electron/install.js
 
       - name: Resolve version
         id: ver
