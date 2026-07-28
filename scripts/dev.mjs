@@ -7,7 +7,7 @@ import electronPath from "electron";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 
-execSync("npm run build:main && npm run copy:assets", {
+execSync("npm run build:main && npm run build:ssh && npm run copy:assets", {
   stdio: "inherit",
   cwd: root,
 });

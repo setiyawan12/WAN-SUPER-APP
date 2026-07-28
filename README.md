@@ -50,7 +50,7 @@ WAN Super App membungkus **tiga aplikasi mandiri** ke dalam satu shell Electron:
 |-------|----------|-----------|
 | **WANN X RENN CLIProxyAPI** | `wan-cliproxyapi` | Chat AI, Cowork Mode, Neuron Activity, sinkronisasi VS Code / JetBrains |
 | **WAN NET** | `wan-net` | Cloudflare Tunnel + inspector lalu-lintas |
-| **WANN SSH** | `wann-ssh` | SSH client + encrypted vault (Argon2id + AES-256-GCM), TOFU host-key, terminal xterm.js, sync cloud opsional (Firebase) |
+| **WANN SSH** | `wann-ssh` | SSH client + encrypted vault (Argon2id + AES-256-GCM), TOFU host-key, terminal xterm.js, sync cloud opsional (Firebase **Realtime Database**) |
 
 > **Alur pemakaian:** Buka app → **Hub** (3 kartu) → pilih modul → UI & fungsi persis seperti app aslinya.
 
@@ -174,13 +174,67 @@ scripts/            # Build helper (copy-assets, dev, vendor-sync)
 | CLIProxyAPI home | `~/.wan-super-app/cliproxyapi` |
 | WAN NET config | `{userData}/wan-net-cfg.json` |
 | WANN SSH store | `{userData}/wann-ssh.json` (item/outbox/vault-meta) |
-| WANN SSH Firebase config | `{userData}/firebase-config.json` (opsional, sync cloud) |
+| WANN SSH Firebase config | `{userData}/firebase-config.json` (opsional, sync cloud RTDB; wajib `databaseURL`) |
 
 > `{userData}` di macOS = `~/Library/Application Support/WAN Super App/`.
 >
 > ⚠️ Vault WANN SSH terikat ke `{userData}` Super App (appId `com.wan.superapp`), berbeda
 > dari app `wann-ssh` standalone (`com.wann.wannssh`). Data tidak otomatis terbagi —
 > gunakan Firebase sync bila perlu berbagi antar-app.
+
+### WANN SSH cloud sync (Realtime Database)
+
+Host/group/identity/key **tetap disimpan lokal dulu** (`wann-ssh.json`). Vault `personal`
+saja yang di-outbox lalu di-push ke RTDB. Field sensitif tetap terenkripsi vault
+sebelum sync.
+
+**Path RTDB:**
+
+```text
+users/{uid}/vaults/{vaultId}/items/{itemId}
+```
+
+**`firebase-config.json` (wajib `databaseURL`):**
+
+```json
+{
+  "apiKey": "...",
+  "authDomain": "...",
+  "projectId": "...",
+  "appId": "...",
+  "databaseURL": "https://<project>-default-rtdb.firebaseio.com"
+}
+```
+
+**Rules minimal + index `updatedAt`:**
+
+```json
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "auth != null && auth.uid == $uid",
+        ".write": "auth != null && auth.uid == $uid",
+        "vaults": {
+          "$vaultId": {
+            "items": {
+              ".indexOn": ["updatedAt"]
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+Data lama di **Firestore tidak ikut pindah** otomatis — migrasi manual / `sync:pushAll`
+dari klien setelah sign-in jika ingin mengisi RTDB dari lokal.
+
+**Sesi Auth:** setelah Sign in sekali, refresh token disimpan di
+`{userData}/firebase-auth-session.bin` (dienkripsi `safeStorage` bila tersedia).
+Password **tidak** disimpan. Restart app memulihkan sesi otomatis; **Sign out**
+menghapus file sesi.
 
 ---
 

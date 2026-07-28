@@ -9,6 +9,10 @@ modules/net/cloudflared.exe
 # vendor snapshots are large mirrors of sibling repos; regenerate via vendor:sync
 vendor/
 
+# compiled SSH module output (tsc emit from modules/ssh/src/main → modules/ssh/main)
+# regenerate via: npm run build:ssh
+modules/ssh/main/
+
 # runtime logs (wan-net / inspector)
 *.log
 **/*log*.json

@@ -16522,6 +16522,7 @@ function SyncBar() {
   const refresh = () => void window.api.sync.status().then(setSt);
   reactExports.useEffect(refresh, []);
   reactExports.useEffect(() => window.api.on.syncState((p) => setSt((s) => ({ ...s, state: p.state, pending: p.pending }))), []);
+  reactExports.useEffect(() => window.api.on.storeChanged(() => refresh()), []);
   const now = async () => {
     await window.api.sync.now();
     refresh();
@@ -16529,6 +16530,15 @@ function SyncBar() {
   const pushAll = async () => {
     const r = await window.api.sync.pushAll();
     if (!r.ok && r.reason) setErr(r.reason);
+    refresh();
+  };
+  const logout = async () => {
+    setErr(null);
+    try {
+      await window.api.sync.signOut();
+    } catch (e) {
+      setErr(e.message);
+    }
     refresh();
   };
   const importConfig = async () => {
@@ -16561,6 +16571,16 @@ function SyncBar() {
           disabled: st.state === "syncing",
           title: "Antre ulang semua item lokal ke cloud (rebuild dokumen yang terhapus)",
           children: "Re-upload"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: "btn",
+          style: mini,
+          onClick: logout,
+          title: "Keluar dari akun cloud (sesi dihapus, vault lokal tetap aman)",
+          children: "Logout"
         }
       )
     ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini, onClick: () => setDialog(true), children: "Sign in" }),

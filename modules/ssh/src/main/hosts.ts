@@ -1,0 +1,193 @@
+import { VAULT } from "./constants.js";
+import { itemRepo, resolveEffective } from "./repo.js";
+import type { VaultCore } from "./vault.js";
+
+export class HostService {
+  vault: VaultCore;
+  ownerUid: () => string;
+  constructor(vault: VaultCore, ownerUid: () => string) {
+    this.vault = vault;
+    this.ownerUid = ownerUid;
+  }
+  toView(h: any) {
+    const eff = resolveEffective(h, (id) => itemRepo.get(id));
+    const identity = eff.identityId ? itemRepo.get(eff.identityId) : null;
+    const hasCredential = (identity?.secret ?? null) !== null || eff.keyId !== null;
+    return {
+      id: h.id,
+      vaultId: h.vaultId,
+      groupId: h.groupId,
+      label: h.label,
+      address: h.address,
+      port: h.port,
+      protocol: h.protocol,
+      identityId: h.identityId,
+      keyId: h.keyId,
+      jumpHostId: h.jumpHostId,
+      tags: h.tags,
+      environment: h.environment,
+      favorite: h.favorite,
+      agentForwarding: h.agentForwarding,
+      keepAliveInterval: h.keepAliveInterval,
+      lastConnectedAt: h.lastConnectedAt,
+      effectiveUsername: eff.username,
+      effectivePort: eff.port,
+      hasCredential,
+      groupPath: eff.groupPath
+    };
+  }
+  listHosts() {
+    return itemRepo.listByTypeAll("host").map((h) => this.toView(h));
+  }
+  getHost(id: string) {
+    const h = itemRepo.get(id);
+    return h ? this.toView(h) : null;
+  }
+  saveHost(input: any) {
+    const now = Date.now();
+    const existing = input.id ? itemRepo.get(input.id) : null;
+    const id = existing?.id ?? itemRepo.newId();
+    const vaultId = existing?.vaultId ?? input.vaultId ?? VAULT.defaultVaultId;
+    let identityId = input.identityId ?? existing?.identityId ?? null;
+    if (input.password || input.username) {
+      const identity = this.upsertInlineIdentity(
+        identityId,
+        input.username ?? "root",
+        input.password,
+        now,
+        vaultId
+      );
+      identityId = identity;
+    }
+    const host = {
+      id,
+      type: "host",
+      ownerUid: this.ownerUid(),
+      vaultId,
+      updatedAt: now,
+      version: (existing?.version ?? 0) + 1,
+      deletedAt: null,
+      groupId: input.groupId ?? existing?.groupId ?? null,
+      label: input.label,
+      address: input.address,
+      port: input.port ?? existing?.port ?? null,
+      protocol: input.protocol ?? existing?.protocol ?? "ssh",
+      identityId,
+      keyId: input.keyId ?? existing?.keyId ?? null,
+      jumpHostId: input.jumpHostId ?? existing?.jumpHostId ?? null,
+      tags: input.tags ?? existing?.tags ?? [],
+      environment: input.environment ?? existing?.environment ?? "none",
+      themeId: existing?.themeId ?? null,
+      fontId: existing?.fontId ?? null,
+      startupSnippetId: existing?.startupSnippetId ?? null,
+      backspaceMode: existing?.backspaceMode ?? "del",
+      keepAliveInterval: input.keepAliveInterval ?? existing?.keepAliveInterval ?? 0,
+      agentForwarding: input.agentForwarding ?? existing?.agentForwarding ?? false,
+      charset: existing?.charset ?? "utf-8",
+      notes: existing?.notes ?? null,
+      favorite: input.favorite ?? existing?.favorite ?? false,
+      lastConnectedAt: existing?.lastConnectedAt ?? null
+    };
+    itemRepo.upsert(host);
+    return id;
+  }
+  upsertInlineIdentity(existingId: string | null, username: string, password: string | undefined, now: number, vaultId: string) {
+    const prev = existingId ? itemRepo.get(existingId) : null;
+    const id = prev?.id ?? itemRepo.newId();
+    const secret = password ? this.vault.encryptField(password, id, "secret") : prev?.secret ?? null;
+    const identity = {
+      id,
+      type: "identity",
+      ownerUid: this.ownerUid(),
+      vaultId: prev?.vaultId ?? vaultId,
+      updatedAt: now,
+      version: (prev?.version ?? 0) + 1,
+      deletedAt: null,
+      label: `${username}@inline`,
+      username,
+      secret,
+      keyId: prev?.keyId ?? null
+    };
+    itemRepo.upsert(identity);
+    return id;
+  }
+  removeHost(id: string) {
+    itemRepo.remove(id);
+  }
+  listGroups() {
+    return itemRepo.listByTypeAll("group").map((g) => ({
+      id: g.id,
+      parentId: g.parentId,
+      name: g.name,
+      defaults: g.defaults
+    }));
+  }
+  saveGroup(input: any) {
+    const now = Date.now();
+    const existing = input.id ? itemRepo.get(input.id) : null;
+    const id = existing?.id ?? itemRepo.newId();
+    const group = {
+      id,
+      type: "group",
+      ownerUid: this.ownerUid(),
+      updatedAt: now,
+      version: (existing?.version ?? 0) + 1,
+      deletedAt: null,
+      parentId: input.parentId ?? existing?.parentId ?? null,
+      vaultId: existing?.vaultId ?? VAULT.defaultVaultId,
+      name: input.name,
+      defaults: input.defaults ?? existing?.defaults ?? {}
+    };
+    itemRepo.upsert(group);
+    return id;
+  }
+  removeGroup(id: string) {
+    itemRepo.remove(id);
+  }
+}
+
+export class IdentityService {
+  vault: VaultCore;
+  ownerUid: () => string;
+  constructor(vault: VaultCore, ownerUid: () => string) {
+    this.vault = vault;
+    this.ownerUid = ownerUid;
+  }
+  toView(i: any) {
+    return {
+      id: i.id,
+      vaultId: i.vaultId,
+      label: i.label,
+      username: i.username,
+      keyId: i.keyId,
+      hasSecret: i.secret !== null
+    };
+  }
+  list() {
+    return itemRepo.listByTypeAll("identity").map((i) => this.toView(i));
+  }
+  save(input: any) {
+    const now = Date.now();
+    const existing = input.id ? itemRepo.get(input.id) : null;
+    const id = existing?.id ?? itemRepo.newId();
+    const secret = input.password ? this.vault.encryptField(input.password, id, "secret") : existing?.secret ?? null;
+    const identity = {
+      id,
+      type: "identity",
+      ownerUid: this.ownerUid(),
+      vaultId: existing?.vaultId ?? input.vaultId ?? VAULT.defaultVaultId,
+      updatedAt: now,
+      version: (existing?.version ?? 0) + 1,
+      deletedAt: null,
+      label: input.label,
+      username: input.username,
+      secret,
+      keyId: input.keyId ?? existing?.keyId ?? null
+    };
+    itemRepo.upsert(identity);
+    return id;
+  }
+  remove(id: string) {
+    itemRepo.remove(id);
+  }
+}

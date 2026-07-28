@@ -1,5 +1,9 @@
 {
   "name": "wan-super-app-module-ssh",
   "private": true,
-  "type": "commonjs"
+  "type": "commonjs",
+  "scripts": {
+    "build:main": "tsc -p tsconfig.main.json",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit"
+  }
 }
