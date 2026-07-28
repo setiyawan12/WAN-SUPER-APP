@@ -20,3 +20,6 @@ modules/ssh/main/
 # OS / editor
 .DS_Store
 npm-debug.log*
+
+# graphify knowledge-graph output (local tool)
+graphify-out/

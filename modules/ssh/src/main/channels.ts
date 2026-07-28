@@ -11,6 +11,7 @@ export const CH = {
   hosts: {
     list: "hosts:list",
     get: "hosts:get",
+    revealPassword: "hosts:revealPassword",
     save: "hosts:save",
     remove: "hosts:remove",
     testConnection: "hosts:testConnection"
@@ -30,6 +31,7 @@ export const CH = {
     now: "sync:now",
     pushAll: "sync:pushAll",
     signIn: "sync:signIn",
+    signInGoogle: "sync:signInGoogle",
     signOut: "sync:signOut",
     importConfig: "sync:importConfig"
   },

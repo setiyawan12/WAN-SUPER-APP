@@ -7147,64 +7147,100 @@ function VaultUnlock() {
       void unlock(pw);
     }
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: wrap, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { style: card, onSubmit: submit, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: monogram, children: "W" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { style: { fontSize: "var(--text-xl)", fontWeight: 620 }, children: "WANN-SSH" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "muted", style: { fontSize: "var(--text-sm)", marginBottom: "var(--s4)" }, children: isCreate ? "Buat master password untuk vault terenkripsi" : "Buka vault kamu" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "input",
-      {
-        type: "password",
-        autoFocus: true,
-        placeholder: "Master password",
-        value: pw,
-        onChange: (e) => setPw(e.target.value),
-        style: { width: "100%", marginBottom: "var(--s2)" }
-      }
-    ),
-    isCreate && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "input",
-      {
-        type: "password",
-        placeholder: "Konfirmasi password",
-        value: confirm2,
-        onChange: (e) => setConfirm(e.target.value),
-        style: { width: "100%", marginBottom: "var(--s2)" }
-      }
-    ),
-    mismatch && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: errStyle, children: "Password tidak cocok" }),
-    isCreate && pw.length > 0 && pw.length < 8 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: errStyle, children: "Minimal 8 karakter" }),
-    error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: errStyle, children: error }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", className: "btn btn-primary", style: { width: "100%", marginTop: "var(--s3)" }, children: isCreate ? "Buat vault" : "Unlock" }),
-    isCreate && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: "var(--s3)" }, children: "Password ini tidak pernah meninggalkan device. Tidak bisa dipulihkan kalau lupa." })
-  ] }) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: wrap, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: auroraA }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: auroraB }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { style: card, onSubmit: submit, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: monogram, children: "W" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { style: { fontSize: "var(--text-2xl)", fontWeight: 700, letterSpacing: ".01em" }, children: "WANN-SSH" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "secondary", style: { fontSize: "var(--text-sm)", marginBottom: "var(--s5)", marginTop: 4 }, children: isCreate ? "Buat master password untuk vault terenkripsi" : "Buka vault kamu untuk melanjutkan" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          type: "password",
+          autoFocus: true,
+          placeholder: "Master password",
+          value: pw,
+          onChange: (e) => setPw(e.target.value),
+          style: { width: "100%", marginBottom: "var(--s2)" }
+        }
+      ),
+      isCreate && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          type: "password",
+          placeholder: "Konfirmasi password",
+          value: confirm2,
+          onChange: (e) => setConfirm(e.target.value),
+          style: { width: "100%", marginBottom: "var(--s2)" }
+        }
+      ),
+      mismatch && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: errStyle, children: "Password tidak cocok" }),
+      isCreate && pw.length > 0 && pw.length < 8 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: errStyle, children: "Minimal 8 karakter" }),
+      error && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: errStyle, children: error }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", className: "btn btn-primary", style: { width: "100%", marginTop: "var(--s3)", padding: "10px" }, children: isCreate ? "Buat vault" : "⚿ Unlock" }),
+      isCreate && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: "var(--s4)", lineHeight: 1.5 }, children: "Password ini tidak pernah meninggalkan device. Tidak bisa dipulihkan kalau lupa." })
+    ] })
+  ] });
 }
 const wrap = {
   height: "100%",
   display: "grid",
   placeItems: "center",
+  position: "relative",
+  overflow: "hidden",
   background: "var(--bg-base)"
 };
+const auroraA = {
+  position: "absolute",
+  width: 520,
+  height: 520,
+  borderRadius: "50%",
+  top: "-18%",
+  right: "-10%",
+  background: "radial-gradient(circle, rgba(108,140,255,.5), transparent 62%)",
+  filter: "blur(70px)",
+  animation: "aurora 22s linear infinite",
+  pointerEvents: "none"
+};
+const auroraB = {
+  position: "absolute",
+  width: 480,
+  height: 480,
+  borderRadius: "50%",
+  bottom: "-20%",
+  left: "-12%",
+  background: "radial-gradient(circle, rgba(90,209,230,.38), transparent 62%)",
+  filter: "blur(70px)",
+  animation: "aurora 28s linear infinite reverse",
+  pointerEvents: "none"
+};
 const card = {
-  width: 320,
+  position: "relative",
+  width: 340,
   padding: "var(--s8)",
-  background: "var(--bg-raised)",
-  border: "1px solid var(--border-subtle)",
-  borderRadius: "var(--r-lg)",
-  boxShadow: "var(--sh-3)",
-  textAlign: "center"
+  textAlign: "center",
+  zIndex: 1,
+  background: "var(--glass-bg)",
+  border: "1px solid var(--glass-border)",
+  borderRadius: "var(--r-xl)",
+  boxShadow: "var(--sh-3), var(--ring)",
+  backdropFilter: "blur(var(--blur)) saturate(140%)",
+  WebkitBackdropFilter: "blur(var(--blur)) saturate(140%)"
 };
 const monogram = {
-  width: 44,
-  height: 44,
-  margin: "0 auto var(--s3)",
-  borderRadius: "var(--r-md)",
-  background: "var(--accent)",
-  color: "var(--fg-inverse)",
+  width: 60,
+  height: 60,
+  margin: "0 auto var(--s4)",
+  borderRadius: "var(--r-lg)",
+  background: "var(--grad-accent)",
+  color: "#fff",
   display: "grid",
   placeItems: "center",
-  fontWeight: 700,
-  fontSize: 22
+  fontWeight: 800,
+  fontSize: 30,
+  boxShadow: "var(--glow-accent)",
+  animation: "float-badge 4s var(--ease) infinite"
 };
 const errStyle = {
   color: "var(--danger)",
@@ -7238,16 +7274,15 @@ function envColor(env) {
   return COLOR$1[env in COLOR$1 ? env : "none"];
 }
 function EnvRail({ env, active }) {
+  const c = envColor(env);
   return /* @__PURE__ */ jsxRuntimeExports.jsx(
     "span",
     {
+      className: "env-rail",
       style: {
-        width: 3,
-        alignSelf: "stretch",
-        background: envColor(env),
-        opacity: active ? 1 : 0.75,
-        borderRadius: 2,
-        flexShrink: 0
+        background: c,
+        opacity: active ? 1 : 0.7,
+        boxShadow: active ? `0 0 8px ${c}` : "none"
       }
     }
   );
@@ -7255,69 +7290,74 @@ function EnvRail({ env, active }) {
 function HostList({ onEdit, onNew }) {
   const { hosts, selectedId, reload, select, remove } = useHostStore();
   const openSession = useSessionStore((s) => s.open);
+  const [query, setQuery] = reactExports.useState("");
   reactExports.useEffect(() => {
     void reload();
     return window.api.on.storeChanged(() => void reload());
   }, [reload]);
   const connect = (h) => void openSession({ id: h.id, label: h.label, environment: h.environment });
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: header, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontSize: "var(--text-xs)", letterSpacing: 0.6, color: "var(--fg-muted)" }, children: "HOSTS" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: { padding: "2px 8px" }, onClick: onNew, title: "Tambah host", children: "+" })
+  const filtered = reactExports.useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return hosts;
+    return hosts.filter(
+      (h) => [h.label, h.effectiveUsername ?? "", h.environment].join(" ").toLowerCase().includes(q)
+    );
+  }, [hosts, query]);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "list-header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "list-title", children: "HOSTS" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "chip", children: hosts.length }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-btn", onClick: onNew, title: "Tambah host", style: { fontSize: 18, lineHeight: 1 }, children: "+" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, overflowY: "auto" }, children: [
+    hosts.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "search", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "search-ico", children: "⌕" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          placeholder: "Cari host…",
+          value: query,
+          onChange: (e) => setQuery(e.target.value)
+        }
+      )
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "host-scroll", children: [
       hosts.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: empty, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: 22, marginBottom: "var(--s2)" }, children: "⌗" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 520, marginBottom: "var(--s1)" }, children: "Belum ada host" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: emptyIcon, children: "⌗" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 620, marginBottom: "var(--s1)" }, children: "Belum ada host" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginBottom: "var(--s3)" }, children: "Tambahkan server pertamamu" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: onNew, children: "Tambah host" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: onNew, children: "+ Tambah host" })
       ] }),
-      hosts.map((h) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      hosts.length > 0 && filtered.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "muted", style: { textAlign: "center", padding: "var(--s6) var(--s4)", fontSize: "var(--text-sm)" }, children: [
+        "Tidak ada host cocok “",
+        query,
+        "”."
+      ] }),
+      filtered.map((h) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
-          style: { ...row, background: selectedId === h.id ? "var(--bg-selected)" : void 0 },
+          className: `host-row${selectedId === h.id ? " selected" : ""}`,
           onClick: () => select(h.id),
           onDoubleClick: () => connect(h),
-          className: "host-row",
+          title: "Klik-dua-kali untuk connect",
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(EnvRail, { env: h.environment, active: selectedId === h.id }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: dot }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: h.label }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                title: h.vaultId === "personal" ? "Cloud (tersinkron)" : "Lokal (offline)",
-                style: { fontSize: "var(--text-xs)", opacity: 0.7 },
-                children: h.vaultId === "personal" ? "☁" : "💻"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "muted", style: { fontSize: "var(--text-xs)" }, children: h.effectiveUsername ?? "" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                className: "btn",
-                style: miniBtn,
-                title: "Edit",
-                onClick: (e) => {
-                  e.stopPropagation();
-                  onEdit(h.id);
-                },
-                children: "⋯"
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "button",
-              {
-                className: "btn",
-                style: miniBtn,
-                title: "Hapus",
-                onClick: (e) => {
-                  e.stopPropagation();
-                  void remove(h.id);
-                },
-                children: "✕"
-              }
-            )
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "host-title", children: h.label }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "host-sub", children: [
+                h.vaultId === "personal" ? "☁ cloud" : "💻 lokal",
+                h.effectiveUsername ? ` · ${h.effectiveUsername}` : ""
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "row-actions", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-btn", title: "Edit", onClick: (e) => {
+                e.stopPropagation();
+                onEdit(h.id);
+              }, children: "⋯" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-btn danger", title: "Hapus", onClick: (e) => {
+                e.stopPropagation();
+                void remove(h.id);
+              }, children: "✕" })
+            ] })
           ]
         },
         h.id
@@ -7325,39 +7365,18 @@ function HostList({ onEdit, onNew }) {
     ] })
   ] });
 }
-const header = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "0 var(--s3)",
-  height: 34,
-  borderBottom: "1px solid var(--border-subtle)"
-};
-const row = {
-  display: "flex",
-  alignItems: "center",
-  gap: "var(--s2)",
-  height: "var(--h-row)",
-  padding: "0 var(--s2) 0 0",
-  cursor: "default"
-};
-const dot = {
-  width: 6,
-  height: 6,
-  borderRadius: "50%",
-  background: "var(--fg-muted)",
-  flexShrink: 0,
-  marginLeft: "var(--s1)"
-};
-const miniBtn = {
-  padding: "0 6px",
-  fontSize: "var(--text-xs)",
-  background: "transparent",
-  border: "none"
-};
-const empty = {
-  textAlign: "center",
-  padding: "var(--s8) var(--s4)"
+const empty = { textAlign: "center", padding: "var(--s8) var(--s4)" };
+const emptyIcon = {
+  width: 52,
+  height: 52,
+  margin: "0 auto var(--s3)",
+  borderRadius: "var(--r-lg)",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 24,
+  color: "var(--accent)",
+  background: "var(--accent-quiet)",
+  border: "1px solid rgba(108,140,255,.28)"
 };
 const ENVS = ["none", "prod", "staging", "dev"];
 function HostForm({ hostId, onClose }) {
@@ -7367,6 +7386,7 @@ function HostForm({ hostId, onClose }) {
   const [port, setPort] = reactExports.useState("22");
   const [username, setUsername] = reactExports.useState("");
   const [password, setPassword] = reactExports.useState("");
+  const [showPw, setShowPw] = reactExports.useState(false);
   const [environment, setEnvironment] = reactExports.useState("none");
   const [vaultId, setVaultId] = reactExports.useState("local");
   const [testResult, setTestResult] = reactExports.useState(null);
@@ -7398,6 +7418,9 @@ function HostForm({ hostId, onClose }) {
       setIdentityId(h.identityId);
       setAgentFwd(h.agentForwarding);
       setKeepAlive(String(h.keepAliveInterval ?? 0));
+    });
+    void window.api.hosts.revealPassword(hostId).then((r) => {
+      if (r?.password) setPassword(r.password);
     });
   }, [hostId]);
   const persist = async () => {
@@ -7431,58 +7454,85 @@ function HostForm({ hostId, onClose }) {
     const r = await window.api.hosts.testConnection(id);
     setTestResult(r.ok ? `✓ Terhubung (${r.latencyMs}ms)` : `✕ ${r.error}`);
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: overlay$4, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { style: dialog$4, onClick: (e) => e.stopPropagation(), onSubmit: save, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { fontSize: "var(--text-lg)", marginBottom: "var(--s4)" }, children: hostId ? "Edit host" : "Host baru" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Label", children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: label, onChange: (e) => setLabel(e.target.value), required: true, style: inp, autoFocus: true }) }),
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overlay", onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "dialog-card", style: { width: 440, padding: "var(--s6)" }, onClick: (e) => e.stopPropagation(), onSubmit: save, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "dialog-title", style: { marginBottom: "var(--s5)" }, children: hostId ? "✎ Edit host" : "+ Host baru" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Label", children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: label, onChange: (e) => setLabel(e.target.value), required: true, style: inp, autoFocus: true, placeholder: "mis. Web Prod" }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "var(--s2)" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Address", grow: true, children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: address, onChange: (e) => setAddress(e.target.value), required: true, style: inp }) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Port", children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: port, onChange: (e) => setPort(e.target.value), style: { ...inp, width: 70 } }) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Address", grow: true, children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: address, onChange: (e) => setAddress(e.target.value), required: true, style: inp, placeholder: "10.0.0.1 / host.example.com" }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Port", children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: port, onChange: (e) => setPort(e.target.value), style: { ...inp, width: 74 } }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Username", children: /* @__PURE__ */ jsxRuntimeExports.jsx("input", { value: username, onChange: (e) => setUsername(e.target.value), style: inp, placeholder: "root" }) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Password (opsional)", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "input",
-      {
-        type: "password",
-        value: password,
-        onChange: (e) => setPassword(e.target.value),
-        style: inp,
-        placeholder: hostId ? "•••••• (biarkan kosong = tetap)" : ""
-      }
-    ) }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Environment", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: "var(--s3)" }, children: ENVS.map((env) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: "var(--text-sm)" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Password (opsional)", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { position: "relative" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "input",
         {
-          type: "radio",
-          name: "env",
-          checked: environment === env,
-          onChange: () => setEnvironment(env)
+          type: showPw ? "text" : "password",
+          value: password,
+          onChange: (e) => setPassword(e.target.value),
+          style: { ...inp, paddingRight: 40 },
+          placeholder: hostId ? "•••••• (biarkan kosong = tetap)" : ""
         }
       ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          onClick: () => setShowPw((v) => !v),
+          title: showPw ? "Sembunyikan password" : "Lihat password",
+          tabIndex: -1,
+          style: {
+            position: "absolute",
+            right: 4,
+            top: "50%",
+            transform: "translateY(-50%)",
+            background: "transparent",
+            border: "none",
+            color: "var(--fg-secondary)",
+            cursor: "pointer",
+            padding: "4px 6px",
+            fontSize: 15,
+            lineHeight: 1
+          },
+          children: showPw ? "🙈" : "👁"
+        }
+      )
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Environment", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "seg", children: ENVS.map((env) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        type: "button",
+        className: "seg-item",
+        "aria-pressed": environment === env,
+        onClick: () => setEnvironment(env),
+        children: [
+          env !== "none" && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "env-dot", style: { background: envColor(env) } }),
+          env
+        ]
+      },
       env
-    ] }, env)) }) }),
+    )) }) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Field, { label: "Workspace", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: "var(--s3)" }, children: [["local", "💻 Lokal (offline)"], ["personal", "☁ Cloud (sinkron)"]].map(([v, lbl]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "flex", alignItems: "center", gap: 4, fontSize: "var(--text-sm)", opacity: hostId ? 0.6 : 1 }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            type: "radio",
-            name: "vault",
-            checked: vaultId === v,
-            onChange: () => setVaultId(v),
-            disabled: !!hostId
-          }
-        ),
-        lbl
-      ] }, v)) }),
-      hostId ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: 2 }, children: "Workspace tak bisa diubah setelah dibuat." }) : vaultId === "personal" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: 2 }, children: "Host ini akan tersinkron ke Firebase." })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "seg", children: [["local", "💻 Lokal"], ["personal", "☁ Cloud"]].map(([v, lbl]) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "seg-item",
+          "aria-pressed": vaultId === v,
+          onClick: () => !hostId && setVaultId(v),
+          disabled: !!hostId,
+          style: hostId && vaultId !== v ? { opacity: 0.4 } : void 0,
+          children: lbl
+        },
+        v
+      )) }),
+      hostId ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: 5 }, children: "Workspace tak bisa diubah setelah dibuat." }) : vaultId === "personal" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: 5 }, children: "Host ini akan tersinkron ke Firebase." })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "button",
       {
         type: "button",
         onClick: () => setAdvanced((v) => !v),
-        style: { background: "transparent", border: "none", color: "var(--fg-secondary)", fontSize: "var(--text-sm)", marginBottom: "var(--s2)" },
+        style: { background: "transparent", border: "none", color: "var(--fg-secondary)", fontSize: "var(--text-sm)", marginBottom: "var(--s2)", padding: 0 },
         children: [
           advanced ? "▾" : "▸",
           " Advanced"
@@ -7490,43 +7540,27 @@ function HostForm({ hostId, onClose }) {
       }
     ),
     advanced && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: "var(--s3)" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Identitas tersimpan", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "select",
-        {
-          value: identityId ?? "",
-          onChange: (e) => setIdentityId(e.target.value || null),
-          style: { width: "100%", background: "var(--bg-input)", color: "var(--fg-primary)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-sm)", padding: 6 },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "— inline (pakai username/password di atas) —" }),
-            identities.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: i.id, children: [
-              i.label,
-              " (",
-              i.username,
-              ")"
-            ] }, i.id))
-          ]
-        }
-      ) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "SSH key", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "select",
-        {
-          value: keyId ?? "",
-          onChange: (e) => setKeyId(e.target.value || null),
-          style: { width: "100%", background: "var(--bg-input)", color: "var(--fg-primary)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-sm)", padding: 6 },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "— tanpa key (password) —" }),
-            keys.map((k) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: k.id, children: [
-              k.label,
-              " (",
-              k.algorithm,
-              ")"
-            ] }, k.id))
-          ]
-        }
-      ) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "var(--s4)", alignItems: "center" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "Identitas tersimpan", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: identityId ?? "", onChange: (e) => setIdentityId(e.target.value || null), style: { width: "100%" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "— inline (pakai username/password di atas) —" }),
+        identities.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: i.id, children: [
+          i.label,
+          " (",
+          i.username,
+          ")"
+        ] }, i.id))
+      ] }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Field, { label: "SSH key", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: keyId ?? "", onChange: (e) => setKeyId(e.target.value || null), style: { width: "100%" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "— tanpa key (password) —" }),
+        keys.map((k) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: k.id, children: [
+          k.label,
+          " (",
+          k.algorithm,
+          ")"
+        ] }, k.id))
+      ] }) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "var(--s4)", alignItems: "center", marginTop: "var(--s2)" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "flex", gap: 6, alignItems: "center", fontSize: "var(--text-sm)" }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: agentFwd, onChange: (e) => setAgentFwd(e.target.checked) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: agentFwd, onChange: (e) => setAgentFwd(e.target.checked), style: { width: "auto" } }),
           " Agent forwarding"
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "flex", gap: 6, alignItems: "center", fontSize: "var(--text-sm)" }, children: [
@@ -7540,8 +7574,8 @@ function HostForm({ hostId, onClose }) {
       margin: "var(--s2) 0",
       color: testResult.startsWith("✓") ? "var(--ok)" : "var(--danger)"
     }, children: testResult }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "var(--s2)", marginTop: "var(--s4)" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn", onClick: test, children: "Test connection" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: "var(--s2)", marginTop: "var(--s5)" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn", onClick: test, children: "⚡ Test connection" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1 } }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn", onClick: onClose, children: "Cancel" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", className: "btn btn-primary", children: "Save" })
@@ -7550,26 +7584,10 @@ function HostForm({ hostId, onClose }) {
 }
 function Field({ label, grow, children }) {
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { marginBottom: "var(--s3)", flex: grow ? 1 : void 0 }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "var(--text-xs)", color: "var(--fg-secondary)", marginBottom: 4 }, children: label }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "field-label", children: label }),
     children
   ] });
 }
-const overlay$4 = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,.45)",
-  display: "grid",
-  placeItems: "center",
-  zIndex: 50
-};
-const dialog$4 = {
-  width: 420,
-  padding: "var(--s6)",
-  background: "var(--bg-overlay)",
-  border: "1px solid var(--border-strong)",
-  borderRadius: "var(--r-lg)",
-  boxShadow: "var(--sh-3)"
-};
 const inp = { width: "100%" };
 var xterm = { exports: {} };
 var hasRequiredXterm;
@@ -16135,63 +16153,37 @@ function TerminalPane({ sessionId, active }) {
 }
 function TabBar() {
   const { sessions, tabs, activeTabId, setActive, close } = useSessionStore();
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: bar, children: tabs.map((id) => {
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "tabbar", children: tabs.map((id) => {
     const s = sessions[id];
     if (!s) return null;
     const active = id === activeTabId;
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "div",
-      {
-        style: { ...tab, background: active ? "var(--bg-base)" : "var(--bg-raised)" },
-        onClick: () => setActive(id),
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { width: 3, alignSelf: "stretch", background: envColor(s.environment), borderRadius: 2 } }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: {
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: s.status === "connected" ? "var(--ok)" : s.status === "error" ? "var(--danger)" : "var(--warn)"
-          } }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, children: s.label }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              className: "btn",
-              style: { padding: "0 4px", background: "transparent", border: "none" },
-              onClick: (e) => {
-                e.stopPropagation();
-                void close(id);
-              },
-              children: "✕"
-            }
-          )
-        ]
-      },
-      id
-    );
+    const dot = s.status === "connected" ? "var(--ok)" : s.status === "error" ? "var(--danger)" : "var(--warn)";
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `tab${active ? " active" : ""}`, onClick: () => setActive(id), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { width: 3, height: 16, borderRadius: 2, background: envColor(s.environment), flexShrink: 0 } }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          className: s.status === "connecting" ? "pulse-dot" : "",
+          style: { width: 7, height: 7, borderRadius: "50%", background: dot, flexShrink: 0 }
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "tab-label", children: s.label }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: "icon-btn",
+          style: { width: 20, height: 20 },
+          onClick: (e) => {
+            e.stopPropagation();
+            void close(id);
+          },
+          title: "Tutup",
+          children: "✕"
+        }
+      )
+    ] }, id);
   }) });
 }
-const bar = {
-  display: "flex",
-  gap: 2,
-  height: "var(--h-tabbar)",
-  alignItems: "stretch",
-  background: "var(--bg-raised)",
-  borderBottom: "1px solid var(--border-subtle)",
-  padding: "0 var(--s2)"
-};
-const tab = {
-  display: "flex",
-  alignItems: "center",
-  gap: "var(--s2)",
-  minWidth: 120,
-  maxWidth: 200,
-  padding: "0 var(--s2)",
-  fontSize: "var(--text-sm)",
-  cursor: "default",
-  borderTopLeftRadius: "var(--r-sm)",
-  borderTopRightRadius: "var(--r-sm)"
-};
 function HostKeyDialog() {
   const [prompt, setPrompt] = reactExports.useState(null);
   reactExports.useEffect(() => window.api.on.hostKeyPrompt((p) => setPrompt(p)), []);
@@ -16201,11 +16193,11 @@ function HostKeyDialog() {
     void window.api.session.answerHostKey(prompt.sessionId, accept);
     setPrompt(null);
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: overlay$3, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { ...dialog$3, borderColor: changed ? "var(--danger)" : "var(--border-strong)" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { fontSize: "var(--text-lg)", color: changed ? "var(--danger)" : "var(--fg-primary)" }, children: changed ? "⚠ Identitas server BERUBAH" : "Host baru" }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { style: { fontSize: "var(--text-sm)", margin: "var(--s3) 0", color: "var(--fg-secondary)" }, children: changed ? "Kunci host berbeda dari yang tersimpan. Ini bisa berarti serangan MITM. Jangan lanjut kecuali kamu tahu server memang berganti kunci." : `Ini pertama kali menghubungkan ke ${prompt.pattern}. Verifikasi fingerprint sebelum melanjutkan.` }),
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overlay", style: { zIndex: 60 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "dialog-card", style: { width: 460, padding: "var(--s6)", borderColor: changed ? "var(--danger)" : void 0, boxShadow: changed ? "0 24px 64px rgba(0,0,0,.62), 0 0 0 1px rgba(255,93,108,.4)" : void 0 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "dialog-title", style: { display: "flex", alignItems: "center", gap: 8, color: changed ? "var(--danger)" : "var(--fg-primary)" }, children: changed ? "⚠ Identitas server BERUBAH" : "🔑 Host baru" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { style: { fontSize: "var(--text-sm)", margin: "var(--s3) 0", color: "var(--fg-secondary)", lineHeight: 1.55 }, children: changed ? "Kunci host berbeda dari yang tersimpan. Ini bisa berarti serangan MITM. Jangan lanjut kecuali kamu tahu server memang berganti kunci." : `Ini pertama kali menghubungkan ke ${prompt.pattern}. Verifikasi fingerprint sebelum melanjutkan.` }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: fp, children: prompt.fingerprint }),
-    changed && prompt.previous && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: 4, wordBreak: "break-all" }, children: [
+    changed && prompt.previous && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginTop: 6, wordBreak: "break-all" }, children: [
       "Sebelumnya: ",
       prompt.previous.slice(0, 44),
       "…"
@@ -16216,29 +16208,15 @@ function HostKeyDialog() {
     ] })
   ] }) });
 }
-const overlay$3 = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(0,0,0,.5)",
-  display: "grid",
-  placeItems: "center",
-  zIndex: 60
-};
-const dialog$3 = {
-  width: 440,
-  padding: "var(--s6)",
-  background: "var(--bg-overlay)",
-  border: "1px solid",
-  borderRadius: "var(--r-lg)",
-  boxShadow: "var(--sh-3)"
-};
 const fp = {
   fontFamily: "var(--font-mono)",
   fontSize: "var(--text-sm)",
   background: "var(--bg-input)",
-  padding: "var(--s2)",
+  padding: "var(--s3)",
   borderRadius: "var(--r-sm)",
-  wordBreak: "break-all"
+  wordBreak: "break-all",
+  border: "1px solid var(--border-subtle)",
+  color: "var(--accent-2)"
 };
 const useKeyStore = create((set) => ({
   keys: [],
@@ -16293,50 +16271,45 @@ function KeyManager({ onClose }) {
       setMsg("✕ " + e.message);
     }
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: overlay$2, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: dialog$2, onClick: (e) => e.stopPropagation(), children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", marginBottom: "var(--s4)" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { fontSize: "var(--text-lg)", flex: 1 }, children: "⚿ Keychain" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setMode("gen"), style: { marginRight: 6 }, children: "Generate" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setMode("import"), style: { marginRight: 6 }, children: "Import" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: onClose, children: "Tutup" })
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overlay", style: { zIndex: 55 }, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "dialog-card", style: { width: 580, padding: "var(--s6)" }, onClick: (e) => e.stopPropagation(), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "var(--s2)", marginBottom: "var(--s4)" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "dialog-title", style: { flex: 1 }, children: "⚿ Keychain" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setMode("gen"), children: "Generate" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setMode("import"), children: "Import" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", onClick: onClose, children: "Tutup" })
     ] }),
     msg && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "var(--text-sm)", color: "var(--accent)", marginBottom: "var(--s2)" }, children: msg }),
     mode === "gen" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: panel$1, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { placeholder: "Label", value: label, onChange: (e) => setLabel(e.target.value), style: { width: "100%", marginBottom: 6 }, autoFocus: true }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "flex", gap: "var(--s3)", marginBottom: 6, fontSize: "var(--text-sm)" }, children: ["ed25519", "rsa", "ecdsa"].map((a) => /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { style: { display: "flex", gap: 4, alignItems: "center" }, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "radio", checked: algo === a, onChange: () => setAlgo(a) }),
-        a
-      ] }, a)) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "password", placeholder: "Passphrase (opsional)", value: passphrase, onChange: (e) => setPassphrase(e.target.value), style: { width: "100%", marginBottom: 6 } }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { placeholder: "Label", value: label, onChange: (e) => setLabel(e.target.value), style: { width: "100%", marginBottom: 8 }, autoFocus: true }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "seg", style: { marginBottom: 8 }, children: ["ed25519", "rsa", "ecdsa"].map((a) => /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "seg-item", "aria-pressed": algo === a, onClick: () => setAlgo(a), children: a }, a)) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "password", placeholder: "Passphrase (opsional)", value: passphrase, onChange: (e) => setPassphrase(e.target.value), style: { width: "100%", marginBottom: 8 } }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "var(--s2)" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setMode("list"), children: "Batal" }),
-        " ",
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: doGen, children: "Generate" })
       ] })
     ] }),
     mode === "import" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: panel$1, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { placeholder: "Label", value: label, onChange: (e) => setLabel(e.target.value), style: { width: "100%", marginBottom: 6 }, autoFocus: true }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { placeholder: "Label", value: label, onChange: (e) => setLabel(e.target.value), style: { width: "100%", marginBottom: 8 }, autoFocus: true }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "textarea",
         {
           placeholder: "Tempel private key (PEM / OpenSSH)",
           value: pem,
           onChange: (e) => setPem(e.target.value),
-          style: { width: "100%", height: 120, fontFamily: "var(--font-mono)", fontSize: 11, marginBottom: 6, background: "var(--bg-input)", color: "var(--fg-primary)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-sm)", padding: 8 }
+          style: { width: "100%", height: 120, fontFamily: "var(--font-mono)", fontSize: 11, marginBottom: 8 }
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "password", placeholder: "Passphrase (jika ada)", value: passphrase, onChange: (e) => setPassphrase(e.target.value), style: { width: "100%", marginBottom: 6 } }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "password", placeholder: "Passphrase (jika ada)", value: passphrase, onChange: (e) => setPassphrase(e.target.value), style: { width: "100%", marginBottom: 8 } }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "var(--s2)" }, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setMode("list"), children: "Batal" }),
-        " ",
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: doImport, children: "Import" })
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { maxHeight: 340, overflowY: "auto" }, children: [
-      keys.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { padding: "var(--s4)", textAlign: "center" }, children: "Belum ada key. Generate atau import." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { maxHeight: 340, overflowY: "auto", marginTop: 4 }, children: [
+      keys.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { padding: "var(--s5)", textAlign: "center" }, children: "Belum ada key. Generate atau import." }),
       keys.map((k) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: rowS$1, children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { flex: 1, minWidth: 0 }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 520 }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 530 }, children: [
             k.label,
             " ",
             /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "muted", style: { fontSize: "var(--text-xs)" }, children: [
@@ -16359,23 +16332,21 @@ function KeyManager({ onClose }) {
               if (v) push(k.id, v);
               e.target.value = "";
             },
-            style: { ...mini$2, background: "var(--bg-input)", color: "var(--fg-secondary)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-sm)" },
+            style: { ...mini$2, color: "var(--fg-secondary)" },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Push ke…" }),
               hosts.map((h) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: h.id, children: h.label }, h.id))
             ]
           }
         ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini$2, onClick: () => remove(k.id), title: "Hapus", children: "✕" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-btn danger", onClick: () => remove(k.id), title: "Hapus", children: "✕" })
       ] }, k.id))
     ] })
   ] }) });
 }
-const overlay$2 = { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", zIndex: 55 };
-const dialog$2 = { width: 560, padding: "var(--s6)", background: "var(--bg-overlay)", border: "1px solid var(--border-strong)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-3)" };
-const panel$1 = { background: "var(--bg-raised)", padding: "var(--s3)", borderRadius: "var(--r-md)", marginBottom: "var(--s3)" };
-const rowS$1 = { display: "flex", alignItems: "center", gap: 6, padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" };
-const mini$2 = { padding: "2px 8px", fontSize: "var(--text-xs)" };
+const panel$1 = { background: "var(--bg-input)", padding: "var(--s4)", borderRadius: "var(--r-md)", marginBottom: "var(--s3)", border: "1px solid var(--border-subtle)" };
+const rowS$1 = { display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" };
+const mini$2 = { padding: "3px 9px", fontSize: "var(--text-xs)" };
 const useIdentityStore = create((set) => ({
   identities: [],
   async reload() {
@@ -16398,11 +16369,11 @@ function IdentityManager({ onClose }) {
   reactExports.useEffect(() => {
     void window.api.keys.list().then(setKeys);
   }, []);
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: overlay$1, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: dialog$1, onClick: (e) => e.stopPropagation(), children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", marginBottom: "var(--s4)" }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { fontSize: "var(--text-lg)", flex: 1 }, children: "👤 Identitas" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setEditing("new"), style: { marginRight: 6 }, children: "Baru" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: onClose, children: "Tutup" })
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overlay", style: { zIndex: 55 }, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "dialog-card", style: { width: 580, padding: "var(--s6)" }, onClick: (e) => e.stopPropagation(), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "var(--s2)", marginBottom: "var(--s4)" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "dialog-title", style: { flex: 1 }, children: "👤 Identitas" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => setEditing("new"), children: "Baru" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", onClick: onClose, children: "Tutup" })
     ] }),
     msg && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontSize: "var(--text-sm)", color: "var(--accent)", marginBottom: "var(--s2)" }, children: msg }),
     editing && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -16419,10 +16390,10 @@ function IdentityManager({ onClose }) {
         onCancel: () => setEditing(null)
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { maxHeight: 340, overflowY: "auto" }, children: [
-      identities.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { padding: "var(--s4)", textAlign: "center" }, children: "Belum ada identitas. Buat satu untuk dipakai ulang di banyak host." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { maxHeight: 340, overflowY: "auto", marginTop: 4 }, children: [
+      identities.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { padding: "var(--s5)", textAlign: "center" }, children: "Belum ada identitas. Buat satu untuk dipakai ulang di banyak host." }),
       identities.map((i) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: rowS, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, minWidth: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 520 }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, minWidth: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { fontWeight: 530 }, children: [
           i.label,
           " ",
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "muted", style: { fontSize: "var(--text-xs)" }, children: [
@@ -16433,7 +16404,7 @@ function IdentityManager({ onClose }) {
           ] })
         ] }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini$1, onClick: () => setEditing(i), children: "Edit" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini$1, onClick: () => remove(i.id), title: "Hapus", children: "✕" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-btn danger", onClick: () => remove(i.id), title: "Hapus", children: "✕" })
       ] }, i.id))
     ] })
   ] }) });
@@ -16460,7 +16431,7 @@ function IdentityForm({
     onDone(initial ? "Identitas diperbarui" : "Identitas dibuat");
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: panel, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 6, marginBottom: 6 }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", gap: 8, marginBottom: 8 }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("input", { placeholder: "Label (mis. deploy@prod)", value: label, onChange: (e) => setLabel(e.target.value), style: { flex: 1 }, autoFocus: true }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("input", { placeholder: "Username", value: username, onChange: (e) => setUsername(e.target.value), style: { flex: 1 } })
     ] }),
@@ -16471,38 +16442,27 @@ function IdentityForm({
         placeholder: initial?.hasSecret ? "Password (kosong = tetap)" : "Password (opsional)",
         value: password,
         onChange: (e) => setPassword(e.target.value),
-        style: { width: "100%", marginBottom: 6 }
+        style: { width: "100%", marginBottom: 8 }
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "select",
-      {
-        value: keyId ?? "",
-        onChange: (e) => setKeyId(e.target.value || null),
-        style: { width: "100%", marginBottom: 6, background: "var(--bg-input)", color: "var(--fg-primary)", border: "1px solid var(--border-subtle)", borderRadius: "var(--r-sm)", padding: 6 },
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "— tanpa SSH key —" }),
-          keys.map((k) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: k.id, children: [
-            k.label,
-            " (",
-            k.algorithm,
-            ")"
-          ] }, k.id))
-        ]
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { textAlign: "right" }, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: keyId ?? "", onChange: (e) => setKeyId(e.target.value || null), style: { width: "100%", marginBottom: 8 }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "— tanpa SSH key —" }),
+      keys.map((k) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: k.id, children: [
+        k.label,
+        " (",
+        k.algorithm,
+        ")"
+      ] }, k.id))
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", justifyContent: "flex-end", gap: "var(--s2)" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: onCancel, children: "Batal" }),
-      " ",
       /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: submit, children: "Simpan" })
     ] })
   ] });
 }
-const overlay$1 = { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", zIndex: 55 };
-const dialog$1 = { width: 560, padding: "var(--s6)", background: "var(--bg-overlay)", border: "1px solid var(--border-strong)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-3)" };
-const panel = { background: "var(--bg-raised)", padding: "var(--s3)", borderRadius: "var(--r-md)", marginBottom: "var(--s3)" };
-const rowS = { display: "flex", alignItems: "center", gap: 6, padding: "8px 0", borderBottom: "1px solid var(--border-subtle)" };
-const mini$1 = { padding: "2px 8px", fontSize: "var(--text-xs)" };
+const panel = { background: "var(--bg-input)", padding: "var(--s4)", borderRadius: "var(--r-md)", marginBottom: "var(--s3)", border: "1px solid var(--border-subtle)" };
+const rowS = { display: "flex", alignItems: "center", gap: 8, padding: "10px 0", borderBottom: "1px solid var(--border-subtle)" };
+const mini$1 = { padding: "3px 9px", fontSize: "var(--text-xs)" };
 const LABEL = {
   idle: "tersinkron",
   syncing: "menyinkron…",
@@ -16517,12 +16477,11 @@ const COLOR = {
 };
 function SyncBar() {
   const [st, setSt] = reactExports.useState({ state: "offline", pending: 0, user: null, configured: false });
-  const [dialog2, setDialog] = reactExports.useState(false);
+  const [dialog, setDialog] = reactExports.useState(false);
   const [err, setErr] = reactExports.useState(null);
   const refresh = () => void window.api.sync.status().then(setSt);
   reactExports.useEffect(refresh, []);
   reactExports.useEffect(() => window.api.on.syncState((p) => setSt((s) => ({ ...s, state: p.state, pending: p.pending }))), []);
-  reactExports.useEffect(() => window.api.on.storeChanged(() => refresh()), []);
   const now = async () => {
     await window.api.sync.now();
     refresh();
@@ -16532,13 +16491,8 @@ function SyncBar() {
     if (!r.ok && r.reason) setErr(r.reason);
     refresh();
   };
-  const logout = async () => {
-    setErr(null);
-    try {
-      await window.api.sync.signOut();
-    } catch (e) {
-      setErr(e.message);
-    }
+  const signOut = async () => {
+    await window.api.sync.signOut();
     refresh();
   };
   const importConfig = async () => {
@@ -16550,22 +16504,28 @@ function SyncBar() {
   if (!st.configured) {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "var(--s2)" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "muted", title: "Impor firebase-config.json untuk mengaktifkan cloud sync", children: "offline-only" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini, onClick: importConfig, children: "Import config…" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", style: mini, onClick: importConfig, children: "Import config…" }),
       err && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "var(--danger)", fontSize: "var(--text-xs)" }, title: err, children: "✕ config" })
     ] });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { style: { display: "flex", alignItems: "center", gap: "var(--s2)" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: COLOR[st.state] }, children: "●" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "span",
+      {
+        className: st.state === "syncing" ? "pulse-dot" : "",
+        style: { width: 8, height: 8, borderRadius: "50%", background: COLOR[st.state] }
+      }
+    ),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "muted", children: [
       LABEL[st.state],
       st.pending > 0 ? ` · ${st.pending} tertunda` : ""
     ] }),
     st.user ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini, onClick: now, disabled: st.state === "syncing", children: "Sync" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", style: mini, onClick: now, disabled: st.state === "syncing", children: "Sync" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
-          className: "btn",
+          className: "btn btn-ghost",
           style: mini,
           onClick: pushAll,
           disabled: st.state === "syncing",
@@ -16574,17 +16534,37 @@ function SyncBar() {
         }
       ),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "span",
+        {
+          className: "muted",
+          title: `Masuk sebagai ${st.user}`,
+          style: { maxWidth: 150, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+          children: st.user
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
         "button",
         {
-          className: "btn",
+          className: "btn btn-ghost",
           style: mini,
-          onClick: logout,
-          title: "Keluar dari akun cloud (sesi dihapus, vault lokal tetap aman)",
-          children: "Logout"
+          onClick: signOut,
+          title: "Keluar dari akun cloud (vault lokal tetap aman)",
+          children: "Sign out"
         }
       )
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: mini, onClick: () => setDialog(true), children: "Sign in" }),
-    dialog2 && /* @__PURE__ */ jsxRuntimeExports.jsx(SignInDialog, { onClose: () => setDialog(false), onDone: refresh })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", style: mini, onClick: () => setDialog(true), children: "Sign in" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        className: "btn btn-ghost",
+        style: mini,
+        onClick: importConfig,
+        title: "Ganti / impor ulang firebase-config.json",
+        children: "⚙ Config"
+      }
+    ),
+    err && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "var(--danger)", fontSize: "var(--text-xs)" }, title: err, children: "✕" }),
+    dialog && /* @__PURE__ */ jsxRuntimeExports.jsx(SignInDialog, { onClose: () => setDialog(false), onDone: refresh })
   ] });
 }
 function SignInDialog({ onClose, onDone }) {
@@ -16606,8 +16586,45 @@ function SignInDialog({ onClose, onDone }) {
       setBusy(false);
     }
   };
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: overlay, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { style: dialog, onClick: (e) => e.stopPropagation(), onSubmit: submit, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { style: { fontSize: "var(--text-lg)", marginBottom: "var(--s4)" }, children: "Sign in — cloud vault" }),
+  const google = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await window.api.sync.signInGoogle();
+      onDone();
+      onClose();
+    } catch (e2) {
+      setErr(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overlay", style: { zIndex: 60 }, onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "dialog-card", style: { width: 380, padding: "var(--s6)" }, onClick: (e) => e.stopPropagation(), onSubmit: submit, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "dialog-title", style: { marginBottom: "var(--s4)" }, children: "☁ Sign in — cloud vault" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        type: "button",
+        className: "btn",
+        onClick: google,
+        disabled: busy,
+        style: { width: "100%", marginBottom: "var(--s3)", padding: "9px", gap: 10 },
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("svg", { width: "16", height: "16", viewBox: "0 0 48 48", "aria-hidden": "true", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("path", { fill: "#EA4335", d: "M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("path", { fill: "#4285F4", d: "M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("path", { fill: "#FBBC05", d: "M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.28-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("path", { fill: "#34A853", d: "M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" })
+          ] }),
+          busy ? "Menghubungkan…" : "Lanjut dengan Google"
+        ]
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "flex", alignItems: "center", gap: "var(--s2)", margin: "0 0 var(--s3)", color: "var(--fg-muted)", fontSize: "var(--text-xs)" }, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { flex: 1, height: 1, background: "var(--border-subtle)" } }),
+      " atau email ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { flex: 1, height: 1, background: "var(--border-subtle)" } })
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
       "input",
       {
@@ -16617,7 +16634,7 @@ function SignInDialog({ onClose, onDone }) {
         onChange: (e) => setEmail(e.target.value),
         required: true,
         autoFocus: true,
-        style: { width: "100%", marginBottom: 6 }
+        style: { width: "100%", marginBottom: 8 }
       }
     ),
     /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -16628,10 +16645,10 @@ function SignInDialog({ onClose, onDone }) {
         value: password,
         onChange: (e) => setPassword(e.target.value),
         required: true,
-        style: { width: "100%", marginBottom: 6 }
+        style: { width: "100%", marginBottom: 8 }
       }
     ),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginBottom: "var(--s3)" }, children: "Password akun cloud dipakai untuk autentikasi Firebase, tidak disimpan. Vault tetap terenkripsi lokal." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginBottom: "var(--s3)", lineHeight: 1.5 }, children: "Password akun cloud dipakai untuk autentikasi Firebase, tidak disimpan. Vault tetap terenkripsi lokal." }),
     err && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { color: "var(--danger)", fontSize: "var(--text-sm)", marginBottom: "var(--s2)" }, children: [
       "✕ ",
       err
@@ -16642,9 +16659,7 @@ function SignInDialog({ onClose, onDone }) {
     ] })
   ] }) });
 }
-const mini = { padding: "1px 8px", fontSize: "var(--text-xs)" };
-const overlay = { position: "fixed", inset: 0, background: "rgba(0,0,0,.45)", display: "grid", placeItems: "center", zIndex: 60 };
-const dialog = { width: 360, padding: "var(--s6)", background: "var(--bg-overlay)", border: "1px solid var(--border-strong)", borderRadius: "var(--r-lg)", boxShadow: "var(--sh-3)" };
+const mini = { padding: "2px 9px", fontSize: "var(--text-xs)" };
 function App() {
   const { status, refresh, lock } = useVaultStore();
   const { tabs, activeTabId } = useSessionStore();
@@ -16653,6 +16668,7 @@ function App() {
   const [connError, setConnError] = reactExports.useState(null);
   const [keychainOpen, setKeychainOpen] = reactExports.useState(false);
   const [identityOpen, setIdentityOpen] = reactExports.useState(false);
+  const superApp = window.superApp;
   reactExports.useEffect(() => {
     void refresh();
   }, [refresh]);
@@ -16665,91 +16681,92 @@ function App() {
   if (status === "loading") return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", placeItems: "center", height: "100%" }, className: "muted", children: "Memuat…" });
   if (status !== "unlocked") return /* @__PURE__ */ jsxRuntimeExports.jsx(VaultUnlock, {});
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateRows: "var(--h-titlebar) 1fr var(--h-statusbar)", height: "100%" }, children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { style: titlebar, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontWeight: 620, letterSpacing: 0.3 }, children: "WANN-SSH" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "titlebar", style: { height: "var(--h-titlebar)", paddingLeft: superApp ? "var(--s3)" : void 0 }, children: [
+      superApp && /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          className: "btn btn-ghost no-drag",
+          onClick: () => superApp.showHub(),
+          title: "Kembali ke WAN Super App",
+          style: { marginRight: 2 },
+          children: "← Super App"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "brand-badge no-drag", children: "W" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { fontWeight: 640, letterSpacing: 0.3 }, children: "WANN-SSH" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "chip no-drag", style: { marginLeft: 2 }, children: "SSH" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1 } }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: { padding: "2px 10px" }, onClick: () => void lock(), title: "Kunci vault (⌘L)", children: "⚿ Lock" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost no-drag", onClick: () => void lock(), title: "Kunci vault (⌘L)", children: "⚿ Lock" })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: { display: "grid", gridTemplateColumns: "var(--w-sidebar) 1fr", minHeight: 0 }, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { style: sidebar, children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, minHeight: 0 }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(HostList, { onEdit: (id) => {
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "sidebar", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }, children: /* @__PURE__ */ jsxRuntimeExports.jsx(HostList, { onEdit: (id) => {
           setEditId(id);
           setFormOpen(true);
         }, onNew: () => {
           setEditId(null);
           setFormOpen(true);
         } }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: sideNav, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: navBtn, onClick: () => setIdentityOpen(true), children: "👤 Identitas" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: navBtn, onClick: () => setKeychainOpen(true), children: "⚿ Keychain" })
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "side-nav", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", onClick: () => setIdentityOpen(true), children: "👤 Identitas" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-ghost", onClick: () => setKeychainOpen(true), children: "⚿ Keychain" })
         ] })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("main", { style: { display: "flex", flexDirection: "column", minWidth: 0, position: "relative" }, children: tabs.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(TabBar, {}),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1, position: "relative" }, children: tabs.map((id) => /* @__PURE__ */ jsxRuntimeExports.jsx(TerminalPane, { sessionId: id, active: id === activeTabId }, id)) })
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { display: "grid", placeItems: "center", height: "100%" }, className: "muted", children: "Double-click host untuk connect" }) })
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: emptyMain, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: emptyBadge, children: "⌘" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 620, fontSize: "var(--text-lg)" }, children: "Belum ada sesi aktif" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-sm)" }, children: "Klik-dua-kali sebuah host di panel kiri untuk mulai terhubung." })
+      ] }) })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { style: statusbar, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "statusbar", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "muted", children: [
         tabs.length,
         " sesi"
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { flex: 1 } }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(SyncBar, {}),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "muted", style: { marginLeft: "var(--s3)" }, children: "vault unlocked" })
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "chip", style: { marginLeft: "var(--s2)" }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { width: 6, height: 6, borderRadius: "50%", background: "var(--ok)", display: "inline-block" } }),
+        "vault unlocked"
+      ] })
     ] }),
     formOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(HostForm, { hostId: editId, onClose: () => setFormOpen(false) }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(HostKeyDialog, {}),
     keychainOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(KeyManager, { onClose: () => setKeychainOpen(false) }),
     identityOpen && /* @__PURE__ */ jsxRuntimeExports.jsx(IdentityManager, { onClose: () => setIdentityOpen(false) }),
-    connError && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { style: toast, onClick: () => setConnError(null), children: [
+    connError && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "toast", onClick: () => setConnError(null), children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { style: { color: "var(--danger)" }, children: "✕" }),
       " ",
       connError,
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "muted", style: { fontSize: "var(--text-xs)" }, children: " (klik untuk tutup)" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "muted", style: { fontSize: "var(--text-xs)" }, children: "(klik untuk tutup)" })
     ] })
   ] });
 }
-const titlebar = {
+const emptyMain = {
   display: "flex",
+  flexDirection: "column",
+  gap: "var(--s2)",
   alignItems: "center",
-  gap: "var(--s3)",
-  padding: "0 var(--s3)",
-  background: "var(--bg-raised)",
-  borderBottom: "1px solid var(--border-subtle)",
-  WebkitAppRegion: "drag",
-  paddingLeft: 80
+  justifyContent: "center",
+  textAlign: "center",
+  height: "100%",
+  padding: "var(--s6)"
 };
-const sidebar = {
-  background: "var(--bg-raised)",
-  borderRight: "1px solid var(--border-subtle)",
-  minHeight: 0,
-  display: "flex",
-  flexDirection: "column"
-};
-const sideNav = { borderTop: "1px solid var(--border-subtle)", padding: "var(--s2)" };
-const navBtn = { width: "100%", textAlign: "left", background: "transparent", border: "none" };
-const statusbar = {
-  display: "flex",
-  alignItems: "center",
-  gap: "var(--s3)",
-  padding: "0 var(--s3)",
-  fontSize: "var(--text-xs)",
-  background: "var(--bg-raised)",
-  borderTop: "1px solid var(--border-subtle)"
-};
-const toast = {
-  position: "fixed",
-  bottom: "var(--s6)",
-  left: "50%",
-  transform: "translateX(-50%)",
-  background: "var(--bg-overlay)",
-  border: "1px solid var(--border-strong)",
-  borderRadius: "var(--r-md)",
-  padding: "var(--s2) var(--s4)",
-  boxShadow: "var(--sh-2)",
-  fontSize: "var(--text-sm)",
-  zIndex: 70
+const emptyBadge = {
+  width: 64,
+  height: 64,
+  borderRadius: "var(--r-lg)",
+  display: "grid",
+  placeItems: "center",
+  fontSize: 28,
+  color: "var(--accent)",
+  marginBottom: "var(--s2)",
+  background: "var(--accent-quiet)",
+  border: "1px solid rgba(108,140,255,.3)",
+  boxShadow: "var(--glow-accent)"
 };
 clientExports.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(reactExports.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })

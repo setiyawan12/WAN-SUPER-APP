@@ -39,6 +39,9 @@ export function registerIpc() {
   ipcMain.handle(CH.vault.enableBiometric, async () => requireCtx().enableBiometric());
   ipcMain.handle(CH.hosts.list, () => requireCtx().hosts.listHosts());
   ipcMain.handle(CH.hosts.get, (_e, raw) => requireCtx().hosts.getHost(IdSchema.parse(raw)));
+  ipcMain.handle(CH.hosts.revealPassword, (_e, raw) => ({
+    password: requireCtx().hosts.revealPassword(IdSchema.parse(raw))
+  }));
   ipcMain.handle(CH.hosts.save, (_e, raw) => requireCtx().hosts.saveHost(HostInputSchema.parse(raw)));
   ipcMain.handle(CH.hosts.remove, (_e, raw) => requireCtx().hosts.removeHost(IdSchema.parse(raw)));
   ipcMain.handle(CH.hosts.testConnection, (_e, raw) => requireCtx().ssh.testConnection(IdSchema.parse(raw)));
@@ -77,6 +80,14 @@ export function registerIpc() {
     logger.info("signIn → syncNow:", JSON.stringify(outcome));
     // Jaminan: paksa renderer reload list SETELAH pull selesai, walau emit di
     // dalam pullPhase kebetulan terlewat karena listener renderer belum siap.
+    requireCtx().emit(CH.evt.storeChanged, void 0);
+    return { uid };
+  });
+  ipcMain.handle(CH.sync.signInGoogle, async () => {
+    const { sync, syncTransport } = requireCtx();
+    const uid = await syncTransport.signInGoogle();
+    const outcome = await sync.syncNow();
+    logger.info("signInGoogle → syncNow:", JSON.stringify(outcome));
     requireCtx().emit(CH.evt.storeChanged, void 0);
     return { uid };
   });

@@ -1,6 +1,8 @@
 import * as node_fs from "node:fs";
 import * as path from "node:path";
-import { app, safeStorage } from "electron";
+import * as node_http from "node:http";
+import * as node_crypto from "node:crypto";
+import { app, safeStorage, shell } from "electron";
 import { VAULT, logger } from "./constants.js";
 
 export function firebaseConfigPath() {
@@ -121,6 +123,100 @@ export function loadConfig(): any {
   } catch {
   }
   return null;
+}
+
+function base64url(buf: Buffer): string {
+  return buf.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * OAuth 2.0 loopback + PKCE untuk aplikasi desktop (RFC 8252). Membuka browser
+ * SISTEM (bukan webview embedded — Google memblokir embedded UA), menangkap
+ * redirect di http://127.0.0.1:<port-acak>, lalu menukar code → id_token Google.
+ */
+async function googleIdTokenViaLoopback(clientId: string, clientSecret?: string): Promise<string> {
+  const verifier = base64url(node_crypto.randomBytes(32));
+  const challenge = base64url(node_crypto.createHash("sha256").update(verifier).digest());
+  const state = base64url(node_crypto.randomBytes(16));
+
+  return new Promise<string>((resolve, reject) => {
+    const server = node_http.createServer();
+    let settled = false;
+    const timer = setTimeout(
+      () => finish(() => reject(new Error("Login Google kedaluwarsa (timeout 3 menit)."))),
+      180_000
+    );
+    function finish(fn: () => void): void {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try { server.close(); } catch { /* ignore */ }
+      fn();
+    }
+
+    server.on("request", async (req, res) => {
+      try {
+        const reqUrl = new URL(req.url ?? "/", "http://127.0.0.1");
+        if (!reqUrl.searchParams.has("code") && !reqUrl.searchParams.has("error")) {
+          res.writeHead(404).end();
+          return;
+        }
+        res.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        res.end(
+          '<!doctype html><meta charset="utf-8"><body style="font-family:system-ui;background:#0d1016;color:#eaeef7;display:grid;place-items:center;height:100vh;margin:0">' +
+            '<div style="text-align:center"><div style="font-size:44px">✓</div><h2>Login berhasil</h2>' +
+            '<p style="color:#9aa5bd">Silakan kembali ke WANN-SSH. Tab ini boleh ditutup.</p></div>'
+        );
+        const err = reqUrl.searchParams.get("error");
+        if (err) return finish(() => reject(new Error("Google menolak login: " + err)));
+        if (reqUrl.searchParams.get("state") !== state) {
+          return finish(() => reject(new Error("State OAuth tidak cocok (kemungkinan CSRF).")));
+        }
+        const code = reqUrl.searchParams.get("code");
+        if (!code) return finish(() => reject(new Error("Tidak ada authorization code.")));
+
+        const addr = server.address();
+        const port = typeof addr === "object" && addr ? addr.port : 0;
+        const body = new URLSearchParams({
+          code,
+          client_id: clientId,
+          redirect_uri: `http://127.0.0.1:${port}`,
+          grant_type: "authorization_code",
+          code_verifier: verifier
+        });
+        if (clientSecret) body.set("client_secret", clientSecret);
+
+        const tokRes = await fetch("https://oauth2.googleapis.com/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body: body.toString()
+        });
+        const tok = (await tokRes.json()) as { id_token?: string; error?: string; error_description?: string };
+        if (!tokRes.ok || !tok.id_token) {
+          return finish(() => reject(new Error("Tukar token gagal: " + (tok.error_description || tok.error || tokRes.status))));
+        }
+        finish(() => resolve(tok.id_token as string));
+      } catch (e) {
+        finish(() => reject(e as Error));
+      }
+    });
+
+    server.on("error", (e) => finish(() => reject(e)));
+    server.listen(0, "127.0.0.1", () => {
+      const addr = server.address();
+      const port = typeof addr === "object" && addr ? addr.port : 0;
+      const auth = new URL("https://accounts.google.com/o/oauth2/v2/auth");
+      auth.searchParams.set("client_id", clientId);
+      auth.searchParams.set("redirect_uri", `http://127.0.0.1:${port}`);
+      auth.searchParams.set("response_type", "code");
+      auth.searchParams.set("scope", "openid email profile");
+      auth.searchParams.set("code_challenge", challenge);
+      auth.searchParams.set("code_challenge_method", "S256");
+      auth.searchParams.set("state", state);
+      auth.searchParams.set("prompt", "select_account");
+      void shell.openExternal(auth.href);
+    });
+  });
 }
 
 /**
@@ -347,6 +443,33 @@ export class RealtimeDbTransport {
       "sessionFile =",
       node_fs.existsSync(firebaseAuthPersistencePath())
     );
+    if (!node_fs.existsSync(firebaseAuthPersistencePath())) {
+      throw new Error("Sign in berhasil tapi sesi gagal disimpan ke disk");
+    }
+    return this.uid;
+  }
+  async signInGoogle() {
+    await this.ensureInit();
+    const clientId = this.config?.googleClientId;
+    if (!clientId) {
+      throw new Error(
+        'Google sign-in belum dikonfigurasi. Tambahkan "googleClientId" (OAuth 2.0 Client ID tipe Desktop app) ke firebase-config.json, dan aktifkan provider Google di Firebase Authentication.'
+      );
+    }
+    const idToken = await googleIdTokenViaLoopback(clientId, this.config?.googleClientSecret);
+    const credential = this.fb.authMod.GoogleAuthProvider.credential(idToken);
+    const cred = await this.fb.authMod.signInWithCredential(this.auth, credential);
+    this.handleUidChange(cred.user.uid);
+    if (typeof this.onFreshLogin === "function") this.onFreshLogin();
+    try {
+      if (cred.user && typeof cred.user.getIdToken === "function") {
+        await cred.user.getIdToken(true);
+      }
+      await this.persistUserSnapshot(cred.user);
+      await new Promise((r) => setTimeout(r, 150));
+    } catch (e) {
+      logger.warn("post-signInGoogle persist:", e);
+    }
     if (!node_fs.existsSync(firebaseAuthPersistencePath())) {
       throw new Error("Sign in berhasil tapi sesi gagal disimpan ke disk");
     }

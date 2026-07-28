@@ -13,6 +13,7 @@ const CH = {
   hosts: {
     list: "hosts:list",
     get: "hosts:get",
+    revealPassword: "hosts:revealPassword",
     save: "hosts:save",
     remove: "hosts:remove",
     testConnection: "hosts:testConnection"
@@ -32,6 +33,7 @@ const CH = {
     now: "sync:now",
     pushAll: "sync:pushAll",
     signIn: "sync:signIn",
+    signInGoogle: "sync:signInGoogle",
     signOut: "sync:signOut",
     importConfig: "sync:importConfig"
   },
@@ -82,6 +84,7 @@ const api = {
   hosts: {
     list: () => invoke(CH.hosts.list),
     get: (id) => invoke(CH.hosts.get, id),
+    revealPassword: (id) => invoke(CH.hosts.revealPassword, id),
     save: (input) => invoke(CH.hosts.save, input),
     remove: (id) => invoke(CH.hosts.remove, id),
     testConnection: (id) => invoke(CH.hosts.testConnection, id)
@@ -101,6 +104,7 @@ const api = {
     now: () => invoke(CH.sync.now),
     pushAll: () => invoke(CH.sync.pushAll),
     signIn: (email, password) => invoke(CH.sync.signIn, email, password),
+    signInGoogle: () => invoke(CH.sync.signInGoogle),
     signOut: () => invoke(CH.sync.signOut),
     importConfig: () => invoke(CH.sync.importConfig)
   },
@@ -133,3 +137,9 @@ const api = {
   }
 };
 electron.contextBridge.exposeInMainWorld("api", api);
+if (process.argv.includes("--wan-super-app-embed")) {
+  electron.contextBridge.exposeInMainWorld("superApp", {
+    showHub: () => electron.ipcRenderer.invoke("super:showHub"),
+    openModule: (id) => electron.ipcRenderer.invoke("super:openModule", id)
+  });
+}

@@ -136,6 +136,8 @@ function createShellWindow(opts: {
   height?: number;
   /** Default true (hub/cliproxy). NET launcher historically runs unsandboxed. */
   sandbox?: boolean;
+  /** Extra argv forwarded to the (sandboxed) preload via process.argv. */
+  additionalArguments?: string[];
 }): BrowserWindow {
   const saved = getSettings().windowBoundsHub;
   const iconPath = hubIconPath();
@@ -159,6 +161,9 @@ function createShellWindow(opts: {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: opts.sandbox !== false,
+      ...(opts.additionalArguments
+        ? { additionalArguments: opts.additionalArguments }
+        : {}),
     },
   });
 
@@ -272,6 +277,9 @@ export function ensureModuleShell(
       height: getSettings().windowBoundsHub?.height ?? 780,
       // wann-ssh WAJIB sandbox:true (Bab 18 handbook SSH).
       sandbox: true,
+      // Tandai embed agar preload wann-ssh meng-expose window.superApp (tombol
+      // "kembali ke hub"). Standalone wann-ssh tidak menerima argv ini.
+      additionalArguments: ["--wan-super-app-embed"],
     });
     shellView = "ssh";
     loadSshContent(win);

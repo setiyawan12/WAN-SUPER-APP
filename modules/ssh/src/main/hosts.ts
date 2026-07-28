@@ -43,6 +43,16 @@ export class HostService {
     const h = itemRepo.get(id);
     return h ? this.toView(h) : null;
   }
+  /** Decrypt password efektif host (dari identity inline/tersimpan) untuk ditampilkan
+   *  di UI — vault WAJIB sudah unlock. Return null bila host pakai SSH key / tanpa password. */
+  revealPassword(id: string): string | null {
+    const h = itemRepo.get(id);
+    if (!h) return null;
+    const eff = resolveEffective(h, (rid: string) => itemRepo.get(rid));
+    const identity = eff.identityId ? itemRepo.get(eff.identityId) : null;
+    if (!identity || !identity.secret) return null;
+    return this.vault.decryptString(identity.secret, identity.id);
+  }
   saveHost(input: any) {
     const now = Date.now();
     const existing = input.id ? itemRepo.get(input.id) : null;
