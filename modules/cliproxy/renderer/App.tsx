@@ -9,6 +9,7 @@ import { Logs } from "./pages/Logs";
 import { Config } from "./pages/Config";
 import { VsCode } from "./pages/VsCode";
 import { JetBrains } from "./pages/JetBrains";
+import { CliTools } from "./pages/CliTools";
 import { Toasts } from "./components/ui";
 
 const PAGES = [
@@ -20,6 +21,7 @@ const PAGES = [
   { id: "neuron", label: "Activity" },
   { id: "vscode", label: "VS Code" },
   { id: "jetbrains", label: "JetBrains" },
+  { id: "clitools", label: "CLI Tools" },
   { id: "logs", label: "Logs" },
   { id: "config", label: "Config" },
 ] as const;
@@ -56,6 +58,9 @@ const ICONS: Record<PageId, ReactNode> = {
   ),
   jetbrains: (
     <svg {...s}><rect x="3" y="3" width="18" height="18" rx="2.5" /><path d="M7 16.5h6" /><path d="M9 8v5a2 2 0 0 1-2 2" /></svg>
+  ),
+  clitools: (
+    <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3" /><path d="M13 15h4" /></svg>
   ),
   logs: (
     <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 2.5 2L7 13" /><path d="M12.5 14H16" /></svg>
@@ -174,6 +179,7 @@ export function App() {
         {page === "neuron" && <Neuron />}
         {page === "vscode" && <VsCode />}
         {page === "jetbrains" && <JetBrains />}
+        {page === "clitools" && <CliTools />}
         {page === "logs" && <Logs />}
         {page === "config" && <Config />}
       </main>

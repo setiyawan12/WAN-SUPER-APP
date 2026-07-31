@@ -5187,3 +5187,211 @@ select:focus-visible {
   border-color: rgba(167, 139, 250, 0.45) !important;
   box-shadow: 0 0 0 3px var(--wan-ring);
 }
+
+/* --------------------------------------------------------- CLI Tools page */
+/* Keep content readable on ultra-wide windows instead of stretching edge-to-edge. */
+.cli-tools-wrap {
+  max-width: 880px;
+}
+
+.cli-section-label {
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--wan-muted);
+  margin: 4px 0 12px;
+}
+
+.cli-tool-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+/* Colored letter tile shared by cards + detail header. */
+.cli-tool-mark {
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 700;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+}
+/* Brand logo variant — contain the artwork on a neutral rounded tile. */
+.cli-tool-logo {
+  object-fit: contain;
+  padding: 5px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--wan-border-strong);
+  box-shadow: none;
+}
+
+.cli-tool-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 14px;
+  cursor: pointer;
+  border-radius: 13px;
+  border: 1px solid var(--wan-border-strong);
+  background: linear-gradient(165deg, rgba(167, 139, 250, 0.05), rgba(255, 255, 255, 0.012));
+  color: var(--wan-text);
+  transition: border-color 0.18s ease, background 0.18s ease, transform 0.08s ease;
+}
+.cli-tool-card:hover {
+  border-color: rgba(167, 139, 250, 0.4);
+  background: linear-gradient(165deg, rgba(167, 139, 250, 0.09), rgba(255, 255, 255, 0.02));
+}
+.cli-tool-card:active {
+  transform: translateY(1px);
+}
+.cli-tool-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cli-tool-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cli-tool-desc {
+  font-size: 0.82em;
+  color: var(--wan-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cli-tool-chevron {
+  color: var(--wan-faint);
+  font-size: 1.3em;
+  flex-shrink: 0;
+}
+
+/* Back link — compact, not a full-width bar. */
+.cli-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: auto;
+  align-self: flex-start;
+  margin-bottom: 16px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--wan-border-strong);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--wan-muted);
+  cursor: pointer;
+  font-size: 0.88em;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+.cli-back:hover {
+  border-color: rgba(167, 139, 250, 0.4);
+  color: var(--wan-text);
+}
+
+.cli-detail-card {
+  padding: 22px;
+  border-radius: 15px;
+  border: 1px solid var(--wan-border-strong);
+  background: linear-gradient(170deg, rgba(167, 139, 250, 0.05), rgba(255, 255, 255, 0.01));
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+.cli-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.cli-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 1.15rem;
+  font-weight: 650;
+}
+
+.cli-key-row {
+  display: flex;
+  gap: 8px;
+}
+.cli-key-row .text-input {
+  flex: 1;
+}
+
+/* Model slots — Claude has four, everything else one; wrap nicely. */
+.cli-slot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+/* Constrain the picker so its right-aligned menu sits under the button. */
+.cli-picker {
+  max-width: 360px;
+}
+.cli-picker .model-picker-btn {
+  width: 100%;
+  max-width: none;
+}
+
+.cli-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.cli-steps {
+  margin: 0;
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: var(--wan-text);
+  line-height: 1.5;
+}
+
+.cli-code-wrap {
+  position: relative;
+}
+.cli-code-copy {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+.cli-note {
+  margin: 0;
+  font-size: 0.85em;
+  color: var(--wan-muted);
+  border-left: 2px solid rgba(167, 139, 250, 0.4);
+  padding-left: 10px;
+}
+
+.badge.warn {
+  color: #f5c451;
+  background: rgba(245, 196, 81, 0.12);
+}
+
+.code-block {
+  background: rgba(0, 0, 0, 0.28);
+  border: 1px solid var(--wan-border-strong);
+  border-radius: 11px;
+  padding: 14px 16px;
+  margin: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.84em;
+  line-height: 1.55;
+  white-space: pre;
+  overflow-x: auto;
+}

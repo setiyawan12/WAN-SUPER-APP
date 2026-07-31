@@ -215,8 +215,50 @@ export interface OpenAiCompatEntry {
   [key: string]: unknown;
 }
 
+// --- CLI Tools -------------------------------------------------------------
+export interface CliToolSlot {
+  key: string;
+  label: string;
+}
+export interface CliTool {
+  id: string;
+  name: string;
+  description: string;
+  color: string;
+  kind: "writer" | "guide";
+  api: "anthropic" | "openai";
+  baseUrl: string;
+  image?: string | null;
+  configFile?: string;
+  // writer cards
+  slots?: CliToolSlot[];
+  installed?: boolean;
+  configured?: boolean;
+  current?: Record<string, string>;
+  // guide cards
+  steps?: string[];
+  code?: string;
+  codeLang?: string;
+  note?: string;
+}
+export interface CliToolsResponse {
+  endpoint: string;
+  apiKey: string;
+  tools: CliTool[];
+}
+
 export const api = {
   getStatus: () => request<ServerStatus>("/server/status"),
+
+  getCliTools: () => request<CliToolsResponse>("/cli-tools"),
+  applyCliTool: (id: string, body: Record<string, string>) =>
+    request<CliTool>(`/cli-tools/${encodeURIComponent(id)}`, {
+      method: "POST",
+      body: JSON.stringify(body),
+      headers: { "Content-Type": "application/json" },
+    }),
+  resetCliTool: (id: string) =>
+    request<CliTool>(`/cli-tools/${encodeURIComponent(id)}`, { method: "DELETE" }),
   install: () => request<{ ok: boolean; version: string }>("/server/install", { method: "POST" }),
   start: () => request<ServerStatus>("/server/start", { method: "POST" }),
   stop: () => request<ServerStatus>("/server/stop", { method: "POST" }),

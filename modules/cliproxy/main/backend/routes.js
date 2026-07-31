@@ -19,6 +19,7 @@ import { settings, proxyBaseUrl } from "./settings.js";
 import { getUsageSummary, getUsageByCredential, getUsageByCredentialWindows } from "./usage-store.js";
 import { getCodexUsage } from "./codex-usage.js";
 import { proxyChatCompletions } from "./chat-proxy.js";
+import { listCliTools, applyCliTool, resetCliTool } from "./cli-tools.js";
 
 export const router = express.Router();
 
@@ -89,6 +90,14 @@ async function getModelDefinitionsById() {
 
   return modelDefinitionsRequest;
 }
+
+// --- CLI Tools (wire external coding CLIs to this local proxy) -------------
+// GET returns the catalog + live per-tool status; POST/DELETE write/remove a
+// tool's config file. Endpoint + API key are filled in server-side from the
+// running CLIProxyAPI (see cli-tools.js), so the renderer only sends models.
+router.get("/cli-tools", asyncHandler(async (req, res) => res.json(await listCliTools())));
+router.post("/cli-tools/:id", express.json(), asyncHandler(async (req, res) => res.json(await applyCliTool(req.params.id, req.body || {}))));
+router.delete("/cli-tools/:id", asyncHandler(async (req, res) => res.json(await resetCliTool(req.params.id))));
 
 // --- Server lifecycle -----------------------------------------------------
 router.get("/server/status", (req, res) => res.json(getStatus()));
