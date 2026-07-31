@@ -774,6 +774,14 @@ a.link:hover {
   background: var(--wan-surface-2);
 }
 
+/* Per-model reasoning-effort picker in a Models-page row (see Models.tsx). */
+select.text-input.model-thinking-select {
+  width: auto;
+  min-width: 92px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
 /* --------------------------------------------------- Providers page */
 
 .credentials-panel {

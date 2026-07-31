@@ -135,6 +135,8 @@ export const management = {
   getConfigYaml: () => call("/config.yaml", { raw: true }),
   putConfigYaml: (yamlText) =>
     call("/config.yaml", { method: "PUT", body: yamlText, raw: true }),
+  getModelDefinitions: (channel) =>
+    call(`/model-definitions/${encodeURIComponent(channel)}`),
 
   // --- Logs ------------------------------------------------------------
   getLogs: (after) => call("/logs", { query: { after } }),

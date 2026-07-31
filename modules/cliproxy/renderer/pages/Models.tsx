@@ -43,6 +43,24 @@ export function Models() {
 
   const models = data?.models ?? [];
 
+  async function changeThinkingLevel(model: ModelEntry, level: string) {
+    // Optimistically reflect the pick, then persist. On failure, a refetch
+    // (mutate undefined) snaps the row back to the server's truth.
+    mutate(
+      (current) =>
+        current && {
+          ...current,
+          models: current.models.map((m) => (m.id === model.id ? { ...m, thinkingLevel: level } : m)),
+        },
+      false
+    );
+    try {
+      await api.setThinkingLevel(model.id, level);
+    } catch {
+      mutate(undefined, true);
+    }
+  }
+
   async function verifyModel(model: ModelEntry) {
     setVerifying((v) => ({ ...v, [model.id]: true }));
     try {
@@ -193,6 +211,21 @@ export function Models() {
                     </div>
                   </div>
                   <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    {m.thinkingLevels?.length ? (
+                      <select
+                        className="text-input model-thinking-select"
+                        title="Reasoning effort sent for this model (Default = provider's own default)"
+                        value={m.thinkingLevel || ""}
+                        onChange={(e) => changeThinkingLevel(m, e.target.value)}
+                      >
+                        <option value="">Default</option>
+                        {m.thinkingLevels.map((level) => (
+                          <option key={level} value={level}>
+                            {level}
+                          </option>
+                        ))}
+                      </select>
+                    ) : null}
                     <CapabilityBadge capabilities={m.capabilities} verifying={!!verifying[m.id]} onRecheck={() => verifyModel(m)} />
                     <input type="checkbox" className="toggle" checked={m.enabled} onChange={(e) => toggle(m, e.target.checked)} />
                   </div>

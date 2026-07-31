@@ -9,7 +9,7 @@ import { loadProxyApiKeyFromConfig } from "./cliproxy-manager.js";
  * MODEL_CATALOG in model-catalog.js is only a label/grouping fallback for
  * when this call fails (server not running yet, no accounts logged in, etc.).
  */
-export async function listLiveModelIds() {
+export async function getCliProxyApiModels() {
   const key = loadProxyApiKeyFromConfig();
   if (!key) throw new Error("No proxy API key configured yet (start the server once to generate one).");
 
@@ -32,6 +32,11 @@ export async function listLiveModelIds() {
     throw err;
   }
 
+  return data;
+}
+
+export async function listLiveModelIds() {
+  const data = await getCliProxyApiModels();
   return Array.isArray(data?.data) ? data.data.map((m) => m.id).filter(Boolean) : [];
 }
 

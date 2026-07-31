@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import fetch from "node-fetch";
 import { proxyBaseUrl } from "./settings.js";
 import { activityBus } from "./activity-bus.js";
+import { readState } from "./state.js";
 
 // Fire-and-forget notification for the dashboard's live "neuron" activity feed.
 // MUST never throw or block: a bug here cannot be allowed to break the proxy
@@ -41,6 +42,24 @@ export async function proxyChatCompletions(req, res) {
   const isClaude = /claude/i.test(model);
   if (isClaude) {
     for (const key of DEPRECATED_SAMPLING_PARAMS) delete body[key];
+  }
+
+  // CLIProxyAPI selects a model's thinking budget via a "(level)" suffix on the
+  // model NAME (e.g. "claude-opus-4-6(high)"), which it translates per provider
+  // -- Claude -> thinking.budget_tokens, Gemini -> thinkingConfig.thinkingBudget,
+  // OpenAI/Codex -> reasoning_effort. It is NOT a top-level reasoning_effort
+  // field the client sets (the proxy derives that itself from the suffix). See
+  // help.router-for.me/configuration/thinking. So we encode the chosen level
+  // onto the model name here. The level comes from the URL (?thinking=, the
+  // VS Code export path where we can only set a per-model URL, not a body) or,
+  // failing that, the per-model choice saved in the dashboard's Models page
+  // (state.modelThinkingLevels, keyed by model id) -- that fallback is what
+  // makes the in-app Chat and every other proxy client honor the selection too.
+  // Skipped when the caller already put its own "(...)" on the model name.
+  const levelFromUrl = typeof req.query?.thinking === "string" ? req.query.thinking.trim() : "";
+  const level = levelFromUrl || (readState().modelThinkingLevels?.[model] || "").trim();
+  if (level && typeof body.model === "string" && !/\([^)]*\)\s*$/.test(body.model)) {
+    body.model = `${body.model}(${level})`;
   }
 
   // Live activity tap (see activity-bus.js). All IDE models are routed here via

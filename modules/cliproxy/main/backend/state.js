@@ -31,6 +31,27 @@ const defaultState = {
   // dashboard's manual "Re-check" action re-probes an already-checked id, as
   // a deliberate user-initiated request rather than an automatic retry.
   modelCapabilities: {},
+  // Per-model reasoning-effort selection, keyed by model id, e.g.
+  // { "claude/claude-opus-4-5": "high" }. Only set for models that actually
+  // expose a `thinking.levels` list (see routes.js's model-definitions merge).
+  // The chosen level is encoded onto the Copilot model URL as a
+  // `?reasoning_effort=<level>` query param (see toCopilotModelEntry) and
+  // re-injected into the request body by the proxy hop (see chat-proxy.js) --
+  // VS Code's custom-OAI BYOK vendor only lets us set a per-model URL, not a
+  // per-model request body, so the URL is the only place this choice can ride.
+  // An id absent here (or set to "") means "let the provider pick its default".
+  modelThinkingLevels: {},
+  // Last-known-good reasoning-effort levels advertised by CLIProxyAPI's
+  // /model-definitions, keyed by the *base* model id (prefix stripped), e.g.
+  // { "claude-opus-4-7": ["low","medium","high","xhigh","max"] }. That endpoint
+  // is intermittent here (it depends on provider accounts being reachable, and
+  // the dashboard shows many flapping up/down), so relying on a single live
+  // fetch made the per-model level dropdowns blink in and out. We remember the
+  // levels the last time the endpoint DID return them, and fall back to this
+  // when a later fetch comes back empty -- same "learn while data is available,
+  // trust the memory afterwards" pattern as modelProviderMemory above. Cleared
+  // per id only when the endpoint explicitly returns a different, non-empty set.
+  modelThinkingLevelDefs: {},
 };
 
 export function readState() {

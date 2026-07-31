@@ -238,8 +238,17 @@ export function toCopilotModelEntry(model, { proxyUrl, ownBaseUrl }) {
   // on that hop (Anthropic rejects non-default top_p/temperature/top_k on Opus
   // 4.7+/Sonnet 4.5+). Fall back to CLIProxyAPI direct only when we have no
   // own base URL (standalone backend / tests without the Electron hop).
+  // A per-model thinking-level choice rides on the URL as a query param:
+  // VS Code's custom-OAI BYOK vendor lets us set only a per-model URL, not a
+  // per-model request body, so this is the one place the choice can travel.
+  // The proxy hop reads it off req.query and encodes it onto the model name as
+  // a "(level)" suffix, which is how CLIProxyAPI actually takes a thinking
+  // budget (see chat-proxy.js and help.router-for.me/configuration/thinking).
+  // Only meaningful on the ownBaseUrl hop -- the direct CLIProxyAPI fallback
+  // has no hop to apply it, so we don't append there.
+  const effort = typeof model.thinkingLevel === "string" ? model.thinkingLevel.trim() : "";
   const url = ownBaseUrl
-    ? `${ownBaseUrl}/api/proxy/v1/chat/completions`
+    ? `${ownBaseUrl}/api/proxy/v1/chat/completions${effort ? `?thinking=${encodeURIComponent(effort)}` : ""}`
     : `${proxyUrl}/v1/chat/completions`;
   return {
     id: model.id,

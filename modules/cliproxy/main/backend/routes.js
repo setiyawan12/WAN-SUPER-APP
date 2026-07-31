@@ -12,7 +12,7 @@ import {
   getXaiLoginStatus,
 } from "./cliproxy-manager.js";
 import { management, patchRoutingStrategy, readRoutingStrategy } from "./management-client.js";
-import { listLiveModelIds, probeVisionSupport } from "./proxy-client.js";
+import { getCliProxyApiModels, listLiveModelIds, probeVisionSupport } from "./proxy-client.js";
 import { buildModelList, toCopilotModelEntry } from "./model-catalog.js";
 import { readState, writeState } from "./state.js";
 import { settings, proxyBaseUrl } from "./settings.js";
@@ -43,6 +43,53 @@ function asyncHandler(fn) {
   });
 }
 
+const MODEL_DEFINITION_CHANNELS = [
+  "claude",
+  "gemini",
+  "vertex",
+  "aistudio",
+  "codex",
+  "kimi",
+  "antigravity",
+  "xai",
+];
+const MODEL_DEFINITIONS_TTL_MS = 5 * 60 * 1000;
+// The endpoint is intermittent here (provider accounts flap up/down). Caching an
+// *empty* result for the full 5 min would hide every thinking-level dropdown for
+// minutes after one unlucky fetch, so a fetch that yields nothing is retried
+// soon instead -- we only settle into the long TTL once we actually got data.
+const MODEL_DEFINITIONS_EMPTY_TTL_MS = 20 * 1000;
+let modelDefinitionsCache = { expiresAt: 0, byId: new Map() };
+let modelDefinitionsRequest = null;
+
+async function getModelDefinitionsById() {
+  if (Date.now() < modelDefinitionsCache.expiresAt) return modelDefinitionsCache.byId;
+  if (modelDefinitionsRequest) return modelDefinitionsRequest;
+
+  modelDefinitionsRequest = Promise.allSettled(
+    MODEL_DEFINITION_CHANNELS.map((channel) => management.getModelDefinitions(channel))
+  ).then((results) => {
+    const byId = new Map();
+    for (const result of results) {
+      if (result.status !== "fulfilled" || !Array.isArray(result.value?.models)) continue;
+      for (const model of result.value.models) {
+        if (!model?.id) continue;
+        const current = byId.get(model.id);
+        if (!current?.thinking || model.thinking) byId.set(model.id, model);
+      }
+    }
+    modelDefinitionsCache = {
+      expiresAt: Date.now() + (byId.size ? MODEL_DEFINITIONS_TTL_MS : MODEL_DEFINITIONS_EMPTY_TTL_MS),
+      byId,
+    };
+    return byId;
+  }).finally(() => {
+    modelDefinitionsRequest = null;
+  });
+
+  return modelDefinitionsRequest;
+}
+
 // --- Server lifecycle -----------------------------------------------------
 router.get("/server/status", (req, res) => res.json(getStatus()));
 
@@ -59,6 +106,14 @@ router.post("/server/stop", asyncHandler(async (req, res) => res.json(await stop
 router.post("/server/restart", asyncHandler(async (req, res) => res.json(await restartServer())));
 
 router.get("/server/logs", (req, res) => res.json({ lines: getRecentLogs() }));
+
+// Diagnostic passthrough of CLIProxyAPI's native GET /v1/models response.
+// No desktop catalog labels, provider inference, enabled state, capability
+// probes, or model-definition metadata are merged into this payload.
+router.get(
+  "/models-cliproxyapi",
+  asyncHandler(async (req, res) => res.json(await getCliProxyApiModels()))
+);
 
 // Lets the extension flip whether CLIProxyAPI requires the proxy API key at
 // all -- needed for VS Code's "customoai" BYOK vendor, which never sends an
@@ -535,19 +590,44 @@ function ensureVisionProbed(modelId) {
 }
 
 async function getMergedCatalog() {
-  const [loggedInProviders, openAiCompatEntries, prefixIndex] = await Promise.all([
+  const [loggedInProviders, openAiCompatEntries, prefixIndex, definitionsById] = await Promise.all([
     getLoggedInProviders(),
     getOpenAiCompatEntries(),
     getPrefixIndex(),
+    getModelDefinitionsById(),
   ]);
   try {
     const liveIds = await listLiveModelIds();
-    const memory = readState().modelProviderMemory;
-    const { models, memory: nextMemory } = buildModelList(liveIds, loggedInProviders, openAiCompatEntries, memory, prefixIndex);
-    // Only hits disk when a new id was actually learned (i.e. exactly one
-    // provider was logged in and we saw an id we hadn't seen before).
+    const state = readState();
+    const memory = state.modelProviderMemory;
+    const { models: baseModels, memory: nextMemory } = buildModelList(liveIds, loggedInProviders, openAiCompatEntries, memory, prefixIndex);
+    // Last-known-good levels per base id. /model-definitions is intermittent
+    // here, so we remember what it advertised while it was up and fall back to
+    // that when a later fetch returns nothing -- otherwise the dropdowns blink
+    // out every time the endpoint flaps. See state.js's modelThinkingLevelDefs.
+    const levelDefs = state.modelThinkingLevelDefs || {};
+    const nextLevelDefs = { ...levelDefs };
+    const models = baseModels.map((model) => {
+      const baseId = basePartOf(model.id, prefixIndex);
+      const definition = definitionsById.get(baseId);
+      const liveLevels = Array.isArray(definition?.thinking?.levels)
+        ? definition.thinking.levels.filter((level) => typeof level === "string" && level.length > 0)
+        : [];
+      if (liveLevels.length) nextLevelDefs[baseId] = liveLevels; // learn while the endpoint is up
+      const thinkingLevels = liveLevels.length ? liveLevels : levelDefs[baseId] || [];
+      return {
+        ...model,
+        thinking: model.thinking || Boolean(definition?.thinking) || thinkingLevels.length > 0,
+        ...(thinkingLevels.length ? { thinkingLevels } : {}),
+      };
+    });
+    // Only hits disk when something actually changed -- a newly-learned
+    // provider attribution or a freshly-seen set of thinking levels.
     if (JSON.stringify(nextMemory) !== JSON.stringify(memory)) {
       writeState({ modelProviderMemory: nextMemory });
+    }
+    if (JSON.stringify(nextLevelDefs) !== JSON.stringify(levelDefs)) {
+      writeState({ modelThinkingLevelDefs: nextLevelDefs });
     }
     return {
       catalog: models,
@@ -607,6 +687,7 @@ router.get(
     }
     if (capabilitiesChanged) writeState({ modelCapabilities: capabilities });
 
+    const thinkingLevels = state.modelThinkingLevels || {};
     const models = catalog.map((m) => {
       const capability = capabilities[m.id];
       if (!capability) ensureVisionProbed(m.id); // first time we've seen this id -- queue a one-time probe
@@ -614,6 +695,9 @@ router.get(
         ...m,
         enabled: state.enabledModelIds.includes(m.id),
         capabilities: capability || { vision: "unknown" },
+        // Current per-model reasoning-effort choice ("" = provider default).
+        // Only surfaced for models that actually expose selectable levels.
+        thinkingLevel: m.thinkingLevels?.length ? thinkingLevels[m.id] || "" : "",
       };
     });
     res.json({ models, source, liveError });
@@ -649,16 +733,50 @@ router.put("/models", express.json(), (req, res) => {
   res.json({ ok: true, enabledModelIds: state.enabledModelIds });
 });
 
+// Sets (or clears) the per-model reasoning-effort choice. `level` must be one
+// of the model's own advertised thinking.levels (from the model-definitions
+// merge) -- anything else is rejected so we never write a value CLIProxyAPI
+// would reject at request time. An empty/absent `level` clears the choice,
+// restoring the provider's default. Persisted to modelThinkingLevels and
+// re-read by /models/export, which encodes it onto the Copilot model URL.
+router.put(
+  "/models/:id/thinking-level",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    const modelId = req.params.id;
+    const level = typeof req.body?.level === "string" ? req.body.level.trim() : "";
+
+    const { catalog } = await getMergedCatalog();
+    const model = catalog.find((m) => m.id === modelId);
+    if (!model) return res.status(404).json({ error: `Unknown model "${modelId}".` });
+
+    const available = Array.isArray(model.thinkingLevels) ? model.thinkingLevels : [];
+    if (level && !available.includes(level)) {
+      return res.status(400).json({
+        error: `"${level}" is not a selectable thinking level for ${modelId}.`,
+        available,
+      });
+    }
+
+    const current = { ...(readState().modelThinkingLevels || {}) };
+    if (level) current[modelId] = level;
+    else delete current[modelId];
+    writeState({ modelThinkingLevels: current });
+    res.json({ ok: true, modelId, level });
+  })
+);
+
 router.get(
   "/models/export",
   asyncHandler(async (req, res) => {
     const state = readState();
     const { catalog } = await getMergedCatalog();
     const capabilities = state.modelCapabilities || {};
+    const thinkingLevels = state.modelThinkingLevels || {};
     const enabled = catalog.filter((m) => state.enabledModelIds.includes(m.id));
     const entries = enabled.map((m) =>
       toCopilotModelEntry(
-        { ...m, capabilities: capabilities[m.id] },
+        { ...m, capabilities: capabilities[m.id], thinkingLevel: thinkingLevels[m.id] || "" },
         { proxyUrl: proxyBaseUrl(), ownBaseUrl: `http://127.0.0.1:${settings.port}` }
       )
     );

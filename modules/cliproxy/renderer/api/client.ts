@@ -55,6 +55,10 @@ export interface ModelEntry {
   family: string;
   label: string;
   thinking: boolean;
+  thinkingLevels?: string[];
+  // Currently-selected reasoning effort for this model ("" = provider default).
+  // Only meaningful when thinkingLevels is non-empty. Set via setThinkingLevel.
+  thinkingLevel?: string;
   enabled: boolean;
   capabilities: ModelCapabilities;
 }
@@ -229,6 +233,14 @@ export const api = {
     request<{ ok: boolean; enabledModelIds: string[] }>("/models", {
       method: "PUT",
       body: JSON.stringify({ enabledModelIds }),
+    }),
+  // Sets (level = one of the model's thinkingLevels) or clears (level = "")
+  // the per-model reasoning effort. Backend validates against the model's own
+  // advertised levels and persists it; export encodes it onto the model URL.
+  setThinkingLevel: (modelId: string, level: string) =>
+    request<{ ok: boolean; modelId: string; level: string }>(`/models/${encodeURIComponent(modelId)}/thinking-level`, {
+      method: "PUT",
+      body: JSON.stringify({ level }),
     }),
   verifyVision: async (modelId: string) => {
     const res = await bridge().request({
