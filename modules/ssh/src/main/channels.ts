@@ -14,6 +14,7 @@ export const CH = {
     revealPassword: "hosts:revealPassword",
     save: "hosts:save",
     remove: "hosts:remove",
+    restoreDeleted: "hosts:restoreDeleted",
     testConnection: "hosts:testConnection"
   },
   groups: {

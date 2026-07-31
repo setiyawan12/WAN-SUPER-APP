@@ -1,7 +1,7 @@
 import * as node_crypto from "node:crypto";
 import * as ssh2 from "ssh2";
 import { APP, SSH } from "./constants.js";
-import { SshError, mapSshError } from "./errors.js";
+import { SshError, VaultError, mapSshError } from "./errors.js";
 import { wipe } from "./crypto.js";
 import { itemRepo, resolveEffective } from "./repo.js";
 import { fingerprintOf, knownHosts } from "./knownhosts.js";
@@ -152,13 +152,25 @@ export class SshManager {
     let passphrase: string | undefined;
     const username = eff.username || "root";
     const identity = eff.identityId ? itemRepo.get(eff.identityId) : null;
-    if (identity?.secret) password = this.vault.decryptString(identity.secret, identity.id);
-    if (eff.keyId) {
-      const key = itemRepo.get(eff.keyId);
-      if (key) {
-        privateKey = this.vault.decryptField(key.privateKey, key.id);
-        if (key.passphrase) passphrase = this.vault.decryptString(key.passphrase, key.id);
+    try {
+      if (identity?.secret) password = this.vault.decryptString(identity.secret, identity.id);
+      if (eff.keyId) {
+        const key = itemRepo.get(eff.keyId);
+        if (key) {
+          privateKey = this.vault.decryptField(key.privateKey, key.id);
+          if (key.passphrase) passphrase = this.vault.decryptString(key.passphrase, key.id);
+        }
       }
+    } catch (e) {
+      // Kredensial disegel dengan Vault Key lain (belum tersinkron ke perangkat
+      // ini) — sampaikan sebagai gagal-auth yang jelas, bukan crash crypto.
+      if (e instanceof VaultError && e.code === "UNDECRYPTABLE") {
+        throw new SshError(
+          "AUTH_FAILED",
+          "Kredensial host ini tersimpan dengan Vault Key lain (belum tersinkron ke perangkat ini). Buka kunci dengan master password asli, atau simpan ulang kredensialnya."
+        );
+      }
+      throw e;
     }
     return { username, password, privateKey, passphrase };
   }

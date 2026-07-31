@@ -1,4 +1,5 @@
-import { VAULT } from "./constants.js";
+import { VAULT, logger } from "./constants.js";
+import { VaultError } from "./errors.js";
 import { itemRepo, resolveEffective } from "./repo.js";
 import type { VaultCore } from "./vault.js";
 
@@ -51,7 +52,17 @@ export class HostService {
     const eff = resolveEffective(h, (rid: string) => itemRepo.get(rid));
     const identity = eff.identityId ? itemRepo.get(eff.identityId) : null;
     if (!identity || !identity.secret) return null;
-    return this.vault.decryptString(identity.secret, identity.id);
+    try {
+      return this.vault.decryptString(identity.secret, identity.id);
+    } catch (e) {
+      // Secret disegel dengan Vault Key berbeda (belum tersinkron ke perangkat
+      // ini). Kembalikan null — UI menampilkan field kosong, bukan crash.
+      if (e instanceof VaultError && e.code === "UNDECRYPTABLE") {
+        logger.warn("revealPassword: secret tak bisa didekripsi (Vault Key beda) untuk identity", identity.id);
+        return null;
+      }
+      throw e;
+    }
   }
   saveHost(input: any) {
     const now = Date.now();
@@ -123,6 +134,9 @@ export class HostService {
   }
   removeHost(id: string) {
     itemRepo.remove(id);
+  }
+  restoreLatestDeletedHost() {
+    return itemRepo.restoreLatestDeleted("host");
   }
   listGroups() {
     return itemRepo.listByTypeAll("group").map((g) => ({

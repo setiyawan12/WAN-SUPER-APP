@@ -7262,6 +7262,11 @@ const useHostStore = create((set) => ({
     await window.api.hosts.remove(id);
     const hosts = await window.api.hosts.list();
     set({ hosts, selectedId: null });
+  },
+  async restoreDeleted() {
+    await window.api.hosts.restoreDeleted();
+    const hosts = await window.api.hosts.list();
+    set({ hosts, selectedId: hosts[0]?.id ?? null });
   }
 }));
 const COLOR$1 = {
@@ -7288,7 +7293,7 @@ function EnvRail({ env, active }) {
   );
 }
 function HostList({ onEdit, onNew }) {
-  const { hosts, selectedId, reload, select, remove } = useHostStore();
+  const { hosts, selectedId, reload, select, remove, restoreDeleted } = useHostStore();
   const openSession = useSessionStore((s) => s.open);
   const [query, setQuery] = reactExports.useState("");
   reactExports.useEffect(() => {
@@ -7325,7 +7330,8 @@ function HostList({ onEdit, onNew }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: emptyIcon, children: "⌗" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { fontWeight: 620, marginBottom: "var(--s1)" }, children: "Belum ada host" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "muted", style: { fontSize: "var(--text-xs)", marginBottom: "var(--s3)" }, children: "Tambahkan server pertamamu" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: onNew, children: "+ Tambah host" })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", onClick: onNew, children: "+ Tambah host" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", style: { marginTop: "var(--s2)" }, onClick: () => void restoreDeleted(), children: "Pulihkan host terakhir" })
       ] }),
       hosts.length > 0 && filtered.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "muted", style: { textAlign: "center", padding: "var(--s6) var(--s4)", fontSize: "var(--text-sm)" }, children: [
         "Tidak ada host cocok “",
@@ -7355,7 +7361,7 @@ function HostList({ onEdit, onNew }) {
               }, children: "⋯" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "icon-btn danger", title: "Hapus", onClick: (e) => {
                 e.stopPropagation();
-                void remove(h.id);
+                if (window.confirm(`Hapus host “${h.label}”?`)) void remove(h.id);
               }, children: "✕" })
             ] })
           ]

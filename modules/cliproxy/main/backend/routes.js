@@ -37,7 +37,8 @@ function normalizeList(raw) {
 
 function asyncHandler(fn) {
   return (req, res) => fn(req, res).catch((err) => {
-    console.error(err);
+    if (err.expected) console.warn(err.message);
+    else console.error(err);
     res.status(err.status || 500).json({ error: err.message });
   });
 }

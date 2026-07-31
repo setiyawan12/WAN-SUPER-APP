@@ -23,6 +23,9 @@ export const itemRepo = {
   /** Soft delete (tombstone) — hard delete dilarang (Bab 8.2). */
   remove(id: string) {
     jsonStore.remove(id);
+  },
+  restoreLatestDeleted(type: string) {
+    return jsonStore.restoreLatestDeleted(type);
   }
 };
 

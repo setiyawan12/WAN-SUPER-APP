@@ -1,5 +1,5 @@
 import { VAULT, logger } from "./constants.js";
-import { metaStore, jsonStore } from "./store.js";
+import { metaStore, jsonStore, syncStore } from "./store.js";
 import { VaultCore } from "./vault.js";
 import { HostService, IdentityService } from "./hosts.js";
 import { SshManager } from "./ssh.js";
@@ -31,19 +31,23 @@ export class AppContext {
     this.keys = new KeyService(this.vault, uidFn);
     this.syncTransport = new RealtimeDbTransport();
     this.sync = new SyncEngine(
-      jsonStore,
+      syncStore,
       this.syncTransport,
       (state, pending) => this.emit(CH.evt.syncState, { state, pending }),
       [VAULT.personalVaultId],
-      () => this.emit(CH.evt.storeChanged, void 0)
+      () => this.emit(CH.evt.storeChanged, void 0),
+      () => {
+        if (this.vault.isUnlocked()) this.vault.lock();
+      }
     );
     // Realtime: saat data cloud berubah di RTDB, tarik + reload UI otomatis.
     this.syncTransport.onRemoteChange = () => {
       void this.sync.syncNow();
     };
     // Ganti akun / logout: buang data cloud lokal akun lama lalu reload UI.
-    this.syncTransport.onAccountSwitch = () => {
-      const removed = jsonStore.clearSyncedItems();
+    this.syncTransport.onAccountSwitch = (preserveVaultMeta = false) => {
+      this.vault.lock();
+      const removed = jsonStore.clearSyncedItems(preserveVaultMeta);
       logger.info("Ganti akun: buang", removed, "item cloud lokal");
       this.emit(CH.evt.storeChanged, void 0);
     };

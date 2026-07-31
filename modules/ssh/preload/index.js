@@ -16,6 +16,7 @@ const CH = {
     revealPassword: "hosts:revealPassword",
     save: "hosts:save",
     remove: "hosts:remove",
+    restoreDeleted: "hosts:restoreDeleted",
     testConnection: "hosts:testConnection"
   },
   groups: {
@@ -87,6 +88,7 @@ const api = {
     revealPassword: (id) => invoke(CH.hosts.revealPassword, id),
     save: (input) => invoke(CH.hosts.save, input),
     remove: (id) => invoke(CH.hosts.remove, id),
+    restoreDeleted: () => invoke(CH.hosts.restoreDeleted),
     testConnection: (id) => invoke(CH.hosts.testConnection, id)
   },
   groups: {

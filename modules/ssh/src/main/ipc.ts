@@ -44,6 +44,14 @@ export function registerIpc() {
   }));
   ipcMain.handle(CH.hosts.save, (_e, raw) => requireCtx().hosts.saveHost(HostInputSchema.parse(raw)));
   ipcMain.handle(CH.hosts.remove, (_e, raw) => requireCtx().hosts.removeHost(IdSchema.parse(raw)));
+  ipcMain.handle(CH.hosts.restoreDeleted, async () => {
+    const ctx = requireCtx();
+    const restored = ctx.hosts.restoreLatestDeletedHost();
+    if (!restored) return { restored: false };
+    const outcome = await ctx.sync.syncNow();
+    ctx.emit(CH.evt.storeChanged, void 0);
+    return { restored: true, id: restored.id, sync: outcome };
+  });
   ipcMain.handle(CH.hosts.testConnection, (_e, raw) => requireCtx().ssh.testConnection(IdSchema.parse(raw)));
   ipcMain.handle(CH.groups.list, () => requireCtx().hosts.listGroups());
   ipcMain.handle(CH.groups.save, (_e, raw) => requireCtx().hosts.saveGroup(GroupInputSchema.parse(raw)));
@@ -65,9 +73,17 @@ export function registerIpc() {
   });
   ipcMain.handle(CH.sync.now, () => requireCtx().sync.syncNow());
   ipcMain.handle(CH.sync.pushAll, async () => {
-    const { sync } = requireCtx();
+    const { sync, vault } = requireCtx();
+    try {
+      vault.assertCanDecryptItems(jsonStore.listSyncedPayloads());
+    } catch (error) {
+      if (error instanceof Error && error.message === "UNDECRYPTABLE") {
+        throw new Error("Re-upload dibatalkan: ada kredensial Cloud yang memakai Vault Key berbeda. Simpan ulang kredensial tersebut lebih dulu.");
+      }
+      throw error;
+    }
     const requeued = jsonStore.requeueAll();
-    const outcome = await sync.syncNow();
+    const outcome = await sync.syncNow({ forceLocal: true });
     return { requeued, ...outcome };
   });
   ipcMain.handle(CH.sync.signIn, async (_e, rawEmail, rawPw) => {
@@ -76,8 +92,9 @@ export function registerIpc() {
     const uid = await syncTransport.signIn(email, password);
     // Pull awal DITUNGGU (bukan fire-and-forget) supaya list host terisi begitu
     // sign-in selesai. Cursor sudah 0 (fresh) sehingga full pull dari RTDB.
-    const outcome = await sync.syncNow();
+    const outcome = await sync.syncNow({ preferRemoteMeta: true });
     logger.info("signIn → syncNow:", JSON.stringify(outcome));
+    if (!outcome.ok) throw new Error(`Sign in berhasil, tetapi pull RTDB gagal: ${outcome.reason}`);
     // Jaminan: paksa renderer reload list SETELAH pull selesai, walau emit di
     // dalam pullPhase kebetulan terlewat karena listener renderer belum siap.
     requireCtx().emit(CH.evt.storeChanged, void 0);
@@ -86,8 +103,9 @@ export function registerIpc() {
   ipcMain.handle(CH.sync.signInGoogle, async () => {
     const { sync, syncTransport } = requireCtx();
     const uid = await syncTransport.signInGoogle();
-    const outcome = await sync.syncNow();
+    const outcome = await sync.syncNow({ preferRemoteMeta: true });
     logger.info("signInGoogle → syncNow:", JSON.stringify(outcome));
+    if (!outcome.ok) throw new Error(`Sign in Google berhasil, tetapi pull RTDB gagal: ${outcome.reason}`);
     requireCtx().emit(CH.evt.storeChanged, void 0);
     return { uid };
   });

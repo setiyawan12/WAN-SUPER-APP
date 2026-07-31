@@ -13,6 +13,10 @@ export function firebaseAuthPersistencePath() {
   return path.join(app.getPath("userData"), "firebase-auth-session.bin");
 }
 
+export function vaultMetaPath(uid: string, vaultId: string) {
+  return `users/${uid}/vaultMeta/${vaultId}`;
+}
+
 /**
  * Persistence LOCAL berbasis file untuk proses main Electron.
  *
@@ -238,7 +242,7 @@ export class RealtimeDbTransport {
   /** Dipanggil saat data cloud berubah (di-set oleh AppContext → syncNow). */
   onRemoteChange: (() => void) | null = null;
   /** Dipanggil saat akun berganti (uid baru ≠ lama) → reset store lokal cloud. */
-  onAccountSwitch: (() => void) | null = null;
+  onAccountSwitch: ((preserveVaultMeta?: boolean) => void) | null = null;
   /** Dipanggil tiap sign-in sukses → reset cursor agar full pull akun ini. */
   onFreshLogin: (() => void) | null = null;
 
@@ -481,7 +485,7 @@ export class RealtimeDbTransport {
     this.uid = null;
     this.liveUid = null;
     // Buang data cloud lokal agar host akun lama tidak tertinggal di UI.
-    if (typeof this.onAccountSwitch === "function") this.onAccountSwitch();
+    if (typeof this.onAccountSwitch === "function") this.onAccountSwitch(true);
     await clearFileAuthPersistence();
   }
   itemsPath(vaultId: string) {
@@ -489,6 +493,10 @@ export class RealtimeDbTransport {
   }
   itemRef(vaultId: string, itemId: string) {
     return this.fb.dbMod.ref(this.db, `${this.itemsPath(vaultId)}/${itemId}`);
+  }
+  vaultMetaRef(vaultId: string) {
+    if (!this.uid) throw new Error("Belum sign-in");
+    return this.fb.dbMod.ref(this.db, vaultMetaPath(this.uid, vaultId));
   }
   /** RTDB menolak nilai `undefined` — buang key undefined (Firestore diam-diam skip). */
   sanitize(entity: any) {
@@ -503,14 +511,33 @@ export class RealtimeDbTransport {
       await set(this.itemRef(vaultId, entity.id), this.sanitize(entity));
     }
   }
+  async pushVaultMeta(vaultId: string, meta: any) {
+    if (!this.uid) throw new Error("Belum sign-in");
+    await this.ensureInit();
+    await this.fb.dbMod.set(this.vaultMetaRef(vaultId), this.sanitize(meta));
+  }
+  async pullVaultMeta(vaultId: string) {
+    if (!this.uid) throw new Error("Belum sign-in");
+    await this.ensureInit();
+    const snap = await this.fb.dbMod.get(this.vaultMetaRef(vaultId));
+    return snap.exists() ? snap.val() : null;
+  }
   async pull(vaultId: string, since: number) {
     if (!this.uid) throw new Error("Belum sign-in");
     await this.ensureInit();
     const { ref, query, orderByChild, startAt, get } = this.fb.dbMod;
+    const itemsRef = ref(this.db, this.itemsPath(vaultId));
+    if (since <= 0) {
+      const snap = await get(itemsRef);
+      if (!snap.exists()) return [];
+      const val = snap.val();
+      if (!val || typeof val !== "object") return [];
+      return Object.values(val).filter((e: any) => e && typeof e === "object" && e.id);
+    }
     // startAt(since+1) meniru where("updatedAt", ">", since) di Firestore.
     // Butuh index: users/{uid}/vaults/{vaultId}/items → ".indexOn": ["updatedAt"]
     const q = query(
-      ref(this.db, this.itemsPath(vaultId)),
+      itemsRef,
       orderByChild("updatedAt"),
       startAt(Number(since) + 1)
     );

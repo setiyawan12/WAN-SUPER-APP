@@ -10,15 +10,24 @@ export class SyncEngine {
   emit: (state: string, pending: number) => void;
   vaults: string[];
   emitStoreChanged: () => void;
+  onVaultMetaChanged: () => void;
   running = false;
 
-  constructor(store: any, transport: any, emit: any, vaults: string[], emitStoreChanged?: () => void) {
+  constructor(
+    store: any,
+    transport: any,
+    emit: any,
+    vaults: string[],
+    emitStoreChanged?: () => void,
+    onVaultMetaChanged?: () => void
+  ) {
     this.store = store;
     this.transport = transport;
     this.emit = emit;
     this.vaults = vaults;
     // Diberi tahu renderer untuk reload list saat data cloud berubah.
     this.emitStoreChanged = emitStoreChanged ?? (() => {});
+    this.onVaultMetaChanged = onVaultMetaChanged ?? (() => {});
   }
   pendingCount() {
     return this.store.outboxPending().length;
@@ -32,7 +41,7 @@ export class SyncEngine {
     };
   }
   /** Satu siklus sync penuh. Aman dipanggil ulang; menolak reentrancy. */
-  async syncNow() {
+  async syncNow(options: { forceLocal?: boolean; preferRemoteMeta?: boolean } = {}) {
     if (this.running) return { ok: false, pushed: 0, pulled: 0, reason: "busy" };
     if (!this.transport.isConfigured() || !this.transport.currentUser()) {
       this.emit("offline", this.pendingCount());
@@ -41,6 +50,7 @@ export class SyncEngine {
     this.running = true;
     this.emit("syncing", this.pendingCount());
     try {
+      await this.syncVaultMeta(options.forceLocal === true, options.preferRemoteMeta === true);
       const pushed = await this.pushPhase();
       const pulled = await this.pullPhase();
       this.emit("idle", this.pendingCount());
@@ -50,6 +60,42 @@ export class SyncEngine {
       return { ok: false, pushed: 0, pulled: 0, reason: err instanceof Error ? err.message : String(err) };
     } finally {
       this.running = false;
+    }
+  }
+  async syncVaultMeta(forceLocal = false, preferRemote = false) {
+    for (const vaultId of this.vaults) {
+      const local = this.store.loadVaultMeta(vaultId);
+      if (forceLocal && local) {
+        await this.transport.pushVaultMeta(vaultId, local);
+        continue;
+      }
+      const remote = await this.transport.pullVaultMeta(vaultId);
+      if (!local && remote) {
+        this.store.saveRemoteVaultMeta(remote);
+        this.onVaultMetaChanged();
+        continue;
+      }
+      if (local && !remote) {
+        await this.transport.pushVaultMeta(vaultId, local);
+        continue;
+      }
+      if (!local || !remote) continue;
+      if (JSON.stringify(local) === JSON.stringify(remote)) continue;
+      if (preferRemote) {
+        this.store.saveRemoteVaultMeta(remote);
+        this.onVaultMetaChanged();
+        continue;
+      }
+      const localVersion = local.version ?? 1;
+      const remoteVersion = remote.version ?? 1;
+      if (localVersion > remoteVersion) {
+        await this.transport.pushVaultMeta(vaultId, local);
+      } else if (remoteVersion > localVersion) {
+        this.store.saveRemoteVaultMeta(remote);
+        this.onVaultMetaChanged();
+      } else {
+        throw new Error(`VAULT_META_CONFLICT:${vaultId}`);
+      }
     }
   }
   async pushPhase() {

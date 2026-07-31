@@ -20,11 +20,24 @@ async function call(pathname, { method = "GET", body, query, raw = false } = {})
   const headers = { Authorization: `Bearer ${key}` };
   if (body && !raw) headers["Content-Type"] = "application/json";
 
-  const res = await fetch(url, {
-    method,
-    headers,
-    body: body ? (raw ? body : JSON.stringify(body)) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(url, {
+      method,
+      headers,
+      body: body ? (raw ? body : JSON.stringify(body)) : undefined,
+    });
+  } catch (cause) {
+    if (cause?.code !== "ECONNREFUSED") throw cause;
+    const err = new Error(
+      `CLIProxyAPI is not reachable at ${url.origin}. Start the server and try again.`
+    );
+    err.status = 503;
+    err.code = "CLIPROXY_UNAVAILABLE";
+    err.expected = true;
+    err.cause = cause;
+    throw err;
+  }
 
   const text = await res.text();
   let data;

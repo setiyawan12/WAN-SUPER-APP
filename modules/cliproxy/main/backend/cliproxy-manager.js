@@ -527,6 +527,28 @@ export function setProxyAuthEnabled(enabled) {
   return { changed: true };
 }
 
+async function waitForManagementApi(timeoutMs = 10_000) {
+  const deadline = Date.now() + timeoutMs;
+  const url = managementBaseUrl() + "/config";
+
+  while (Date.now() < deadline) {
+    if (!isRunning()) {
+      throw new Error(lastStartError || "CLIProxyAPI exited before it became ready.");
+    }
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${loadManagementKeyFromConfig() || settings.managementKey}` },
+      });
+      if (res.status !== 502 && res.status !== 503 && res.status !== 504) return;
+    } catch (err) {
+      if (err?.code !== "ECONNREFUSED") throw err;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+
+  throw new Error(`CLIProxyAPI did not become reachable at ${managementBaseUrl()} within ${timeoutMs}ms.`);
+}
+
 export async function startServer() {
   if (isRunning()) return getStatus();
   if (!fs.existsSync(binaryPath())) {
@@ -551,8 +573,13 @@ export async function startServer() {
     childProcess = null;
   });
 
-  // Give it a moment to bind the port before we report "running".
-  await new Promise((resolve) => setTimeout(resolve, 800));
+  try {
+    await waitForManagementApi();
+  } catch (err) {
+    lastStartError = err.message;
+    if (isRunning()) childProcess.kill();
+    throw err;
+  }
   return getStatus();
 }
 

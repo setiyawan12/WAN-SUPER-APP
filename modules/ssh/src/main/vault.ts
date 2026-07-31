@@ -51,7 +51,9 @@ export class VaultCore {
       kdfSalt: salt.toString("base64"),
       kdfParams: KDF_PARAMS_SERIALIZED,
       keyRing: [CURRENT_KID],
-      schemaVersion: 1
+      schemaVersion: 1,
+      version: 1,
+      updatedAt: Date.now()
     });
     this.vaultKey = vaultKey;
     this.state = "unlocked";
@@ -96,7 +98,13 @@ export class VaultCore {
     const wrapped = seal(this.vaultKey, kek, `wrap|${this.vaultId}`, CURRENT_KID);
     wipe(mk, kek);
     const meta = this.meta.load(this.vaultId);
-    this.meta.save({ ...meta, wrappedVaultKey: wrapped, kdfSalt: salt.toString("base64") });
+    this.meta.save({
+      ...meta,
+      wrappedVaultKey: wrapped,
+      kdfSalt: salt.toString("base64"),
+      version: (meta.version ?? 1) + 1,
+      updatedAt: Date.now()
+    });
   }
   /** Export Vault Key untuk disimpan di OS keychain. Hati-hati memakainya. */
   exportVaultKey() {
@@ -116,10 +124,32 @@ export class VaultCore {
   decryptField(env: any, itemId: string) {
     if (!this.vaultKey) throw new VaultError("LOCKED");
     this.resetAutoLock();
-    return open(env, hkdf(this.vaultKey, `item:${itemId}`));
+    try {
+      return open(env, hkdf(this.vaultKey, `item:${itemId}`));
+    } catch {
+      // GCM gagal autentikasi → secret ini disegel dengan Vault Key LAIN
+      // (mis. instalasi lama / perangkat lain; Vault Key belum tersinkron).
+      // Jangan biarkan error crypto mentah menjatuhkan handler IPC.
+      throw new VaultError("UNDECRYPTABLE");
+    }
   }
   decryptString(env: any, itemId: string) {
     return this.decryptField(env, itemId).toString("utf8");
+  }
+  assertCanDecryptItems(items: any[]) {
+    if (!this.vaultKey) throw new VaultError("LOCKED", "Buka vault sebelum melakukan re-upload.");
+    for (const item of items) {
+      const encryptedFields = item.type === "identity"
+        ? [item.secret]
+        : item.type === "sshkey"
+          ? [item.privateKey, item.passphrase]
+          : [];
+      for (const encrypted of encryptedFields) {
+        if (!encrypted) continue;
+        const plain = this.decryptField(encrypted, item.id);
+        wipe(plain);
+      }
+    }
   }
   touch() {
     if (this.isUnlocked()) this.resetAutoLock();

@@ -34,6 +34,50 @@ function ensure() {
   return data;
 }
 
+export function createTombstonePayload(payload: any, deletedAt: number, version: number) {
+  return { ...payload, deletedAt, version, updatedAt: deletedAt };
+}
+
+export function createRestoredPayload(payload: any, updatedAt: number, version: number) {
+  return { ...payload, deletedAt: null, version, updatedAt };
+}
+
+export function replaceSyncedOutbox(d: any, now: number) {
+  d.outbox = d.outbox.filter((o: any) => !isSynced(o.vaultId));
+  let count = 0;
+  for (const row of Object.values(d.items) as any[]) {
+    if (!isSynced(row.vaultId)) continue;
+    d.outbox.push({
+      seq: ++d.outboxSeq,
+      itemId: row.id,
+      vaultId: row.vaultId,
+      op: row.deletedAt ? "delete" : "upsert",
+      payload: row.payload,
+      createdAt: now,
+      attempts: 0
+    });
+    row.syncState = "pending";
+    count += 1;
+  }
+  return count;
+}
+
+export function clearSyncedData(d: any, preserveVaultMeta = false) {
+  let count = 0;
+  for (const id of Object.keys(d.items)) {
+    if (isSynced(d.items[id].vaultId)) {
+      delete d.items[id];
+      count += 1;
+    }
+  }
+  d.outbox = d.outbox.filter((o: any) => !isSynced(o.vaultId));
+  for (const vaultId of VAULT.syncedVaultIds) {
+    if (d.syncCursor) delete d.syncCursor[vaultId];
+    if (!preserveVaultMeta && d.vaultMeta) delete d.vaultMeta[vaultId];
+  }
+  return count;
+}
+
 export const jsonStore = {
   listByType(vaultId: string, type: string) {
     return Object.values(ensure().items).filter((r: any) => r.vaultId === vaultId && r.type === type && r.deletedAt === null).sort((a: any, b: any) => b.updatedAt - a.updatedAt);
@@ -41,6 +85,11 @@ export const jsonStore = {
   /** Semua vault (Lokal + Cloud) untuk satu tipe — dipakai UI lintas-workspace. */
   listByTypeAll(type: string) {
     return Object.values(ensure().items).filter((r: any) => r.type === type && r.deletedAt === null).sort((a: any, b: any) => b.updatedAt - a.updatedAt);
+  },
+  listSyncedPayloads() {
+    return Object.values(ensure().items)
+      .filter((r: any) => isSynced(r.vaultId) && r.deletedAt === null)
+      .map((r: any) => r.payload);
   },
   get(id: string) {
     const r = ensure().items[id];
@@ -82,6 +131,7 @@ export const jsonStore = {
     row.deletedAt = now;
     row.version += 1;
     row.updatedAt = now;
+    row.payload = createTombstonePayload(row.payload, now, row.version);
     row.syncState = isSynced(row.vaultId) ? "pending" : "synced";
     if (isSynced(row.vaultId)) {
       d.outbox.push({
@@ -95,6 +145,32 @@ export const jsonStore = {
       });
     }
     persist();
+  },
+  restoreLatestDeleted(type: string) {
+    const d = ensure();
+    const row = (Object.values(d.items) as any[])
+      .filter((item) => item.type === type && item.deletedAt !== null)
+      .sort((a, b) => b.deletedAt - a.deletedAt)[0];
+    if (!row) return null;
+    const now = Date.now();
+    row.version += 1;
+    row.updatedAt = now;
+    row.deletedAt = null;
+    row.payload = createRestoredPayload(row.payload, now, row.version);
+    row.syncState = isSynced(row.vaultId) ? "pending" : "synced";
+    if (isSynced(row.vaultId)) {
+      d.outbox.push({
+        seq: ++d.outboxSeq,
+        itemId: row.id,
+        vaultId: row.vaultId,
+        op: "upsert",
+        payload: row.payload,
+        createdAt: now,
+        attempts: 0
+      });
+    }
+    persist();
+    return row.payload;
   },
   // ── Sync drain API (M6) ──
   /** Semua operasi belum tersinkron, urut kronologis (seq naik). */
@@ -142,21 +218,7 @@ export const jsonStore = {
   requeueAll() {
     const d = ensure();
     const now = Date.now();
-    let n = 0;
-    for (const row of Object.values(d.items) as any[]) {
-      if (!isSynced(row.vaultId)) continue;
-      d.outbox.push({
-        seq: ++d.outboxSeq,
-        itemId: row.id,
-        vaultId: row.vaultId,
-        op: row.deletedAt ? "delete" : "upsert",
-        payload: row.payload,
-        createdAt: now,
-        attempts: 0
-      });
-      row.syncState = "pending";
-      n += 1;
-    }
+    const n = replaceSyncedOutbox(d, now);
     d.syncCursor = {};
     persist();
     return n;
@@ -173,22 +235,13 @@ export const jsonStore = {
   /**
    * Bersihkan SEMUA data vault tersinkron (cloud) beserta outbox & cursornya.
    * Dipakai saat ganti akun (sign in/out) agar host milik akun lama tidak
-   * tercampur dengan akun baru. Vault lokal (privasi) TIDAK ikut terhapus.
+    * tercampur dengan akun baru. Wrapped vault metadata tetap disimpan agar
+    * logout tidak mengubah layar unlock menjadi pembuatan Vault Key baru.
    * Mengembalikan jumlah item yang dibuang.
    */
-  clearSyncedItems() {
+  clearSyncedItems(preserveVaultMeta = false) {
     const d = ensure();
-    let n = 0;
-    for (const id of Object.keys(d.items)) {
-      if (isSynced(d.items[id].vaultId)) {
-        delete d.items[id];
-        n += 1;
-      }
-    }
-    d.outbox = d.outbox.filter((o: any) => !isSynced(o.vaultId));
-    for (const vaultId of VAULT.syncedVaultIds) {
-      if (d.syncCursor) delete d.syncCursor[vaultId];
-    }
+    const n = clearSyncedData(d, preserveVaultMeta);
     persist();
     return n;
   },
@@ -214,5 +267,19 @@ export const metaStore = {
   save(meta: any) {
     ensure().vaultMeta[meta.vaultId] = meta;
     persist();
+  },
+  remove(vaultId: string) {
+    delete ensure().vaultMeta[vaultId];
+    persist();
+  }
+};
+
+export const syncStore = {
+  ...jsonStore,
+  loadVaultMeta(vaultId: string) {
+    return metaStore.load(vaultId);
+  },
+  saveRemoteVaultMeta(meta: any) {
+    metaStore.save(meta);
   }
 };

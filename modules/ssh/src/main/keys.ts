@@ -1,22 +1,49 @@
 import * as node_crypto from "node:crypto";
+import * as ssh2 from "ssh2";
 import { VAULT } from "./constants.js";
 import { itemRepo } from "./repo.js";
 import type { VaultCore } from "./vault.js";
 
+export function toOpenSshPublicKey(key: string, passphrase?: string) {
+  const parsed = (ssh2 as any).utils.parseKey(key, passphrase);
+  if (!(parsed instanceof Error)) {
+    const publicBlob = parsed.getPublicSSH();
+    return {
+      publicKey: `${parsed.type} ${publicBlob.toString("base64")}`,
+      fingerprintSha256: "SHA256:" + node_crypto.createHash("sha256").update(publicBlob).digest("base64").replace(/=+$/, "")
+    };
+  }
+  const keyObject = key.includes("PRIVATE KEY")
+    ? node_crypto.createPublicKey(node_crypto.createPrivateKey({ key, passphrase }))
+    : node_crypto.createPublicKey(key);
+  if (keyObject.asymmetricKeyType !== "ed25519") throw parsed;
+  const jwk = keyObject.export({ format: "jwk" });
+  if (!jwk.x) throw parsed;
+  const algorithm = Buffer.from("ssh-ed25519");
+  const publicBytes = Buffer.from(jwk.x, "base64url");
+  const publicBlob = Buffer.concat([sshString(algorithm), sshString(publicBytes)]);
+  return {
+    publicKey: `ssh-ed25519 ${publicBlob.toString("base64")}`,
+    fingerprintSha256: "SHA256:" + node_crypto.createHash("sha256").update(publicBlob).digest("base64").replace(/=+$/, "")
+  };
+}
+
+function sshString(value: Buffer) {
+  const length = Buffer.allocUnsafe(4);
+  length.writeUInt32BE(value.length);
+  return Buffer.concat([length, value]);
+}
+
 export function generateKey(alg: string, bits = 4096, passphrase?: string) {
   const priv: any = passphrase ? { type: "pkcs8", format: "pem", cipher: "aes-256-cbc", passphrase } : { type: "pkcs8", format: "pem" };
-  const { publicKey, privateKey } = node_crypto.generateKeyPairSync(alg as any, {
+  const { privateKey } = node_crypto.generateKeyPairSync(alg as any, {
     ...alg === "rsa" ? { modulusLength: bits } : {},
     ...alg === "ecdsa" ? { namedCurve: "prime256v1" } : {},
     publicKeyEncoding: { type: "spki", format: "pem" },
     privateKeyEncoding: priv
   } as any);
-  const fingerprintSha256 = "SHA256:" + node_crypto.createHash("sha256").update(publicKey).digest("base64").replace(/=+$/, "");
-  return { publicKey, privateKey, fingerprintSha256 };
-}
-
-export function fpOf(pem: string) {
-  return "SHA256:" + node_crypto.createHash("sha256").update(pem).digest("base64").replace(/=+$/, "");
+  const publicInfo = toOpenSshPublicKey(privateKey, passphrase);
+  return { ...publicInfo, privateKey };
 }
 
 export class KeyService {
@@ -85,7 +112,7 @@ export class KeyService {
     try {
       const priv = createPrivateKey({ key: o.pem, passphrase: o.passphrase });
       const pubPem = createPublicKey(priv).export({ type: "spki", format: "pem" }) as string;
-      publicKey = pubPem;
+      publicKey = toOpenSshPublicKey(pubPem).publicKey;
       const t = priv.asymmetricKeyType;
       algorithm = t === "rsa" ? "rsa" : t === "ec" ? "ecdsa" : "ed25519";
       bits = priv.asymmetricKeyDetails?.modulusLength ?? null;
@@ -99,7 +126,7 @@ export class KeyService {
       publicKey,
       privateKeyPem: o.pem,
       passphrase: o.passphrase,
-      fingerprintSha256: fpOf(o.pem),
+      fingerprintSha256: publicKey ? toOpenSshPublicKey(o.pem, o.passphrase).fingerprintSha256 : "",
       source: "imported"
     });
   }
