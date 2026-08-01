@@ -1,15 +1,10 @@
 import { useEffect, useState } from "react";
+import { AlertTriangle, Braces, CheckCircle2, Clipboard, Code2, KeyRound, Layers3, Link2, PlugZap, RefreshCw, ServerOff } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
-import { PageHeader, CardHead, EmptyState } from "../components/shared";
+import { PageHeader, CardHead, CommandSummary, EmptyState } from "../components/shared";
 import { toast } from "../components/ui";
 import type { WanJetBrainsState, WanJetBrainsSyncResult } from "../wan";
-
-const jv = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" } as const;
-const IconPlug = <svg {...jv}><path d="M9 2v6M15 2v6" /><path d="M6 8h12v3a6 6 0 0 1-12 0V8Z" /><path d="M12 17v5" /></svg>;
-const IconLink = <svg {...jv}><path d="M10 13a5 5 0 0 0 7 0l2-2a5 5 0 0 0-7-7l-1 1" /><path d="M14 11a5 5 0 0 0-7 0l-2 2a5 5 0 0 0 7 7l1-1" /></svg>;
-const IconKey = <svg {...jv}><circle cx="7.5" cy="15.5" r="4.5" /><path d="M10.5 12.5 20 3" /><path d="M15 3h5v5" /></svg>;
-const IconLayers = <svg {...jv}><path d="M12 2 3 7l9 5 9-5-9-5Z" /><path d="M3 12l9 5 9-5" /><path d="M3 17l9 5 9-5" /></svg>;
 
 const HEADERS = "Authorization: Bearer $CUSTOM_SERVICE_API_KEY\nContent-Type: application/json";
 
@@ -59,31 +54,57 @@ export function JetBrains() {
     else toast.error(r.error ?? "No API key yet");
   }
 
+  const targetCount = jb?.targets.length ?? 0;
+  const syncedCount = jb?.targets.filter((target) => target.hasEntry).length ?? 0;
+  const runningCount = jb?.running.length ?? 0;
+
   return (
-    <div className="page">
+    <div className="page ide-page jetbrains-page">
       <PageHeader
         eyebrow="Integration"
         title="JetBrains · ProxyAI"
-        subtitle="Use your models in IntelliJ / Android Studio through the ProxyAI plugin's Custom OpenAI provider."
+        subtitle="Deploy enabled models into IntelliJ, Android Studio, and other ProxyAI-enabled IDEs."
         actions={
           <button className="btn" onClick={copyKey}>
+            <Clipboard size={15} />
             Copy API Key
           </button>
         }
       />
 
-      <div className="card">
+      <CommandSummary
+        tone="amber"
+        icon={<PlugZap size={21} />}
+        eyebrow="IDE deployment"
+        title={targetCount ? `${syncedCount} of ${targetCount} IDE targets configured` : "No JetBrains target detected"}
+        description="ProxyAI receives one managed Custom OpenAI service per enabled model, including endpoint and credential wiring."
+        status={
+          <span className={`command-status-pill ${targetCount > 0 && runningCount === 0 ? "success" : "neutral"}`}>
+            {runningCount > 0 ? <AlertTriangle size={13} /> : targetCount > 0 ? <CheckCircle2 size={13} /> : <ServerOff size={13} />}
+            {runningCount > 0 ? `${runningCount} IDE running` : targetCount > 0 ? "Ready to sync" : "Awaiting IDE"}
+          </span>
+        }
+        metrics={[
+          { label: "detected", value: targetCount },
+          { label: "synced", value: syncedCount, tone: syncedCount ? "success" : "default" },
+          { label: "running", value: runningCount, tone: runningCount ? "warn" : "default" },
+          { label: "models ready", value: enabled.length },
+        ]}
+      />
+
+      <div className="card jetbrains-deploy-card">
         <CardHead
-          icon={IconPlug}
+          icon={<PlugZap size={18} />}
           title="Auto-inject to ProxyAI (experimental)"
           subtitle="Writes ProxyAI's config directly — one provider per enabled model, no manual paste"
           right={
             <button className="btn" onClick={inject} disabled={syncing}>
+              <RefreshCw className={syncing ? "ide-sync-spin" : ""} size={15} />
               {syncing ? "Syncing…" : "Sync to JetBrains"}
             </button>
           }
         />
-        <div className="card-desc">
+        <div className="ide-deploy-description">
           Creates a Custom OpenAI service per enabled model with URL and model pre-filled. On macOS the required API-key
           credential is written straight into the login Keychain, so <b>no manual paste</b> is needed. JetBrains only
           reads plugin settings and credentials at startup, so <b>fully quit the IDE first</b> (⌘Q), click Sync, then
@@ -91,14 +112,14 @@ export function JetBrains() {
         </div>
 
         {jb && jb.running.length > 0 && (
-          <div className="empty-hint" style={{ color: "var(--wan-red)" }}>
-            ⚠ JetBrains IDE running ({jb.running.join(", ")}). Close it, Sync again, then reopen — otherwise the change
-            is overwritten when the IDE exits.
+          <div className="ide-running-warning">
+            <AlertTriangle size={17} />
+            <span>JetBrains IDE running ({jb.running.join(", ")}). Fully quit it, sync again, then reopen so settings are not overwritten.</span>
           </div>
         )}
 
         {jb && jb.targets.length === 0 && (
-          <EmptyState icon={IconPlug}>No JetBrains IDE detected on this machine.</EmptyState>
+          <EmptyState icon={<PlugZap size={18} />}>No JetBrains IDE detected on this machine.</EmptyState>
         )}
 
         {(jb?.targets ?? []).map((t) => {
@@ -106,30 +127,32 @@ export function JetBrains() {
           const status = r ? r.status : t.hasEntry ? "synced" : "not synced";
           const tone = r?.status === "error" ? "error" : status === "written" || status === "synced" ? "ok" : "neutral";
           return (
-            <div key={t.product} className="model-row">
-              <div style={{ minWidth: 0 }}>
-                <div className="model-row-name">{t.product}</div>
-                <div className="model-row-id">{r?.error ?? t.file}</div>
+            <div key={t.product} className={`ide-target-row ${tone === "ok" ? "synced" : tone === "error" ? "error" : "pending"}`}>
+              <span className="ide-target-icon"><Code2 size={17} /></span>
+              <div>
+                <strong>{t.product}</strong>
+                <span>{r?.error ?? t.file}</span>
               </div>
-              <div className="btn-row">
-                <span className={`badge ${tone}`}>{status}</span>
-              </div>
+              <span className={`badge ${tone}`}>{status}</span>
             </div>
           );
         })}
 
         {result && result.targets.length > 0 && (
-          <div className="empty-hint">
+          <div className="ide-result-note">
+            <KeyRound size={16} />
+            <span>
             {result.keychainSupported
               ? `Keychain: ${result.keychainWritten} credential(s) written — no manual paste needed. Fully quit (⌘Q) and reopen the IDE to apply.`
               : "This OS can't auto-fill the credential — paste the API key (button above) once per model in ProxyAI settings. It persists across future syncs."}
+            </span>
           </div>
         )}
       </div>
 
-      <div className="card accent">
+      <div className="card accent ide-manual-card">
         <CardHead
-          icon={IconPlug}
+          icon={<Braces size={18} />}
           title="Manual setup (fallback)"
           subtitle="Settings › Tools › ProxyAI › Providers › Custom OpenAI"
         />
@@ -141,13 +164,14 @@ export function JetBrains() {
       </div>
 
       <div className="cols c-2">
-        <div className="card">
+        <div className="card ide-asset-card">
           <CardHead
-            icon={IconLink}
+            icon={<Link2 size={18} />}
             title="URL"
             subtitle="Chat Completions endpoint"
             right={
               <button className="btn secondary" onClick={() => copy(proxyUrl, "URL")}>
+                <Clipboard size={14} />
                 Copy
               </button>
             }
@@ -155,13 +179,14 @@ export function JetBrains() {
           <div className="mono-chip">{proxyUrl}</div>
         </div>
 
-        <div className="card">
+        <div className="card ide-asset-card">
           <CardHead
-            icon={IconKey}
+            icon={<KeyRound size={18} />}
             title="Headers"
             subtitle="Authorization uses your pasted API key"
             right={
               <button className="btn secondary" onClick={() => copy(HEADERS, "Headers")}>
+                <Clipboard size={14} />
                 Copy
               </button>
             }
@@ -170,26 +195,29 @@ export function JetBrains() {
         </div>
       </div>
 
-      <div className="card">
+      <div className="card ide-models-card">
         <CardHead
-          icon={IconLayers}
+          icon={<Layers3 size={18} />}
           title="Enabled models"
           subtitle="Set one as the provider's model (Body tab), or make one provider per model"
         />
         {enabled.length === 0 && (
-          <EmptyState icon={IconLayers}>No models enabled yet — enable some on the Models page.</EmptyState>
+          <EmptyState icon={<Layers3 size={18} />}>No models enabled yet — enable some on the Models page.</EmptyState>
         )}
         {enabled.map((m) => (
-          <div key={m.id} className="model-row">
-            <div style={{ minWidth: 0 }}>
-              <div className="model-row-name">{m.label}</div>
-              <div className="model-row-id">{m.id}</div>
+          <div key={m.id} className="ide-model-row">
+            <span className="ide-target-icon"><Layers3 size={16} /></span>
+            <div>
+              <strong>{m.label}</strong>
+              <span>{m.id}</span>
             </div>
             <div className="btn-row">
               <button className="btn secondary" onClick={() => copy(m.id, "Model id")}>
+                <Clipboard size={14} />
                 Copy id
               </button>
               <button className="btn secondary" onClick={() => copyBody(m.id)}>
+                <Braces size={14} />
                 Copy body
               </button>
             </div>

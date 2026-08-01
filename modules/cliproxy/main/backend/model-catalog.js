@@ -256,7 +256,7 @@ export function toCopilotModelEntry(model, { proxyUrl, ownBaseUrl }) {
     url,
     toolCalling: true,
     vision: verifiedVision === false ? false : true,
-    maxInputTokens: model.thinking ? 32000 : 128000,
-    maxOutputTokens: model.thinking ? 2048 : 4096,
+    // maxInputTokens: model.thinking ? 32000 : 128000,
+    // maxOutputTokens: model.thinking ? 2048 : 4096,
   };
 }

@@ -52,6 +52,16 @@ const defaultState = {
   // trust the memory afterwards" pattern as modelProviderMemory above. Cleared
   // per id only when the endpoint explicitly returns a different, non-empty set.
   modelThinkingLevelDefs: {},
+  // Token Saver config (see token-saver.js). Output-token reduction applied by
+  // the proxy hop (chat-proxy.js) — each technique appends a terseness/minimalism
+  // directive to the request's system prompt, toggled independently with an
+  // intensity level. Applies to every request that flows through the Node hop
+  // (/proxy/v1/chat/completions): in-app Chat, VS Code, JetBrains, and any tool
+  // pointed at that hop.
+  tokenSaver: {
+    ponytail: { enabled: false, level: "lite" },
+    caveman: { enabled: false, level: "lite" },
+  },
 };
 
 export function readState() {

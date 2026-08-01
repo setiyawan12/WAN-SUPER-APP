@@ -247,6 +247,27 @@ export interface CliToolsResponse {
   tools: CliTool[];
 }
 
+export type TokenSaverLevel = "lite" | "full" | "ultra";
+export interface TokenSaverTech {
+  enabled: boolean;
+  level: TokenSaverLevel;
+}
+export interface TokenSaverConfig {
+  ponytail: TokenSaverTech;
+  caveman: TokenSaverTech;
+}
+export interface TokenSaverStats {
+  requests: number;
+  applied: number;
+  tokensSavedEst: number;
+  ponytail: number;
+  caveman: number;
+}
+export interface TokenSaverResponse {
+  config: TokenSaverConfig;
+  stats: TokenSaverStats;
+}
+
 export const api = {
   getStatus: () => request<ServerStatus>("/server/status"),
 
@@ -259,6 +280,14 @@ export const api = {
     }),
   resetCliTool: (id: string) =>
     request<CliTool>(`/cli-tools/${encodeURIComponent(id)}`, { method: "DELETE" }),
+
+  getTokenSaver: () => request<TokenSaverResponse>("/token-saver"),
+  setTokenSaver: (config: Partial<TokenSaverConfig>) =>
+    request<TokenSaverResponse>("/token-saver", {
+      method: "PATCH",
+      body: JSON.stringify(config),
+      headers: { "Content-Type": "application/json" },
+    }),
   install: () => request<{ ok: boolean; version: string }>("/server/install", { method: "POST" }),
   start: () => request<ServerStatus>("/server/start", { method: "POST" }),
   stop: () => request<ServerStatus>("/server/stop", { method: "POST" }),

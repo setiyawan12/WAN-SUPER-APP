@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
+import { CheckCircle2, CircleHelp, Eye, EyeOff, Info, Layers3, Power, PowerOff, RefreshCw, Search, Sparkles } from "lucide-react";
 import { api, type ModelEntry } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { loadCustomGroups } from "../lib/custom-groups";
-import { PageHeader } from "../components/shared";
+import { CommandSummary, PageHeader } from "../components/shared";
 import { SkeletonRows } from "../components/ui";
 
 const PINNED_PROVIDERS = ["antigravity", "claude", "codex", "xai"];
@@ -136,40 +137,69 @@ export function Models() {
     return applyEnabledIds(enabled ? models.map((m) => m.id) : []);
   }
 
+  const enabledTotal = models.filter((model) => model.enabled).length;
+  const providerCount = presentProviders.size;
+  const thinkingCount = models.filter((model) => model.thinking).length;
+  const visionCount = models.filter((model) => model.capabilities.vision === true).length;
+
   return (
-    <div className="page">
+    <div className="page models-page">
       <PageHeader
         eyebrow="BYOK"
         title="Models"
-        subtitle="Toggle which models get pushed into Copilot Chat. Enabled models auto-sync to VS Code."
+        subtitle="Control the model catalog synced into Copilot Chat and connected editors."
         actions={
           <>
             {saving && <span className="badge neutral">Saving…</span>}
             <button className="btn secondary" disabled={!models.length} onClick={() => setAllEnabled(false)}>
+              <PowerOff size={15} />
               Disable all
             </button>
             <button className="btn" disabled={!models.length} onClick={() => setAllEnabled(true)}>
+              <Power size={15} />
               Enable all
             </button>
           </>
         }
       />
 
-      <div className="tabs" style={{ justifyContent: "space-between" }}>
-        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+      <CommandSummary
+        tone="blue"
+        icon={<Layers3 size={21} />}
+        eyebrow="Model registry"
+        title={models.length ? `${enabledTotal} models ready to route` : "Waiting for the live catalog"}
+        description="Enabled entries are published to local editor integrations; capability checks remain model-specific."
+        status={
+          <span className={`command-status-pill ${data?.source === "live" ? "success" : "neutral"}`}>
+            {data?.source === "live" ? <CheckCircle2 size={13} /> : <CircleHelp size={13} />}
+            {data?.source === "live" ? "Live catalog" : "Catalog unavailable"}
+          </span>
+        }
+        metrics={[
+          { label: "enabled", value: enabledTotal, tone: enabledTotal ? "success" : "default" },
+          { label: "available", value: models.length },
+          { label: "providers", value: providerCount },
+          { label: "thinking", value: thinkingCount },
+          { label: "vision verified", value: visionCount },
+        ]}
+      />
+
+      <div className="models-toolbar">
+        <div className="models-tabs" role="tablist" aria-label="Model provider">
           {tabs.map((tab) => {
             const count = tab === "all" ? models.length : models.filter((m) => m.provider === tab).length;
             return (
-              <button key={tab} className={`btn secondary ${activeTab === tab ? "active" : ""}`} onClick={() => setActiveTab(tab)}>
-                {tab === "all" ? "All" : labelFor(tab)} ({count})
+              <button key={tab} type="button" role="tab" aria-selected={activeTab === tab} className={activeTab === tab ? "active" : ""} onClick={() => setActiveTab(tab)}>
+                {tab === "all" ? "All" : labelFor(tab)} <span>{count}</span>
               </button>
             );
           })}
         </div>
         {models.length > 0 && (
-          <div className="search-box">
+          <label className="models-search">
+            <Search size={15} />
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search models..." />
-          </div>
+          </label>
         )}
       </div>
 
@@ -187,11 +217,15 @@ export function Models() {
       {Object.entries(grouped).map(([provider, items]) => {
         const enabledCount = items.filter((m) => m.enabled).length;
         return (
-          <div className="card" key={provider}>
-            <div className="card-title">
-              <span>
-                {labelFor(provider)} <span className="card-desc">({enabledCount}/{items.length} enabled)</span>
-              </span>
+          <section className="card models-provider-card" key={provider}>
+            <div className="models-group-head">
+              <div className="models-group-identity">
+                <span className="models-group-icon"><Sparkles size={17} /></span>
+                <div>
+                  <strong>{labelFor(provider)}</strong>
+                  <span>{enabledCount}/{items.length} models enabled</span>
+                </div>
+              </div>
               <div className="btn-row">
                 <button className="btn secondary" disabled={enabledCount === 0} onClick={() => setGroupEnabled(items, false)}>
                   Disable all
@@ -201,16 +235,24 @@ export function Models() {
                 </button>
               </div>
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div className="models-group-progress"><span style={{ width: `${items.length ? (enabledCount / items.length) * 100 : 0}%` }} /></div>
+            <div className="models-list">
+              <div className="models-list-head" aria-hidden="true">
+                <span>Model</span>
+                <span>Reasoning</span>
+                <span>Capability</span>
+                <span>Enabled</span>
+              </div>
               {items.map((m) => (
-                <div className="model-row" key={m.id}>
-                  <div>
+                <div className={`model-row ${m.enabled ? "enabled" : ""}`} key={m.id}>
+                  <div className="model-row-copy">
                     <div className="model-row-name">{m.label}</div>
                     <div className="model-row-id">
                       {m.id} {m.thinking && "· thinking"}
                     </div>
                   </div>
-                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div className="model-control-cell model-reasoning-cell">
+                    <span className="model-control-label">Reasoning</span>
                     {m.thinkingLevels?.length ? (
                       <select
                         className="text-input model-thinking-select"
@@ -225,20 +267,40 @@ export function Models() {
                           </option>
                         ))}
                       </select>
-                    ) : null}
-                    <CapabilityBadge capabilities={m.capabilities} verifying={!!verifying[m.id]} onRecheck={() => verifyModel(m)} />
-                    <input type="checkbox" className="toggle" checked={m.enabled} onChange={(e) => toggle(m, e.target.checked)} />
+                    ) : (
+                      <span className="model-control-muted">Standard</span>
+                    )}
                   </div>
+                  <div className="model-control-cell model-capability-cell">
+                    <span className="model-control-label">Capability</span>
+                    <CapabilityBadge capabilities={m.capabilities} verifying={!!verifying[m.id]} onRecheck={() => verifyModel(m)} />
+                  </div>
+                  <label className="model-toggle-cell">
+                    <span className="model-control-label">Enabled</span>
+                    <span className="model-toggle-control">
+                      <span>{m.enabled ? "On" : "Off"}</span>
+                      <input
+                        type="checkbox"
+                        className="toggle"
+                        checked={m.enabled}
+                        aria-label={`${m.enabled ? "Disable" : "Enable"} ${m.label}`}
+                        onChange={(e) => toggle(m, e.target.checked)}
+                      />
+                    </span>
+                  </label>
                 </div>
               ))}
             </div>
-          </div>
+          </section>
         );
       })}
 
-      <div className="empty-hint">
+      <div className="empty-hint models-sync-note">
+        <Info size={17} />
+        <span>
         After changing models here, reload VS Code and enable them via Copilot Chat's model picker → "Manage Models..." → click the eye icon. That last
         step has to be manual -- VS Code doesn't expose an API to enable BYOK models programmatically yet.
+        </span>
       </div>
     </div>
   );
@@ -257,23 +319,26 @@ function CapabilityBadge({
   const badge =
     vision === true ? (
       <span className="badge success" title={note}>
+        <Eye size={12} />
         Vision
       </span>
     ) : vision === false ? (
       <span className="badge error" title={note}>
+        <EyeOff size={12} />
         No vision
       </span>
     ) : (
       <span className="badge neutral" title={note || "Not verified yet"}>
+        <CircleHelp size={12} />
         Unverified
       </span>
     );
 
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+    <div className="model-capability">
       {badge}
       <button className="icon-recheck" title="Re-check vision support (sends one real test request)" disabled={verifying} onClick={onRecheck}>
-        {verifying ? "⟳" : "↻"}
+        <RefreshCw className={verifying ? "model-rechecking" : ""} size={14} />
       </button>
     </div>
   );

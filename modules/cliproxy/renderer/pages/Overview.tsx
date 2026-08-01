@@ -9,6 +9,7 @@ import {
   TrendChart,
   Checklist,
   PageHeader,
+  CommandSummary,
   CardHead,
   ProgressRing,
   EmptyState,
@@ -205,6 +206,26 @@ export function Overview({ onNavigate }: { onNavigate: (page: string) => void })
             {busy === "start" ? "Starting…" : serverRunning ? "Server running" : "Start server"}
           </button>
         }
+      />
+
+      <CommandSummary
+        tone={serverRunning ? "green" : "amber"}
+        icon={IconServer}
+        eyebrow="Local model gateway"
+        title={serverRunning ? "CLIProxyAPI is online and routing" : "CLIProxyAPI is currently stopped"}
+        description="One control surface for server health, connected credentials, published models, and request telemetry."
+        status={
+          <span className={`command-status-pill ${serverRunning ? "success" : "neutral"}`}>
+            {serverRunning ? IconCheck : IconServer}
+            {serverRunning ? `PID ${status?.pid ?? "—"}` : "Start required"}
+          </span>
+        }
+        metrics={[
+          { label: "accounts ready", value: credentials.length ? `${availableCount}/${credentials.length}` : "0", tone: unavailableCount ? "warn" : availableCount ? "success" : "default" },
+          { label: "models enabled", value: totalModels ? `${enabledModels}/${totalModels}` : "0" },
+          { label: "success rate", value: successRate === null ? "—" : `${successRate}%`, tone: successRate !== null && successRate >= 95 ? "success" : successRate !== null && successRate < 90 ? "warn" : "default" },
+          { label: `tokens · ${TOKEN_USAGE_DAYS}d`, value: tokens7d ? formatCompactNumber(tokens7d) : "—" },
+        ]}
       />
 
       <div className="grid">

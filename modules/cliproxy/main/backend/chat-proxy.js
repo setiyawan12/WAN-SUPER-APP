@@ -3,6 +3,7 @@ import fetch from "node-fetch";
 import { proxyBaseUrl } from "./settings.js";
 import { activityBus } from "./activity-bus.js";
 import { readState } from "./state.js";
+import { applyTokenSaver } from "./token-saver.js";
 
 // Fire-and-forget notification for the dashboard's live "neuron" activity feed.
 // MUST never throw or block: a bug here cannot be allowed to break the proxy
@@ -66,6 +67,15 @@ export async function proxyChatCompletions(req, res) {
   // toCopilotModelEntry when ownBaseUrl is set, so path A covers Claude + Grok +
   // Gemini + GPT. `ended` guards the one-shot end event. source:"proxy" tags
   // where this hit came from (in-app chat uses source:"chat" from chat-service).
+  // Token Saver (see token-saver.js): append enabled output-style directives to
+  // the system prompt to trim output tokens. Best-effort and idempotent-safe --
+  // a failure here must never break the proxy pipe.
+  try {
+    applyTokenSaver(body);
+  } catch {
+    /* never break the proxy */
+  }
+
   const reqId = randomUUID().slice(0, 8);
   const startedAt = Date.now();
   const provider = providerFromModel(model);

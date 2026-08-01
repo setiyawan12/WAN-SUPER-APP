@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { ArrowLeft, Command, Cpu, Radio } from "lucide-react";
 import { Overview } from "./pages/Overview";
 import { Chat } from "./pages/Chat";
 import { Models } from "./pages/Models";
@@ -10,6 +11,7 @@ import { Config } from "./pages/Config";
 import { VsCode } from "./pages/VsCode";
 import { JetBrains } from "./pages/JetBrains";
 import { CliTools } from "./pages/CliTools";
+import { TokenSaver } from "./pages/TokenSaver";
 import { Toasts } from "./components/ui";
 
 const PAGES = [
@@ -22,6 +24,7 @@ const PAGES = [
   { id: "vscode", label: "VS Code" },
   { id: "jetbrains", label: "JetBrains" },
   { id: "clitools", label: "CLI Tools" },
+  { id: "tokensaver", label: "Token Saver" },
   { id: "logs", label: "Logs" },
   { id: "config", label: "Config" },
 ] as const;
@@ -61,6 +64,9 @@ const ICONS: Record<PageId, ReactNode> = {
   ),
   clitools: (
     <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 3 3-3 3" /><path d="M13 15h4" /></svg>
+  ),
+  tokensaver: (
+    <svg {...s}><path d="M12 2v4" /><path d="M12 18v4" /><circle cx="12" cy="12" r="4" /><path d="M4.9 4.9l2.1 2.1" /><path d="M17 17l2.1 2.1" /><path d="M2 12h4" /><path d="M18 12h4" /></svg>
   ),
   logs: (
     <svg {...s}><rect x="3" y="4" width="18" height="16" rx="2" /><path d="m7 9 2.5 2L7 13" /><path d="M12.5 14H16" /></svg>
@@ -114,9 +120,7 @@ export function App() {
       <aside className="sidebar">
         <div className="brand">
           <div className="brand-mark">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 7l4 12 5-14 5 14 4-12" />
-            </svg>
+            <Command size={18} strokeWidth={2.1} />
           </div>
           <div className="brand-text">
             <span className="brand-title">WANN X RENN</span>
@@ -136,17 +140,10 @@ export function App() {
               title="Back to Super App hub"
               style={{
                 margin: "0 12px 10px",
-                padding: "8px 10px",
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.08)",
-                background: "rgba(255,255,255,0.05)",
-                color: "inherit",
-                cursor: "pointer",
-                fontSize: "0.82rem",
-                textAlign: "left",
               }}
             >
-              ← Super App
+              <ArrowLeft size={15} />
+              <span>Super App</span>
             </button>
           )}
 
@@ -165,8 +162,13 @@ export function App() {
         </nav>
 
         <div className="sidebar-foot" title={footText}>
+          <span className="sidebar-foot-icon"><Radio size={14} /></span>
           <span className={footClass} />
-          <span>{footText}</span>
+          <span className="sidebar-foot-copy">
+            <strong>Local gateway</strong>
+            <span>{footText}</span>
+          </span>
+          <Cpu size={14} className="sidebar-foot-cpu" />
         </div>
       </aside>
 
@@ -180,6 +182,7 @@ export function App() {
         {page === "vscode" && <VsCode />}
         {page === "jetbrains" && <JetBrains />}
         {page === "clitools" && <CliTools />}
+        {page === "tokensaver" && <TokenSaver />}
         {page === "logs" && <Logs />}
         {page === "config" && <Config />}
       </main>

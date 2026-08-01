@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Activity, CircleAlert, Radio, Sparkles, Zap } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
-import { PageHeader } from "../components/shared";
+import { CommandSummary, PageHeader } from "../components/shared";
 import { useNeuronGraph } from "./neuron/useNeuronGraph";
 import { NeuronCanvas } from "./neuron/NeuronCanvas";
 import { providerPalette } from "./neuron/palette";
@@ -47,11 +48,31 @@ export function Neuron() {
   const stats         = useMemo(() => stageStats(nodes, firings, now), [nodes, firings, now]);
 
   return (
-    <div className="page">
+    <div className="page neuron-page">
       <PageHeader
         eyebrow="Activity"
         title="Neuron activity"
-        subtitle="Deep-space constellation of live model hits — each gem lights the account currently serving traffic. Click a gem to pin details."
+        subtitle="Live model routing visualized as a provider constellation and request pulse feed."
+      />
+
+      <CommandSummary
+        icon={<Activity size={21} />}
+        eyebrow="Routing telemetry"
+        title={serverRunning ? stats.nodes ? `${stats.nodes} model nodes observed` : "Listening for model traffic" : "Telemetry stream offline"}
+        description="Each node represents a provider/model route; live pulses identify the credential currently serving the request."
+        status={
+          <span className={`command-status-pill ${serverRunning ? "success" : "neutral"}`}>
+            {serverRunning ? <Radio size={13} /> : <CircleAlert size={13} />}
+            {serverRunning ? "Live stream" : "Server stopped"}
+          </span>
+        }
+        metrics={[
+          { label: "nodes", value: stats.nodes },
+          { label: "live", value: stats.live, tone: stats.live ? "success" : "default" },
+          { label: "near-live", value: stats.nearLive },
+          { label: "failures", value: stats.fails, tone: stats.fails ? "error" : "default" },
+          { label: "last hit", value: stats.lastHitAgo },
+        ]}
       />
 
       {!serverRunning && (
@@ -80,7 +101,7 @@ export function Neuron() {
                 </span>
               ))}
               <span className="neuron-legend-hint">
-                <span className="neuron-hint-live">⚡ instant</span>
+                <span className="neuron-hint-live"><Zap size={12} />instant</span>
                 <span className="neuron-hint-sep">·</span>
                 <span>~ near-live</span>
                 <span className="neuron-hint-sep">·</span>
@@ -91,7 +112,7 @@ export function Neuron() {
                 <span>gems orbit · Stop freezes</span>
               </span>
             </div>
-            <div className="neuron-stage-badge">CONSTELLATION</div>
+            <div className="neuron-stage-badge"><Sparkles size={12} />CONSTELLATION</div>
             {/* Mini stats strip */}
             <div className="neuron-stats" aria-live="polite">
               <span className="neuron-stats-item">
@@ -153,7 +174,7 @@ export function Neuron() {
                           className={`neuron-chip${f.live ? " live" : ""}`}
                           style={f.live ? { boxShadow: `0 0 8px ${accent}55` } : {}}
                         >
-                          {f.live ? "⚡" : "~"}
+                          {f.live ? <Zap size={11} /> : "~"}
                         </span>
                         {account ? (
                           <span className="neuron-account" title={account}>{short(account, 26)}</span>

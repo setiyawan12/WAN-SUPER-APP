@@ -1,4 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { ArrowDown, Copy, Download, Search } from "lucide-react";
+
+function logTone(line: string) {
+  if (/\b(error|fatal|failed|failure)\b/i.test(line)) return "error";
+  if (/\b(warn|warning)\b/i.test(line)) return "warn";
+  if (/\b(success|ready|started|running|connected|ok)\b/i.test(line)) return "success";
+  return "";
+}
 
 /** Ported from dashboard/components/ui/log-viewer.tsx -- auto-scroll only while pinned to bottom. */
 export function LogViewer({ lines, downloadFilename = "log.txt" }: { lines: string[]; downloadFilename?: string }) {
@@ -43,32 +51,39 @@ export function LogViewer({ lines, downloadFilename = "log.txt" }: { lines: stri
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+    <div className="log-viewer">
       <div className="log-toolbar">
-        <div className="search-box" style={{ flex: 1 }}>
+        <label className="log-search">
+          <Search size={15} />
           <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Filter lines..." />
           {query && (
-            <span className="card-desc">
+            <span className="log-match-count">
               {filtered.length}/{lines.length}
             </span>
           )}
-        </div>
-        <button className="btn secondary" disabled={!filtered.length} title="Copy visible lines" onClick={copyAll}>
-          Copy
+        </label>
+        <button type="button" className="log-action" disabled={!filtered.length} title="Copy visible lines" onClick={copyAll}>
+          <Copy size={15} />
+          <span>Copy</span>
         </button>
-        <button className="btn secondary" disabled={!filtered.length} title="Download visible lines" onClick={downloadAll}>
-          Download
+        <button type="button" className="log-action" disabled={!filtered.length} title="Download visible lines" onClick={downloadAll}>
+          <Download size={15} />
+          <span>Download</span>
         </button>
       </div>
 
       <div className="log-box" ref={scrollRef} onScroll={handleScroll}>
-        {filtered.length === 0 && <span className="card-desc">{query ? "No lines match your filter." : "No log lines yet."}</span>}
+        {filtered.length === 0 && <span className="log-empty">{query ? "No lines match your filter." : "Waiting for log events..."}</span>}
         {filtered.map((line, i) => (
-          <div key={i}>{line}</div>
+          <div key={i} className={`log-line ${logTone(line)}`}>
+            <span className="log-line-number">{String(i + 1).padStart(3, "0")}</span>
+            <span className="log-line-text">{line}</span>
+          </div>
         ))}
         {!pinned && lines.length > 0 && (
           <button className="jump-to-latest" onClick={jumpToBottom}>
-            ↓ Jump to latest
+            <ArrowDown size={14} />
+            Jump to latest
           </button>
         )}
       </div>

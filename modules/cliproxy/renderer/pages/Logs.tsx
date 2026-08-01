@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Activity, AlertTriangle, Radio, Server, SquareTerminal } from "lucide-react";
 import { api } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { LogViewer } from "../components/LogViewer";
@@ -52,31 +53,69 @@ export function Logs() {
   const proxyLines = useProxyLogTail(source === "proxy");
 
   const lines = source === "backend" ? own?.lines ?? [] : proxyLines;
+  const errorCount = lines.filter((line) => /\b(error|fatal|failed|failure)\b/i.test(line)).length;
+  const warningCount = lines.filter((line) => /\b(warn|warning)\b/i.test(line)).length;
+  const sourceTitle = source === "proxy" ? "CLIProxyAPI request log" : "Backend process log";
+  const sourceDescription = source === "proxy"
+    ? `Last ${Math.round(INITIAL_LOOKBACK_SECONDS / 60)} minutes on load, then incremental live tail.`
+    : "Application lifecycle, startup, and backend process output.";
 
   return (
-    <div className="page">
+    <div className="page logs-page">
       <PageHeader
         eyebrow="Diagnostics"
         title="Logs"
-        subtitle="Live tail, refreshed every few seconds."
-        actions={
-          <>
-            <button className={`btn ${source === "proxy" ? "" : "secondary"}`} onClick={() => setSource("proxy")}>
-              CLIProxyAPI
-            </button>
-            <button className={`btn ${source === "backend" ? "" : "secondary"}`} onClick={() => setSource("backend")}>
-              Backend
-            </button>
-          </>
-        }
+        subtitle="Inspect live proxy traffic and backend process output."
+        actions={<span className="logs-live-pill"><Radio size={14} />Live tail · {POLL_MS / 1000}s</span>}
       />
 
-      <div className="card">
-        <div className="card-title">{source === "proxy" ? "CLIProxyAPI request log" : "Backend process log"}</div>
-        <div className="card-desc">
-          {source === "proxy" ? `Most recent lines at the bottom (last ~${Math.round(INITIAL_LOOKBACK_SECONDS / 60)} minutes on load, then live).` : "Most recent lines at the bottom."}
+      <div className="logs-wrap">
+        <section className="logs-status-strip">
+          <div className="logs-status-main">
+            <span className="logs-status-icon">{source === "proxy" ? <Activity size={20} /> : <Server size={20} />}</span>
+            <div>
+              <span className="logs-status-kicker">Active stream</span>
+              <strong>{sourceTitle}</strong>
+              <p>{sourceDescription}</p>
+            </div>
+          </div>
+
+          <div className="logs-status-metrics">
+            <span><strong>{lines.length.toLocaleString()}</strong>lines buffered</span>
+            <span className={warningCount ? "warn" : ""}><strong>{warningCount.toLocaleString()}</strong>warnings</span>
+            <span className={errorCount ? "error" : ""}><strong>{errorCount.toLocaleString()}</strong>errors</span>
+          </div>
+        </section>
+
+        <div className="logs-source-row">
+          <div className="logs-source-switch" role="tablist" aria-label="Log source">
+            <button type="button" role="tab" aria-selected={source === "proxy"} className={source === "proxy" ? "active" : ""} onClick={() => setSource("proxy")}>
+              <Activity size={15} />
+              CLIProxyAPI
+              <span>Requests</span>
+            </button>
+            <button type="button" role="tab" aria-selected={source === "backend"} className={source === "backend" ? "active" : ""} onClick={() => setSource("backend")}>
+              <Server size={15} />
+              Backend
+              <span>Process</span>
+            </button>
+          </div>
+          <span className="logs-buffer-note"><AlertTriangle size={14} />Client buffer capped at {MAX_LINES.toLocaleString()} lines</span>
         </div>
-        <LogViewer lines={lines} downloadFilename={source === "proxy" ? "cliproxyapi-log.txt" : "backend-log.txt"} />
+
+        <section className="logs-console">
+          <div className="logs-console-head">
+            <div>
+              <span className="logs-console-icon"><SquareTerminal size={17} /></span>
+              <div>
+                <strong>{sourceTitle}</strong>
+                <span>Newest events appear at the bottom</span>
+              </div>
+            </div>
+            <span className="logs-stream-state"><i />Streaming</span>
+          </div>
+          <LogViewer lines={lines} downloadFilename={source === "proxy" ? "cliproxyapi-log.txt" : "backend-log.txt"} />
+        </section>
       </div>
     </div>
   );

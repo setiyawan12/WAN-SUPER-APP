@@ -1,12 +1,8 @@
 import { useEffect, useState } from "react";
+import { CheckCircle2, Clipboard, Code2, FileJson2, RefreshCw, Settings2, ShieldCheck, Target, WandSparkles } from "lucide-react";
 import type { WanAppSettings, WanVsCodeState } from "../wan";
-import { PageHeader, CardHead, EmptyState } from "../components/shared";
+import { PageHeader, CardHead, CommandSummary, EmptyState } from "../components/shared";
 import { toast } from "../components/ui";
-
-const sv = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" } as const;
-const IconCode = <svg {...sv}><path d="m9 8-5 4 5 4" /><path d="m15 8 5 4-5 4" /></svg>;
-const IconTarget = <svg {...sv}><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /><circle cx="12" cy="12" r="0.6" /></svg>;
-const IconSliders = <svg {...sv}><path d="M4 6h10" /><path d="M20 6h-2" /><circle cx="16" cy="6" r="2" /><path d="M4 18h4" /><path d="M14 18h6" /><circle cx="10" cy="18" r="2" /><path d="M4 12h2" /><path d="M12 12h8" /><circle cx="8" cy="12" r="2" /></svg>;
 
 // Desktop-only page (handbook Tahap 5, item 5): VS Code detection, one-click
 // sync / copy-key, and the app-level preferences that used to live in the
@@ -62,60 +58,89 @@ export function VsCode() {
   }
 
   const syncedCount = state?.variants.filter((v) => v.hasEntry).length ?? 0;
+  const targetCount = state?.targets.length ?? 0;
+  const pendingCount = Math.max(0, targetCount - syncedCount);
 
   return (
-    <div className="page">
+    <div className="page ide-page vscode-page">
       <PageHeader
         eyebrow="Integration"
         title="VS Code"
-        subtitle="Push your enabled models into Copilot Chat automatically."
+        subtitle="Deploy the local model catalog into VS Code and VSCodium Copilot Chat."
         actions={
           <>
             <button className="btn" onClick={doSync} disabled={busy}>
+              <RefreshCw className={busy ? "ide-sync-spin" : ""} size={15} />
               {busy ? "Syncing…" : "Sync Now"}
             </button>
             <button className="btn secondary" onClick={doCopyKey}>
+              <Clipboard size={15} />
               Copy API Key
             </button>
           </>
         }
       />
 
-      <div className="card accent">
+      <CommandSummary
+        tone="blue"
+        icon={<Code2 size={21} />}
+        eyebrow="Editor deployment"
+        title={targetCount ? `${syncedCount} of ${targetCount} targets configured` : "No editor target detected"}
+        description="Sync writes a managed Custom Endpoint entry into each detected editor profile; your enabled model list stays the source of truth."
+        status={
+          <span className={`command-status-pill ${targetCount > 0 && pendingCount === 0 ? "success" : "neutral"}`}>
+            {targetCount > 0 && pendingCount === 0 ? <CheckCircle2 size={13} /> : <Target size={13} />}
+            {targetCount === 0 ? "Awaiting editor" : pendingCount === 0 ? "All targets synced" : `${pendingCount} pending`}
+          </span>
+        }
+        metrics={[
+          { label: "detected", value: targetCount },
+          { label: "synced", value: syncedCount, tone: syncedCount ? "success" : "default" },
+          { label: "pending", value: pendingCount, tone: pendingCount ? "warn" : "default" },
+          { label: "auto-sync", value: settings?.autoSyncVsCode ? "On" : "Off", tone: settings?.autoSyncVsCode ? "success" : "default" },
+        ]}
+      />
+
+      <div className="card accent ide-flow-card">
         <CardHead
-          icon={IconCode}
-          title="How it works"
-          subtitle="One-time manual step per new model"
+          icon={<WandSparkles size={18} />}
+          title="Deployment flow"
+          subtitle="Managed configuration with one editor-side approval"
           right={
             state?.targets.length ? (
               <span className="badge success">{syncedCount}/{state.targets.length} synced</span>
             ) : undefined
           }
         />
-        <div className="card-desc">
-          Writes the "WAN X RENN CLIProxyAPI" Custom Endpoint provider into each detected VS Code
-          install's <code>chatLanguageModels.json</code>. After a new model appears you still need to
-          reload VS Code once and paste the API key into "Chat: Manage Language Models".
+        <div className="ide-flow-steps">
+          <div><span>1</span><div><strong>Publish catalog</strong><small>Enabled models become the editor model list.</small></div></div>
+          <div><span>2</span><div><strong>Write endpoint</strong><small>Each detected <code>chatLanguageModels.json</code> is updated.</small></div></div>
+          <div><span>3</span><div><strong>Approve once</strong><small>Reload the editor and paste the API key for new models.</small></div></div>
         </div>
       </div>
 
-      <div className="card">
-        <CardHead icon={IconTarget} title="Detected targets" subtitle="VS Code / VSCodium installs on this machine" />
+      <div className="card ide-targets-card">
+        <CardHead icon={<Target size={18} />} title="Detected targets" subtitle="VS Code and VSCodium profiles on this machine" />
         {!state?.targets.length && (
-          <EmptyState icon={IconCode}>No VS Code / VSCodium install detected.</EmptyState>
+          <EmptyState icon={<Code2 size={18} />}>No VS Code / VSCodium install detected.</EmptyState>
         )}
         {state?.variants.map((v) => (
-          <div key={v.path} className="model-row">
-            <span className="model-row-id">{v.path}</span>
+          <div key={v.path} className={`ide-target-row ${v.hasEntry ? "synced" : "pending"}`}>
+            <span className="ide-target-icon"><FileJson2 size={17} /></span>
+            <div>
+              <strong>{v.path.split(/[\\/]/).slice(-2).join("/")}</strong>
+              <span>{v.path}</span>
+            </div>
             <span className={`badge ${v.hasEntry ? "success" : "neutral"}`}>
-              {v.hasEntry ? "synced" : "not yet"}
+              {v.hasEntry ? <CheckCircle2 size={12} /> : <Target size={12} />}
+              {v.hasEntry ? "Synced" : "Pending"}
             </span>
           </div>
         ))}
       </div>
 
-      <div className="card">
-        <CardHead icon={IconSliders} title="Preferences" subtitle="App behaviour & startup" />
+      <div className="card ide-preferences-card">
+        <CardHead icon={<Settings2 size={18} />} title="Preferences" subtitle="Gateway, sync, and startup behavior" />
         {settings &&
           (
             [
@@ -126,10 +151,11 @@ export function VsCode() {
               ["startHidden", "Start hidden in the tray"],
             ] as [BoolSetting, string][]
           ).map(([key, label]) => (
-            <div key={key} className="model-row">
-              <span className="model-row-name">{label}</span>
+            <label key={key} className="ide-setting-row">
+              <span className="ide-setting-icon">{key === "requireApiKey" ? <ShieldCheck size={16} /> : <Settings2 size={16} />}</span>
+              <span>{label}</span>
               <input type="checkbox" className="toggle" checked={settings[key]} onChange={() => toggle(key)} />
-            </div>
+            </label>
           ))}
       </div>
     </div>

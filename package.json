@@ -1,7 +1,7 @@
 {
   "name": "wan-super-app",
   "productName": "WAN Super App",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "WAN Super App — CLIProxyAPI desktop + WAN NET tunnel/inspector",
   "author": "WAN",
   "license": "MIT",
@@ -33,6 +33,7 @@
     "firebase": "^11.10.0",
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.0",
+    "lucide-react": "^1.28.0",
     "node-fetch": "^3.3.2",
     "qrcode": "^1.5.4",
     "react-markdown": "^10.1.0",

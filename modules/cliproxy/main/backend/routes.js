@@ -20,6 +20,7 @@ import { getUsageSummary, getUsageByCredential, getUsageByCredentialWindows } fr
 import { getCodexUsage } from "./codex-usage.js";
 import { proxyChatCompletions } from "./chat-proxy.js";
 import { listCliTools, applyCliTool, resetCliTool } from "./cli-tools.js";
+import { getTokenSaver, setTokenSaver } from "./token-saver.js";
 
 export const router = express.Router();
 
@@ -98,6 +99,11 @@ async function getModelDefinitionsById() {
 router.get("/cli-tools", asyncHandler(async (req, res) => res.json(await listCliTools())));
 router.post("/cli-tools/:id", express.json(), asyncHandler(async (req, res) => res.json(await applyCliTool(req.params.id, req.body || {}))));
 router.delete("/cli-tools/:id", asyncHandler(async (req, res) => res.json(await resetCliTool(req.params.id))));
+
+// Token Saver (see token-saver.js): read config + live stats, and patch the
+// per-technique on/off + level. The proxy hop applies whatever is enabled here.
+router.get("/token-saver", (req, res) => res.json(getTokenSaver()));
+router.patch("/token-saver", express.json(), (req, res) => res.json(setTokenSaver(req.body || {})));
 
 // --- Server lifecycle -----------------------------------------------------
 router.get("/server/status", (req, res) => res.json(getStatus()));

@@ -26,6 +26,47 @@ export function PageHeader({
   );
 }
 
+/** Full-width operational summary band shared by data and integration pages. */
+export function CommandSummary({
+  icon,
+  eyebrow,
+  title,
+  description,
+  status,
+  metrics,
+  tone = "cyan",
+}: {
+  icon: ReactNode;
+  eyebrow: string;
+  title: string;
+  description: string;
+  status?: ReactNode;
+  metrics: { label: string; value: ReactNode; tone?: "default" | "success" | "warn" | "error" }[];
+  tone?: "cyan" | "blue" | "green" | "amber";
+}) {
+  return (
+    <section className={`command-summary ${tone}`}>
+      <div className="command-summary-main">
+        <span className="command-summary-icon">{icon}</span>
+        <div>
+          <span className="command-summary-kicker">{eyebrow}</span>
+          <strong>{title}</strong>
+          <p>{description}</p>
+        </div>
+      </div>
+      {status && <div className="command-summary-status">{status}</div>}
+      <div className="command-summary-metrics">
+        {metrics.map((metric) => (
+          <span key={metric.label} className={metric.tone && metric.tone !== "default" ? metric.tone : undefined}>
+            <strong>{metric.value}</strong>
+            <small>{metric.label}</small>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 /** Icon-chip + title/subtitle header used at the top of content cards. */
 export function CardHead({
   icon,

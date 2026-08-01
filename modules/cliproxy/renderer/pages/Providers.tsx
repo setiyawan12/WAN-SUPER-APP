@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Bot, Boxes, CheckCircle2, CircleAlert, Code2, KeyRound, Orbit, Plus, ServerOff, ShieldCheck, Sparkles } from "lucide-react";
 import { api, type ApiKeyEntry, type AuthFileEntry, type OpenAiCompatEntry } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
 import { useEmailReveal } from "../hooks/useEmailReveal";
@@ -6,7 +7,7 @@ import { loadCustomGroups, saveCustomGroups } from "../lib/custom-groups";
 import { maskKey } from "../lib/utils";
 import { Modal, ModalHeader, MaskedEmail } from "../components/Modal";
 import { postOpenExternal } from "../vscodeApi";
-import { PageHeader, CardHead } from "../components/shared";
+import { PageHeader, CardHead, CommandSummary } from "../components/shared";
 import { Skeleton } from "../components/ui";
 
 const psv = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" } as const;
@@ -67,6 +68,14 @@ const PROVIDER_CARDS: {
       "code shown below (it's usually pre-filled from the link). This can take up to a few minutes to complete.",
   },
 ];
+
+function ProviderMark({ id }: { id: FixedProviderId | "custom" }) {
+  if (id === "antigravity") return <Orbit size={20} />;
+  if (id === "claude") return <Sparkles size={20} />;
+  if (id === "codex") return <Code2 size={20} />;
+  if (id === "xai") return <Bot size={20} />;
+  return <Boxes size={20} />;
+}
 
 type LoginState = "idle" | "waiting" | "ok" | "error";
 const BAN_STORAGE_KEY = "renn-copilot:provider-bans";
@@ -529,41 +538,86 @@ export function Providers() {
     );
   }
 
+  const oauthFiles = data?.files ?? [];
+  const apiKeyCount =
+    (geminiKeysQuery.data?.items?.length ?? 0) +
+    (claudeKeysQuery.data?.items?.length ?? 0) +
+    (codexKeysQuery.data?.items?.length ?? 0) +
+    (xaiKeyQuery.data?.item?.["api-key-entries"]?.length ?? 0) +
+    customItems.reduce((sum, item) => sum + (item["api-key-entries"]?.length ?? 0), 0);
+  const credentialCount = oauthFiles.length + apiKeyCount;
+  const activeOauthCount = oauthFiles.filter((file) => !file.disabled && !file.unavailable).length;
+  const issueCount = oauthFiles.filter((file) => file.disabled || file.unavailable || file.status !== "ready").length;
+  const connectedGroupCount = allGroups.filter((group) => countForGroup(group.id) > 0).length;
+
   return (
-    <div className="page">
+    <div className="page providers-page">
       <PageHeader
         eyebrow="Connect"
         title="Providers & Login"
-        subtitle="Connect each provider via OAuth, or add a raw API key instead. Tokens and keys are stored by CLIProxyAPI under its auth directory."
+        subtitle="Connect model providers through OAuth or managed API credentials."
+      />
+
+      <CommandSummary
+        tone="green"
+        icon={<ShieldCheck size={21} />}
+        eyebrow="Credential gateway"
+        title={serverRunning ? credentialCount ? `${credentialCount} credentials available` : "Ready for provider connections" : "Management API offline"}
+        description="OAuth sessions and API keys stay in CLIProxyAPI's local auth directory and feed the shared model catalog."
+        status={
+          <span className={`command-status-pill ${serverRunning ? "success" : "neutral"}`}>
+            {serverRunning ? <CheckCircle2 size={13} /> : <ServerOff size={13} />}
+            {serverRunning ? "Gateway online" : "Server stopped"}
+          </span>
+        }
+        metrics={[
+          { label: "credentials", value: credentialCount, tone: credentialCount ? "success" : "default" },
+          { label: "OAuth active", value: activeOauthCount },
+          { label: "API keys", value: apiKeyCount },
+          { label: "groups linked", value: connectedGroupCount },
+          { label: "attention", value: issueCount, tone: issueCount ? "warn" : "default" },
+        ]}
       />
 
       {!serverRunning && <div className="empty-hint">CLIProxyAPI isn't running yet, so login can't reach its Management API. Go to Overview and click Start first.</div>}
 
-      <div className="grid">
+      <div className="provider-grid">
         {PROVIDER_CARDS.map((p) => {
           const state = loginStates[p.id] ?? "idle";
           const banDeadline = bannedUntil[p.id];
           const isBanned = !!banDeadline && banDeadline > now;
+          const credentialTotal = countForGroup(p.id);
           return (
-            <div className="card" key={p.id}>
-              <div className="card-title">
-                <span>{p.label}</span>
-                {p.oauthDisabled && <span className="badge neutral">Maintenance</span>}
+            <article className={`card provider-card provider-${p.id}`} key={p.id}>
+              <div className="provider-card-head">
+                <span className="provider-mark"><ProviderMark id={p.id} /></span>
+                <div className="provider-card-title">
+                  <span>{p.label}</span>
+                  <small>{credentialTotal ? `${credentialTotal} credential${credentialTotal === 1 ? "" : "s"}` : "Not connected"}</small>
+                </div>
+                {p.oauthDisabled ? (
+                  <span className="badge neutral">Maintenance</span>
+                ) : credentialTotal > 0 ? (
+                  <span className="provider-linked"><CheckCircle2 size={13} />Linked</span>
+                ) : null}
               </div>
-              <div className="card-desc">{p.description}</div>
+              <div className="provider-card-desc">{p.description}</div>
               {p.oauthDisabled && <p className="card-desc">{p.oauthDisabledReason}</p>}
               {p.note && (
-                <p className="card-desc" style={{ color: "var(--vscode-editorWarning-foreground, #cca700)" }}>
+                <p className="provider-note">
+                  <CircleAlert size={14} />
+                  <span>
                   {p.note}
+                  </span>
                 </p>
               )}
               {isBanned ? (
-                <p className="card-desc" style={{ color: "var(--vscode-errorForeground)" }}>
+                <p className="provider-error">
                   Rate-limited by the provider — retry in {formatRemaining(banDeadline - now)}
                 </p>
               ) : (
                 state === "error" && (
-                  <p className="card-desc" style={{ color: "var(--vscode-errorForeground)" }}>
+                  <p className="provider-error">
                     {errors[p.id]}
                   </p>
                 )
@@ -581,6 +635,7 @@ export function Providers() {
                   onClick={() => startLogin(p.id)}
                   disabled={state === "waiting" || isBanned || !serverRunning || p.oauthDisabled}
                 >
+                  <ShieldCheck size={15} />
                   {p.oauthDisabled
                     ? "Under maintenance"
                     : isBanned
@@ -597,20 +652,28 @@ export function Providers() {
                   onClick={() => (p.isXai ? setXaiModalOpen(true) : setApiKeyModal(p.apiKey!))}
                   disabled={!serverRunning}
                 >
+                  <KeyRound size={15} />
                   Add via API key
                 </button>
               </div>
-            </div>
+            </article>
           );
         })}
 
-        <div className="card">
-          <div className="card-title">Custom provider</div>
-          <div className="card-desc">OpenAI-compatible endpoint -- GLM, Kimi/Moonshot, or anything else that speaks the OpenAI chat-completions API.</div>
+        <article className="card provider-card provider-custom">
+          <div className="provider-card-head">
+            <span className="provider-mark"><ProviderMark id="custom" /></span>
+            <div className="provider-card-title">
+              <span>Custom provider</span>
+              <small>{customItems.length ? `${customItems.length} endpoint${customItems.length === 1 ? "" : "s"}` : "OpenAI compatible"}</small>
+            </div>
+          </div>
+          <div className="provider-card-desc">Connect GLM, Kimi/Moonshot, or any endpoint that speaks the OpenAI chat-completions API.</div>
           <button className="btn secondary" style={{ width: "100%" }} onClick={() => setCustomModalOpen(true)} disabled={!serverRunning}>
+            <Plus size={15} />
             Add custom provider
           </button>
-        </div>
+        </article>
       </div>
 
       <div className="empty-hint">
@@ -618,7 +681,7 @@ export function Providers() {
         they'll show up below.
       </div>
 
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card credentials-card" style={{ padding: 0 }}>
         <div style={{ padding: "16px 18px" }}>
           <CardHead
             icon={IconDatabase}

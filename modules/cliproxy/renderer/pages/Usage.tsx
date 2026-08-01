@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
+import { Activity, CheckCircle2, CircleDollarSign, Database, Gauge, Search, ServerOff, TrendingUp, XCircle } from "lucide-react";
 import { api, type ProviderModelUsage, type RecentUsageRecord } from "../api/client";
 import { usePolling } from "../hooks/usePolling";
-import { TrendChart, PageHeader } from "../components/shared";
+import { TrendChart, PageHeader, CommandSummary } from "../components/shared";
 import { ratesFor, formatUsd, formatNumber } from "../lib/utils";
 import { AuthFilesTable } from "../components/AuthFilesTable";
 
@@ -58,13 +59,37 @@ export function Usage() {
 
   const totalRequests = (data?.totals.success ?? 0) + (data?.totals.failed ?? 0);
   const successRate = totalRequests > 0 ? Math.round(((data?.totals.success ?? 0) / totalRequests) * 100) : null;
+  const tokenTotals = tokenData?.totals;
+  const totalTokens = tokenTotals?.total_tokens ?? 0;
+  const cacheRate = tokenTotals && tokenTotals.input_tokens > 0 ? Math.round((tokenTotals.cached_tokens / tokenTotals.input_tokens) * 100) : 0;
+  const estimatedCost = tokenData ? estimateCostUsd(tokenData.byProviderModel) : 0;
 
   return (
-    <div className="page">
+    <div className="page usage-page">
       <PageHeader
         eyebrow="Analytics"
         title="Usage"
-        subtitle="Request counts per account and API key, as tracked by CLIProxyAPI since it last started."
+        subtitle="Monitor requests, provider token volume, cache efficiency, and recent traffic."
+      />
+
+      <CommandSummary
+        icon={<Activity size={21} />}
+        eyebrow="Traffic analytics"
+        title={serverRunning ? totalRequests ? `${totalRequests.toLocaleString()} requests observed` : "Waiting for request traffic" : "Usage collector offline"}
+        description={`Request health uses the rolling ${BUCKET_WINDOW_LABEL} window; token totals cover the last ${TOKEN_USAGE_DAYS} days.`}
+        status={
+          <span className={`command-status-pill ${serverRunning ? "success" : "neutral"}`}>
+            {serverRunning ? <CheckCircle2 size={13} /> : <ServerOff size={13} />}
+            {serverRunning ? "Collector online" : "Server stopped"}
+          </span>
+        }
+        metrics={[
+          { label: "requests", value: totalRequests },
+          { label: "success", value: successRate === null ? "—" : `${successRate}%`, tone: successRate !== null && successRate >= 95 ? "success" : successRate !== null && successRate < 90 ? "warn" : "default" },
+          { label: "failed", value: data?.totals.failed ?? 0, tone: (data?.totals.failed ?? 0) ? "error" : "default" },
+          { label: "tokens · 7d", value: totalTokens ? formatNumber(totalTokens) : "—" },
+          { label: "cache rate", value: totalTokens ? `${cacheRate}%` : "—" },
+        ]}
       />
 
       {!serverRunning && <div className="empty-hint">CLIProxyAPI isn't running, so there's no usage data to show. Go to Overview and click Start first.</div>}
@@ -73,10 +98,18 @@ export function Usage() {
       {serverRunning && <AuthFilesTable />}
 
       {serverRunning && (
-        <div className="card">
-          <div className="card-title">Token usage by provider & model</div>
-          <div className="card-desc">
-            Token counts as reported directly by each provider (last {TOKEN_USAGE_DAYS} days{tokenData ? `, out of ${tokenData.availableDays} day(s) stored` : ""}).
+        <div className="card usage-ledger-card">
+          <div className="usage-card-head">
+            <div>
+              <span className="usage-card-icon"><Database size={17} /></span>
+              <div>
+                <strong>Token usage by provider & model</strong>
+                <span>Provider-reported totals over {TOKEN_USAGE_DAYS} days{tokenData ? ` · ${tokenData.availableDays} day(s) stored` : ""}</span>
+              </div>
+            </div>
+            {tokenData && (
+              <span className="usage-cost-pill"><CircleDollarSign size={14} />Est. {formatUsd(estimatedCost)}</span>
+            )}
           </div>
           {tokenError && (
             <p className="card-desc" style={{ color: "var(--vscode-errorForeground)" }}>
@@ -88,10 +121,11 @@ export function Usage() {
           )}
           {!tokenError && tokenData && tokenData.byProviderModel.length > 0 && (
             <>
-              <div className="search-box" style={{ maxWidth: 260 }}>
+              <label className="usage-search">
+                <Search size={15} />
                 <input value={tableQuery} onChange={(e) => setTableQuery(e.target.value)} placeholder="Filter by provider or model..." />
-              </div>
-              <div style={{ overflowX: "auto" }}>
+              </label>
+              <div className="usage-table-wrap">
                 <table className="usage-table">
                   <thead>
                     <tr>
@@ -129,33 +163,33 @@ export function Usage() {
           )}
 
           {!tokenError && tokenData && tokenData.byProviderModel.length > 0 && (
-            <div className="empty-hint">
-              Estimated cost on a paid API key: <strong>{formatUsd(estimateCostUsd(tokenData.byProviderModel))}</strong>
-              <br />
-              Rough estimate from static public per-token rates -- not real billing data.
+            <div className="usage-estimate-note">
+              <CircleDollarSign size={16} />
+              <span>Static-rate estimate only; this is not provider billing data.</span>
             </div>
           )}
 
           {!tokenError && tokenData && tokenData.byDay.length > 1 && (
-            <div>
-              <p className="card-desc">Daily total tokens</p>
+            <div className="usage-trend-block">
+              <p className="card-desc"><TrendingUp size={14} />Daily total tokens</p>
               <TrendChart byDay={tokenData.byDay} />
             </div>
           )}
 
           {!tokenError && tokenData && tokenData.recent.length > 0 && (
-            <details>
-              <summary className="card-desc" style={{ cursor: "pointer" }}>
+            <details className="usage-recent">
+              <summary>
                 Recent requests ({tokenData.recent.length})
               </summary>
-              <div style={{ display: "flex", flexDirection: "column", gap: 4, marginTop: 8 }}>
+              <div className="usage-recent-list">
                 {tokenData.recent.slice(0, 20).map((r: RecentUsageRecord, i: number) => (
-                  <div key={i} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: "0.8em" }}>
-                    <span className="card-desc">{r.timestamp ? new Date(r.timestamp).toLocaleString() : "unknown time"}</span>
-                    <span>
+                  <div key={i} className={r.failed ? "failed" : ""}>
+                    <span className="usage-request-state">{r.failed ? <XCircle size={13} /> : <CheckCircle2 size={13} />}</span>
+                    <span className="usage-request-time">{r.timestamp ? new Date(r.timestamp).toLocaleString() : "unknown time"}</span>
+                    <span className="usage-request-model">
                       {r.provider} / {r.model}
                     </span>
-                    <span className={r.failed ? "" : "card-desc"} style={r.failed ? { color: "var(--vscode-errorForeground)" } : undefined}>
+                    <span className="usage-request-value">
                       {r.failed ? "failed" : `${formatNumber(r.tokens.total_tokens ?? 0)} tok`}
                     </span>
                   </div>
@@ -166,26 +200,12 @@ export function Usage() {
         </div>
       )}
 
-      {serverRunning && (
-        <div className="grid">
-          <KpiBlock label={`Total requests (${BUCKET_WINDOW_LABEL})`} value={String(totalRequests)} />
-          <KpiBlock label="Successful" value={String(data?.totals.success ?? 0)} color="var(--vscode-testing-iconPassed, #4caf50)" />
-          <KpiBlock label="Failed" value={String(data?.totals.failed ?? 0)} color="var(--vscode-testing-iconFailed, #f14c4c)" />
+      {serverRunning && successRate !== null && (
+        <div className="usage-health-note">
+          <Gauge size={16} />
+          <span><strong>{successRate}% success</strong> across all connected accounts and keys.</span>
         </div>
       )}
-
-      {serverRunning && successRate !== null && <p className="page-hint">Success rate: {successRate}% across all accounts and keys.</p>}
-    </div>
-  );
-}
-
-function KpiBlock({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="card">
-      <div className="card-desc">{label}</div>
-      <div className="kpi-value" style={color ? { color } : undefined}>
-        {value}
-      </div>
     </div>
   );
 }
