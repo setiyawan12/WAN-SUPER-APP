@@ -20,7 +20,10 @@ function tokensPath() {
 }
 
 const MAX_RECENT = 300;
-const MAX_HOURS = 24 * 14; // 14 days of hourly buckets
+// Monthly budgets need the full current month, while short-term dashboards
+// still use the same compact hourly representation. Ninety days keeps enough
+// history for month-over-month context without turning this into a raw log DB.
+const MAX_HOURS = 24 * 90;
 const FIELDS = ["requests", "failed", "input_tokens", "output_tokens", "reasoning_tokens", "cached_tokens", "total_tokens"];
 
 function emptyCredFields() {
@@ -240,4 +243,45 @@ export function getUsageByCredentialWindows() {
     }
   }
   return result;
+}
+
+function localDayKey(epochMs) {
+  const date = new Date(epochMs);
+  const pad = (value) => String(value).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function addProviderStats(target, provider, stats) {
+  target[provider] ??= emptyCredFields();
+  for (const field of FIELDS) target[provider][field] += stats[field] || 0;
+}
+
+/**
+ * Provider totals for the current calendar day, current calendar month, and
+ * trailing 24 hours. Used by Quota & Budget Center for spend guards and burn
+ * projections. Values remain provider-reported tokens; pricing is layered on
+ * separately so changing an estimate never rewrites usage history.
+ */
+export function getProviderUsageWindows({ now = Date.now() } = {}) {
+  const store = load();
+  const today = localDayKey(now);
+  const month = today.slice(0, 7);
+  const trailing24hStart = now - 24 * 60 * 60 * 1000;
+  const result = { today: {}, month: {}, trailing24h: {} };
+
+  for (const [hour, providers] of Object.entries(store.hourly)) {
+    const day = dayOfHourKey(hour);
+    const hourStart = new Date(`${hour}:00:00`).getTime();
+    for (const [provider, models] of Object.entries(providers || {})) {
+      for (const stats of Object.values(models || {})) {
+        if (day === today) addProviderStats(result.today, provider, stats);
+        if (day.startsWith(month)) addProviderStats(result.month, provider, stats);
+        if (!Number.isNaN(hourStart) && hourStart >= trailing24hStart && hourStart <= now + 3_600_000) {
+          addProviderStats(result.trailing24h, provider, stats);
+        }
+      }
+    }
+  }
+
+  return { ...result, todayKey: today, monthKey: month, generatedAt: now };
 }

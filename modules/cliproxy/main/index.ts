@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog } from "electron";
+import { app, BrowserWindow, dialog, Notification } from "electron";
 import { broadcast } from "./events.js";
 import { prepareBackendEnv, ensureFreePort } from "./config.js";
 import { getSettings } from "./app-settings.js";
@@ -59,6 +59,21 @@ if (!app.requestSingleInstanceLock()) {
       activityBus.on("hit", (evt: unknown) => broadcast("activity", evt));
     } catch (err) {
       console.warn(`[wan] activity bus unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    }
+
+    try {
+      const { quotaBudgetBus } = await loadBackend("./backend/quota-budget-bus.js");
+      quotaBudgetBus.on("alert", (event: { title?: string; message?: string; notifyOs?: boolean }) => {
+        broadcast("quota-budget-alert", event);
+        if (event.notifyOs !== false && Notification.isSupported()) {
+          new Notification({
+            title: event.title || "WAN Quota & Budget Alert",
+            body: event.message || "A configured threshold was reached.",
+          }).show();
+        }
+      });
+    } catch (err) {
+      console.warn(`[wan] quota budget alerts unavailable: ${err instanceof Error ? err.message : String(err)}`);
     }
 
     registerIpc();

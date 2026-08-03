@@ -4,6 +4,7 @@ import { proxyBaseUrl } from "./settings.js";
 import { activityBus } from "./activity-bus.js";
 import { readState } from "./state.js";
 import { applyTokenSaver } from "./token-saver.js";
+import { getModelCombo, orderedComboModels, shouldFallback } from "./model-combos.js";
 
 // Fire-and-forget notification for the dashboard's live "neuron" activity feed.
 // MUST never throw or block: a bug here cannot be allowed to break the proxy
@@ -20,6 +21,7 @@ function emitHit(evt) {
 // Dashboard still re-resolves via resolveProvider; tagging here keeps chips/lobes
 // correct even before path-B recent[] folds auth_index in.
 function providerFromModel(model) {
+  if (getModelCombo(String(model || ""))) return "combo";
   const m = String(model || "").toLowerCase();
   if (m.includes("claude")) return "anthropic";
   if (m.includes("gemini")) return "gemini";
@@ -37,13 +39,38 @@ function providerFromModel(model) {
 // path-A LIVE for Grok/Gemini/GPT) but keep sampling params intact.
 const DEPRECATED_SAMPLING_PARAMS = ["top_p", "temperature", "top_k"];
 
+function prepareAttemptBody(baseBody, requestedModel, attemptModel, levelFromUrl) {
+  const body = { ...baseBody, model: attemptModel };
+  if (/claude/i.test(attemptModel)) {
+    for (const key of DEPRECATED_SAMPLING_PARAMS) delete body[key];
+  }
+
+  const savedLevel = readState().modelThinkingLevels?.[attemptModel] || "";
+  const level = requestedModel === attemptModel ? levelFromUrl || savedLevel : savedLevel;
+  if (level && !/\([^)]*\)\s*$/.test(body.model)) body.model = `${body.model}(${level})`;
+  return body;
+}
+
+function forwardHeaders(upstream, res) {
+  upstream.headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    if (["content-encoding", "content-length", "transfer-encoding", "connection"].includes(lower)) return;
+    res.setHeader(key, value);
+  });
+}
+
+function errorMessage(text, statusText) {
+  try {
+    const data = text ? JSON.parse(text) : {};
+    return String(data?.error?.message || data?.error || data?.message || statusText || text || "");
+  } catch {
+    return String(text || statusText || "");
+  }
+}
+
 export async function proxyChatCompletions(req, res) {
   const body = { ...req.body };
   const model = typeof body.model === "string" ? body.model : "unknown";
-  const isClaude = /claude/i.test(model);
-  if (isClaude) {
-    for (const key of DEPRECATED_SAMPLING_PARAMS) delete body[key];
-  }
 
   // CLIProxyAPI selects a model's thinking budget via a "(level)" suffix on the
   // model NAME (e.g. "claude-opus-4-6(high)"), which it translates per provider
@@ -58,10 +85,6 @@ export async function proxyChatCompletions(req, res) {
   // makes the in-app Chat and every other proxy client honor the selection too.
   // Skipped when the caller already put its own "(...)" on the model name.
   const levelFromUrl = typeof req.query?.thinking === "string" ? req.query.thinking.trim() : "";
-  const level = levelFromUrl || (readState().modelThinkingLevels?.[model] || "").trim();
-  if (level && typeof body.model === "string" && !/\([^)]*\)\s*$/.test(body.model)) {
-    body.model = `${body.model}(${level})`;
-  }
 
   // Live activity tap (see activity-bus.js). All IDE models are routed here via
   // toCopilotModelEntry when ownBaseUrl is set, so path A covers Claude + Grok +
@@ -96,27 +119,63 @@ export async function proxyChatCompletions(req, res) {
     });
   };
 
-  const upstream = await fetch(`${proxyBaseUrl()}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      // Pass through whatever Authorization the client sent verbatim --
-      // this proxy doesn't own auth, CLIProxyAPI's own proxy-auth setting
-      // (see cliproxy-manager.js's setProxyAuthEnabled) still applies.
-      ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}),
-    },
-    body: JSON.stringify(body),
-  });
+  const combo = getModelCombo(model);
+  const candidates = combo ? orderedComboModels(combo, body) : [model];
+  const headers = {
+    "Content-Type": "application/json",
+    // Pass through whatever Authorization the client sent verbatim --
+    // this proxy doesn't own auth, CLIProxyAPI's own proxy-auth setting
+    // (see cliproxy-manager.js's setProxyAuthEnabled) still applies.
+    ...(req.headers.authorization ? { Authorization: req.headers.authorization } : {}),
+  };
+
+  let upstream = null;
+  let bufferedError = "";
+  for (let index = 0; index < candidates.length; index += 1) {
+    const attemptModel = candidates[index];
+    const attemptBody = prepareAttemptBody(body, model, attemptModel, levelFromUrl);
+    try {
+      upstream = await fetch(`${proxyBaseUrl()}/v1/chat/completions`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(attemptBody),
+      });
+    } catch (err) {
+      bufferedError = JSON.stringify({ error: { message: err.message || String(err) } });
+      if (combo && index < candidates.length - 1) {
+        console.warn(`Combo "${combo.name}": ${attemptModel} transport failed, trying next: ${err.message}`);
+        continue;
+      }
+      finish(false);
+      return res.status(503).type("application/json").send(bufferedError);
+    }
+
+    if (upstream.status < 400) break;
+
+    bufferedError = await upstream.text();
+    const message = errorMessage(bufferedError, upstream.statusText);
+    if (combo && index < candidates.length - 1 && shouldFallback(upstream.status, message)) {
+      console.warn(`Combo "${combo.name}": ${attemptModel} failed (${upstream.status}), trying next.`);
+      upstream = null;
+      continue;
+    }
+    break;
+  }
+
+  if (!upstream) {
+    finish(false);
+    return res.status(503).type("application/json").send(bufferedError || JSON.stringify({ error: { message: "All combo models unavailable." } }));
+  }
 
   const upstreamOk = upstream.status < 400;
   res.status(upstream.status);
-  upstream.headers.forEach((value, key) => {
-    const lower = key.toLowerCase();
-    // Node/Express recomputes these for its own response -- forwarding
-    // CLIProxyAPI's original values here would corrupt the stream.
-    if (lower === "content-encoding" || lower === "transfer-encoding" || lower === "connection") return;
-    res.setHeader(key, value);
-  });
+  forwardHeaders(upstream, res);
+
+  if (!upstreamOk) {
+    finish(false);
+    res.end(bufferedError);
+    return;
+  }
 
   if (!upstream.body) {
     finish(upstreamOk);

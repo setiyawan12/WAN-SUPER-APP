@@ -12,14 +12,18 @@ import { VsCode } from "./pages/VsCode";
 import { JetBrains } from "./pages/JetBrains";
 import { CliTools } from "./pages/CliTools";
 import { TokenSaver } from "./pages/TokenSaver";
-import { Toasts } from "./components/ui";
+import { Combos } from "./pages/Combos";
+import { Toasts, toast } from "./components/ui";
+import { QuotaBudget } from "./pages/QuotaBudget";
 
 const PAGES = [
   { id: "overview", label: "Overview" },
   { id: "chat", label: "Chat" },
   { id: "providers", label: "Providers" },
   { id: "models", label: "Models" },
+  { id: "combos", label: "Combos" },
   { id: "usage", label: "Usage" },
+  { id: "quota", label: "Quota & Budget" },
   { id: "neuron", label: "Activity" },
   { id: "vscode", label: "VS Code" },
   { id: "jetbrains", label: "JetBrains" },
@@ -50,8 +54,14 @@ const ICONS: Record<PageId, ReactNode> = {
   models: (
     <svg {...s}><path d="M12 2 3 7l9 5 9-5-9-5Z" /><path d="M3 12l9 5 9-5" /><path d="M3 17l9 5 9-5" /></svg>
   ),
+  combos: (
+    <svg {...s}><circle cx="5" cy="6" r="2" /><circle cx="19" cy="6" r="2" /><circle cx="12" cy="18" r="2" /><path d="M7 6h10" /><path d="m6.7 7.5 4.2 8.7" /><path d="m17.3 7.5-4.2 8.7" /></svg>
+  ),
   usage: (
     <svg {...s}><path d="M3 3v18h18" /><rect x="7" y="11" width="3" height="6" rx="0.6" /><rect x="12.5" y="7" width="3" height="10" rx="0.6" /><rect x="18" y="13" width="3" height="4" rx="0.6" /></svg>
+  ),
+  quota: (
+    <svg {...s}><path d="M12 2v20" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7H14a3.5 3.5 0 0 1 0 7H6" /><path d="M19 3v4" /><path d="M17 5h4" /></svg>
   ),
   neuron: (
     <svg {...s}><circle cx="12" cy="12" r="2.4" /><circle cx="5" cy="6" r="1.6" /><circle cx="19" cy="7" r="1.6" /><circle cx="6" cy="18" r="1.6" /><circle cx="18" cy="17" r="1.6" /><path d="M10.2 10.6 6.3 7M13.8 10.7 17.5 8M10.5 13.6 7.2 16.7M13.6 13.7 16.7 16.2" /></svg>
@@ -91,6 +101,12 @@ export function App() {
     void window.wan.health().then((h) => setHealth(h as HealthLike));
     const off = window.wan.onEvent((ev) => {
       if (ev.type === "health") setHealth(ev.payload as HealthLike);
+      if (ev.type === "quota-budget-alert") {
+        const alert = ev.payload as { title?: string; message?: string; severity?: string };
+        const message = alert.message ? `${alert.title || "Quota & Budget"}: ${alert.message}` : alert.title || "Quota or budget threshold reached";
+        if (alert.severity === "critical" || alert.severity === "exhausted") toast.error(message);
+        else toast.info(message);
+      }
     });
     return off;
   }, []);
@@ -177,7 +193,9 @@ export function App() {
         {page === "chat" && <Chat />}
         {page === "providers" && <Providers />}
         {page === "models" && <Models />}
+        {page === "combos" && <Combos />}
         {page === "usage" && <Usage />}
+        {page === "quota" && <QuotaBudget />}
         {page === "neuron" && <Neuron />}
         {page === "vscode" && <VsCode />}
         {page === "jetbrains" && <JetBrains />}

@@ -2,7 +2,7 @@
  * Super App entry for CLIProxyAPI (lazy module boot).
  * Same order as index.ts, without single-instance / tray / app.whenReady.
  */
-import { BrowserWindow, dialog } from "electron";
+import { BrowserWindow, dialog, Notification } from "electron";
 import { prepareBackendEnv, ensureFreePort, backendPort } from "./config.js";
 import { getSettings } from "./app-settings.js";
 import { registerIpc } from "./ipc.js";
@@ -33,6 +33,7 @@ export interface ModuleHandleLike {
 
 let booted = false;
 let ipcRegistered = false;
+let quotaAlertsRegistered = false;
 let shuttingDown = false;
 
 const loadBackend = (rel: string): Promise<any> =>
@@ -69,6 +70,26 @@ export async function bootCliproxy(opts: CliproxyBootOpts = {}): Promise<ModuleH
     } catch (err) {
       console.warn(
         `[cliproxy] activity bus unavailable: ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+
+    try {
+      const { quotaBudgetBus } = await loadBackend("./backend/quota-budget-bus.js");
+      if (!quotaAlertsRegistered) {
+        quotaBudgetBus.on("alert", (event: { title?: string; message?: string; notifyOs?: boolean }) => {
+          broadcast("quota-budget-alert", event);
+          if (event.notifyOs !== false && Notification.isSupported()) {
+            new Notification({
+              title: event.title || "WAN Quota & Budget Alert",
+              body: event.message || "A configured threshold was reached.",
+            }).show();
+          }
+        });
+        quotaAlertsRegistered = true;
+      }
+    } catch (err) {
+      console.warn(
+        `[cliproxy] quota budget alerts unavailable: ${err instanceof Error ? err.message : String(err)}`
       );
     }
 

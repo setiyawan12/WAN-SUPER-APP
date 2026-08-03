@@ -21,6 +21,17 @@ import { getCodexUsage } from "./codex-usage.js";
 import { proxyChatCompletions } from "./chat-proxy.js";
 import { listCliTools, applyCliTool, resetCliTool } from "./cli-tools.js";
 import { getTokenSaver, setTokenSaver } from "./token-saver.js";
+import {
+  createModelCombo,
+  deleteModelCombo,
+  listModelCombos,
+  updateModelCombo,
+} from "./model-combos.js";
+import {
+  evaluateQuotaBudgetAlerts,
+  getQuotaBudgetCenter,
+  setQuotaBudgetConfig,
+} from "./quota-budget.js";
 
 export const router = express.Router();
 
@@ -104,6 +115,49 @@ router.delete("/cli-tools/:id", asyncHandler(async (req, res) => res.json(await 
 // per-technique on/off + level. The proxy hop applies whatever is enabled here.
 router.get("/token-saver", (req, res) => res.json(getTokenSaver()));
 router.patch("/token-saver", express.json(), (req, res) => res.json(setTokenSaver(req.body || {})));
+
+// Virtual model ids backed by ordered real-model chains. They live in the
+// desktop state because CLIProxyAPI itself does not provide cross-model
+// fallback; chat-proxy.js expands them before forwarding upstream.
+router.get("/model-combos", (req, res) => res.json({ combos: listModelCombos() }));
+router.post(
+  "/model-combos",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    await validateComboInput(req.body || {});
+    res.status(201).json(createModelCombo(req.body || {}));
+  })
+);
+router.put(
+  "/model-combos/:id",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    await validateComboInput(req.body || {}, req.params.id);
+    res.json(updateModelCombo(req.params.id, req.body || {}));
+  })
+);
+router.delete("/model-combos/:id", asyncHandler(async (req, res) => res.json(deleteModelCombo(req.params.id))));
+
+router.get(
+  "/quota-budget",
+  asyncHandler(async (req, res) => res.json(await getQuotaBudgetCenter()))
+);
+router.put(
+  "/quota-budget/config",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    setQuotaBudgetConfig(req.body || {});
+    await evaluateQuotaBudgetAlerts();
+    res.json(await getQuotaBudgetCenter());
+  })
+);
+router.post(
+  "/quota-budget/check",
+  asyncHandler(async (req, res) => {
+    const emitted = await evaluateQuotaBudgetAlerts();
+    res.json({ emitted, center: await getQuotaBudgetCenter() });
+  })
+);
 
 // --- Server lifecycle -----------------------------------------------------
 router.get("/server/status", (req, res) => res.json(getStatus()));
@@ -655,6 +709,23 @@ async function getMergedCatalog() {
   }
 }
 
+async function validateComboInput(input, editingId = "") {
+  const { catalog } = await getMergedCatalog();
+  const modelIds = new Set(catalog.map((model) => model.id));
+  const comboNames = new Set(listModelCombos().filter((combo) => combo.id !== editingId).map((combo) => combo.name));
+  const name = String(input?.name || "").trim();
+  if (modelIds.has(name) || comboNames.has(name)) {
+    throw Object.assign(new Error(`Model id "${name}" is already in use.`), { status: 409, expected: true });
+  }
+
+  if (modelIds.size > 0) {
+    const unknown = (Array.isArray(input?.models) ? input.models : []).find((modelId) => !modelIds.has(modelId));
+    if (unknown) {
+      throw Object.assign(new Error(`Unknown live model "${unknown}".`), { status: 400, expected: true });
+    }
+  }
+}
+
 // Strips a live id's prefix segment (see /auth-files/prefix) back down to the
 // underlying model name, e.g. "claude/claude-sonnet-4-6" -> "claude-sonnet-4-6".
 // Only ever strips when the segment before "/" is a real, currently-set
@@ -664,6 +735,36 @@ function basePartOf(id, prefixIndex) {
   const slash = id.indexOf("/");
   if (slash > 0 && prefixIndex[id.slice(0, slash)]) return id.slice(slash + 1);
   return id;
+}
+
+function comboModelEntry(combo, capabilities, enabledModelIds) {
+  const memberCapabilities = combo.models.map((modelId) => capabilities[modelId]?.vision);
+  const vision = memberCapabilities.includes(true)
+    ? true
+    : memberCapabilities.length > 0 && memberCapabilities.every((value) => value === false)
+      ? false
+      : "unknown";
+  return {
+    id: combo.name,
+    provider: "combo",
+    family: "combo",
+    label: combo.name,
+    thinking: false,
+    enabled: enabledModelIds.includes(combo.name),
+    capabilities: {
+      vision,
+      note: vision === true
+        ? "At least one combo member is verified for vision."
+        : vision === false
+          ? "No combo member is verified for vision."
+          : "Vision follows the selected combo member.",
+    },
+    combo: {
+      models: combo.models,
+      strategy: combo.strategy,
+      stickyLimit: combo.stickyLimit,
+    },
+  };
 }
 
 router.get(
@@ -715,7 +816,8 @@ router.get(
         thinkingLevel: m.thinkingLevels?.length ? thinkingLevels[m.id] || "" : "",
       };
     });
-    res.json({ models, source, liveError });
+    const comboModels = listModelCombos().map((combo) => comboModelEntry(combo, capabilities, state.enabledModelIds));
+    res.json({ models: [...comboModels, ...models], source, liveError });
   })
 );
 
@@ -728,6 +830,10 @@ router.post(
   "/models/:id/verify-vision",
   asyncHandler(async (req, res) => {
     const modelId = req.params.id;
+    const combo = listModelCombos().find((item) => item.name === modelId);
+    if (combo) {
+      return res.status(400).json({ error: "Combo capability is derived from its member models." });
+    }
     try {
       const result = await probeVisionSupport(modelId);
       const current = readState().modelCapabilities || {};
@@ -788,7 +894,8 @@ router.get(
     const { catalog } = await getMergedCatalog();
     const capabilities = state.modelCapabilities || {};
     const thinkingLevels = state.modelThinkingLevels || {};
-    const enabled = catalog.filter((m) => state.enabledModelIds.includes(m.id));
+    const comboCatalog = listModelCombos().map((combo) => comboModelEntry(combo, capabilities, state.enabledModelIds));
+    const enabled = [...comboCatalog, ...catalog].filter((m) => state.enabledModelIds.includes(m.id));
     const entries = enabled.map((m) =>
       toCopilotModelEntry(
         { ...m, capabilities: capabilities[m.id], thinkingLevel: thinkingLevels[m.id] || "" },

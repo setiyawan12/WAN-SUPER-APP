@@ -62,6 +62,17 @@ const defaultState = {
     ponytail: { enabled: false, level: "lite" },
     caveman: { enabled: false, level: "lite" },
   },
+  // Virtual model ids backed by ordered real-model chains. The Node proxy
+  // expands these before calling CLIProxyAPI, enabling cross-model fallback
+  // and round-robin without changing CLIProxyAPI itself.
+  modelCombos: [],
+  quotaBudget: {
+    enabled: true,
+    notificationsEnabled: true,
+    autoRouteEnabled: false,
+    providerBudgets: {},
+  },
+  quotaBudgetAlertState: { sent: {}, history: [] },
 };
 
 export function readState() {

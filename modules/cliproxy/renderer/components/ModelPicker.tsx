@@ -92,6 +92,7 @@ export function ModelPicker({
                   {m.label}
                 </span>
                 <span className="model-picker-badges">
+                  {m.combo && <span className="badge neutral">Combo</span>}
                   {m.capabilities?.vision === true && <span className="badge success">Vision</span>}
                   {m.thinking && <span className="badge neutral">Thinking</span>}
                 </span>

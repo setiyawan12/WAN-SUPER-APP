@@ -61,6 +61,26 @@ export interface ModelEntry {
   thinkingLevel?: string;
   enabled: boolean;
   capabilities: ModelCapabilities;
+  combo?: {
+    models: string[];
+    strategy: ModelComboStrategy;
+    stickyLimit: number;
+  };
+}
+
+export type ModelComboStrategy = "fallback" | "round-robin";
+export interface ModelCombo {
+  id: string;
+  name: string;
+  models: string[];
+  strategy: ModelComboStrategy;
+  stickyLimit: number;
+}
+export interface ModelComboInput {
+  name: string;
+  models: string[];
+  strategy: ModelComboStrategy;
+  stickyLimit: number;
 }
 
 export interface AuthFileEntry {
@@ -268,6 +288,91 @@ export interface TokenSaverResponse {
   stats: TokenSaverStats;
 }
 
+export interface QuotaBudgetProviderLimit {
+  dailyUsd: number;
+  monthlyUsd: number;
+}
+export interface QuotaBudgetConfig {
+  enabled: boolean;
+  notificationsEnabled: boolean;
+  autoRouteEnabled: boolean;
+  providerBudgets: Record<string, QuotaBudgetProviderLimit>;
+}
+export interface BudgetWindowStatus {
+  costUsd: number;
+  budgetUsd: number;
+  percent: number;
+  projectedUsd: number;
+  resetAt: number;
+  exhaustionAt: number | null;
+  status: "off" | "ok" | "warning" | "critical" | "exhausted";
+}
+export interface QuotaBudgetProvider {
+  provider: string;
+  rates: { input: number; output: number };
+  tokens: { today: number; month: number; trailing24h: number };
+  requests: { today: number; month: number };
+  daily: BudgetWindowStatus;
+  monthly: BudgetWindowStatus;
+}
+export interface QuotaPrediction {
+  exhaustionAt: number | null;
+  beforeReset: boolean;
+  confidence: "low" | "medium";
+  burnPercentPerHour: number | null;
+}
+export interface QuotaWindowStatus {
+  usedPercent: number | null;
+  windowSeconds: number | null;
+  resetAfterSeconds: number | null;
+  resetAt: number | null;
+  prediction: QuotaPrediction;
+}
+export interface QuotaBudgetCredential {
+  name: string;
+  label: string;
+  provider: string;
+  disabled: boolean;
+  unavailable: boolean;
+  nextRetryAt: number | null;
+  totalTokens: number;
+  window5hTokens: number;
+  window7dTokens: number;
+  quota: null | { ok: false; reason: string } | {
+    ok: true;
+    planType: string | null;
+    primary: QuotaWindowStatus | null;
+    secondary: QuotaWindowStatus | null;
+  };
+}
+export interface QuotaBudgetResetEvent {
+  id: string;
+  kind: "budget" | "quota" | "retry";
+  label: string;
+  at: number;
+  scope: string;
+}
+export interface QuotaBudgetAlert {
+  id: string;
+  kind: "budget" | "quota";
+  threshold: number;
+  provider: string;
+  title: string;
+  message: string;
+  at: number;
+  severity: "warning" | "critical" | "exhausted";
+}
+export interface QuotaBudgetCenterResponse {
+  config: QuotaBudgetConfig;
+  providers: QuotaBudgetProvider[];
+  credentials: QuotaBudgetCredential[];
+  resets: QuotaBudgetResetEvent[];
+  alerts: QuotaBudgetAlert[];
+  thresholds: number[];
+  generatedAt: number;
+  pricingNote: string;
+}
+
 export const api = {
   getStatus: () => request<ServerStatus>("/server/status"),
 
@@ -288,6 +393,30 @@ export const api = {
       body: JSON.stringify(config),
       headers: { "Content-Type": "application/json" },
     }),
+  getModelCombos: () => request<{ combos: ModelCombo[] }>("/model-combos"),
+  createModelCombo: (combo: ModelComboInput) =>
+    request<ModelCombo>("/model-combos", {
+      method: "POST",
+      body: JSON.stringify(combo),
+      headers: { "Content-Type": "application/json" },
+    }),
+  updateModelCombo: (id: string, combo: ModelComboInput) =>
+    request<ModelCombo>(`/model-combos/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(combo),
+      headers: { "Content-Type": "application/json" },
+    }),
+  deleteModelCombo: (id: string) =>
+    request<ModelCombo>(`/model-combos/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  getQuotaBudgetCenter: () => request<QuotaBudgetCenterResponse>("/quota-budget"),
+  setQuotaBudgetConfig: (config: QuotaBudgetConfig) =>
+    request<QuotaBudgetCenterResponse>("/quota-budget/config", {
+      method: "PUT",
+      body: JSON.stringify(config),
+      headers: { "Content-Type": "application/json" },
+    }),
+  checkQuotaBudget: () =>
+    request<{ emitted: QuotaBudgetAlert[]; center: QuotaBudgetCenterResponse }>("/quota-budget/check", { method: "POST" }),
   install: () => request<{ ok: boolean; version: string }>("/server/install", { method: "POST" }),
   start: () => request<ServerStatus>("/server/start", { method: "POST" }),
   stop: () => request<ServerStatus>("/server/stop", { method: "POST" }),

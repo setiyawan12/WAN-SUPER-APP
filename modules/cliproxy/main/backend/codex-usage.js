@@ -29,12 +29,14 @@ async function fetchWhamUsage(accessToken, accountId) {
   return res.json();
 }
 
-function toWindow(window) {
+function toWindow(window, fetchedAt) {
   if (!window) return null;
+  const resetAfterSeconds = window.reset_after_seconds ?? null;
   return {
     usedPercent: window.used_percent ?? null,
     windowSeconds: window.limit_window_seconds ?? null,
-    resetAfterSeconds: window.reset_after_seconds ?? null,
+    resetAfterSeconds,
+    resetAt: resetAfterSeconds !== null ? fetchedAt + resetAfterSeconds * 1000 : null,
   };
 }
 
@@ -62,11 +64,12 @@ export async function getCodexUsage(name, filePath) {
       result = { ok: false, reason: "auth file missing access_token/account_id" };
     } else {
       const data = await fetchWhamUsage(accessToken, accountId);
+      const fetchedAt = Date.now();
       result = {
         ok: true,
         planType: data.plan_type ?? null,
-        primary: toWindow(data.rate_limit?.primary_window),
-        secondary: toWindow(data.rate_limit?.secondary_window),
+        primary: toWindow(data.rate_limit?.primary_window, fetchedAt),
+        secondary: toWindow(data.rate_limit?.secondary_window, fetchedAt),
       };
     }
   } catch (err) {

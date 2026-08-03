@@ -127,7 +127,10 @@ export function CliTools() {
     load();
     api
       .getModels()
-      .then((r) => setModels(r.models))
+      // CLI Tool writers currently point straight at CLIProxyAPI's own port,
+      // bypassing WAN's /api/proxy hop where virtual Combo ids are expanded.
+      // Hide combos here instead of writing a config that would fail upstream.
+      .then((r) => setModels(r.models.filter((model) => !model.combo)))
       .catch(() => setModels([]));
   }, []);
 

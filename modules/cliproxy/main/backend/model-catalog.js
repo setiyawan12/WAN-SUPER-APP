@@ -171,6 +171,7 @@ export function buildModelList(liveIds = [], loggedInProviders = [], openAiCompa
       const prefix = id.slice(0, slash);
       const owner = prefixIndex[prefix];
       if (owner) {
+        nextMemory[id] = owner;
         const rest = id.slice(slash + 1);
         return {
           id,
@@ -184,6 +185,7 @@ export function buildModelList(liveIds = [], loggedInProviders = [], openAiCompa
 
     const customProvider = customProviderById.get(id);
     if (customProvider) {
+      nextMemory[id] = customProvider;
       return {
         id,
         provider: customProvider,

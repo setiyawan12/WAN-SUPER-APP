@@ -12,6 +12,7 @@ const PROVIDER_LABELS: Record<string, string> = {
   claude: "Claude",
   codex: "Codex",
   xai: "xAI (Grok)",
+  combo: "Combos",
   other: "Other",
 };
 
@@ -273,7 +274,7 @@ export function Models() {
                   </div>
                   <div className="model-control-cell model-capability-cell">
                     <span className="model-control-label">Capability</span>
-                    <CapabilityBadge capabilities={m.capabilities} verifying={!!verifying[m.id]} onRecheck={() => verifyModel(m)} />
+                    <CapabilityBadge capabilities={m.capabilities} derived={!!m.combo} verifying={!!verifying[m.id]} onRecheck={() => verifyModel(m)} />
                   </div>
                   <label className="model-toggle-cell">
                     <span className="model-control-label">Enabled</span>
@@ -308,10 +309,12 @@ export function Models() {
 
 function CapabilityBadge({
   capabilities,
+  derived,
   verifying,
   onRecheck,
 }: {
   capabilities: { vision: boolean | "unknown"; note?: string };
+  derived?: boolean;
   verifying: boolean;
   onRecheck: () => void;
 }) {
@@ -337,9 +340,13 @@ function CapabilityBadge({
   return (
     <div className="model-capability">
       {badge}
-      <button className="icon-recheck" title="Re-check vision support (sends one real test request)" disabled={verifying} onClick={onRecheck}>
-        <RefreshCw className={verifying ? "model-rechecking" : ""} size={14} />
-      </button>
+      {derived ? (
+        <span className="badge neutral" title="Derived from Combo member capabilities">Derived</span>
+      ) : (
+        <button className="icon-recheck" title="Re-check vision support (sends one real test request)" disabled={verifying} onClick={onRecheck}>
+          <RefreshCw className={verifying ? "model-rechecking" : ""} size={14} />
+        </button>
+      )}
     </div>
   );
 }

@@ -6,10 +6,12 @@ import { settings, ensureDirs, binaryPath } from "./settings.js";
 import { router } from "./routes.js";
 import { ensureDefaultConfig, startServer } from "./cliproxy-manager.js";
 import { startUsagePoller } from "./usage-poller.js";
+import { startQuotaBudgetMonitor } from "./quota-budget.js";
 
 ensureDirs();
 ensureDefaultConfig();
 startUsagePoller();
+startQuotaBudgetMonitor();
 
 // Set by the VS Code extension (RENN_AUTO_START_SERVER=1) when the user has
 // rennCopilot.autoStartServer enabled -- mirrors clicking "Start" on the
