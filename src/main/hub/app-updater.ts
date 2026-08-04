@@ -1,4 +1,4 @@
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import fs from "node:fs";
 import path from "node:path";
 import { createRequire } from "node:module";
@@ -27,6 +27,15 @@ const UPDATE_FEED = {
   owner: "setiyawan12",
   repo: "WAN-SUPER-APP",
 } as const;
+
+const RELEASES_URL = `https://github.com/${UPDATE_FEED.owner}/${UPDATE_FEED.repo}/releases/latest`;
+
+// Linux .deb/.rpm installs need root, which electron-updater obtains via
+// `pkexec` — this requires a running PolicyKit authentication agent. Many
+// sessions (minimal/tiling WMs, headless) have none, so pkexec exits 127 and
+// the auto-install fails. AppImage updates replace the file in place and never
+// need root, so only .deb-like installs are treated as manual-install here.
+const isDebLikeLinux = process.platform === "linux" && !process.env.APPIMAGE;
 
 function devUpdateYmlPath(): string {
   // electron-updater looks for dev-app-update.yml in process.cwd() by default;
@@ -144,6 +153,9 @@ function friendlyUpdateError(err: unknown): string {
   if (/net::|ENOTFOUND|ECONN|timed out|403|404/i.test(raw)) {
     return `Gagal menghubungi GitHub Releases: ${raw}`;
   }
+  if (/pkexec/i.test(raw) || /exited with code 12[67]/i.test(raw)) {
+    return "Pemasangan otomatis butuh PolicyKit (pkexec) yang tidak tersedia di sesi ini. Unduh & pasang .deb terbaru manual dari GitHub Releases.";
+  }
   return raw || "Update gagal";
 }
 
@@ -191,7 +203,9 @@ export function initAppUpdater(opts: { autoCheck?: boolean } = {}): void {
   status.isPackaged = app.isPackaged;
 
   autoUpdater.autoDownload = false;
-  autoUpdater.autoInstallOnAppQuit = true;
+  // On .deb/.rpm, installing on quit would silently invoke pkexec and fail
+  // (127) without any UI. Only auto-install on quit where it works root-free.
+  autoUpdater.autoInstallOnAppQuit = !isDebLikeLinux;
   configureUpdateFeed();
 
   autoUpdater.on("checking-for-update", () => {
@@ -319,6 +333,16 @@ export function installAppUpdate(): { ok: boolean; error?: string } {
   }
   if (status.phase !== "downloaded") {
     return { ok: false, error: "Belum ada update yang terunduh." };
+  }
+  // .deb/.rpm auto-install goes through pkexec (needs a PolicyKit agent), which
+  // fails with code 127 on many Linux sessions. Skip it and open GitHub
+  // Releases so the user installs the new package with their own tools.
+  if (isDebLikeLinux) {
+    void shell.openExternal(RELEASES_URL);
+    const message =
+      "Pemasangan .deb otomatis tidak didukung di sesi ini. Halaman GitHub Releases dibuka — unduh & pasang versi terbaru manual.";
+    setStatus({ phase: "downloaded", message });
+    return { ok: false, error: message };
   }
   try {
     // Allow windows to close without tray-hide behavior.
