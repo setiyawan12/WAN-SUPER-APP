@@ -59,6 +59,15 @@ win:
 linux:
   # Required for the .deb package (Debian needs a maintainer). Edit to your own.
   maintainer: WAN <absenkudev@gmail.com>
+  # Bake --no-sandbox into the generated .desktop Exec line. Chromium's setuid
+  # sandbox can't work in AppImage (FUSE) or on kernels that restrict user
+  # namespaces, so GUI launches must pass it up front. Without this, the app
+  # relaunches itself with the flag and GNOME's systemd app-scope kills the
+  # relaunched child when the first process exits — the window never appears.
+  # (Terminal launches via /usr/bin bypass the .desktop and are covered by the
+  # in-app relaunch guard in src/main/index.ts.)
+  executableArgs:
+    - "--no-sandbox"
   extraResources:
     - from: modules/net/cloudflared
       to: cloudflared
