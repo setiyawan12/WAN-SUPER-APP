@@ -105,6 +105,17 @@ async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<
   return handle;
 }
 
+// Linux: Chromium's setuid sandbox needs a root-owned `chrome-sandbox` with the
+// SUID bit (mode 4755). AppImage mounts read-only over FUSE so SUID can never
+// apply, and newer kernels (Ubuntu 23.10+) block unprivileged user namespaces
+// unless a matching AppArmor profile is installed. In both cases Electron
+// refuses to start and forces the user to launch with `--no-sandbox` by hand.
+// Drop the sandbox here so the app opens out of the box on every distro/package.
+// Must run before app "ready". (Renderers only load bundled local content.)
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("no-sandbox");
+}
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {

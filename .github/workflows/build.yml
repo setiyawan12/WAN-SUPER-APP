@@ -204,6 +204,15 @@ jobs:
         # electron binary is fetched explicitly in the next step.
         run: npm ci --ignore-scripts || npm install --ignore-scripts
 
+      - name: Compile node-pty for Linux
+        # node-pty ships prebuilt binaries only for macOS/Windows in its npm
+        # tarball — none for Linux. --ignore-scripts above skipped its build,
+        # so build/Release/pty.node never gets produced and the SSH module
+        # fails at runtime with "Cannot find module .../pty.node". node-pty is
+        # N-API (ABI-stable), so compiling against the runner's Node works in
+        # Electron too. ubuntu-latest already has build-essential + python3.
+        run: npm rebuild node-pty
+
       - name: Download Electron binary
         run: node node_modules/electron/install.js
 
