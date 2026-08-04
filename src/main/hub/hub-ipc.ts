@@ -10,6 +10,8 @@ import {
   installAppUpdate,
 } from "./app-updater.js";
 
+let pendingChatContext: { label: string; text: string; source: "ssh"; createdAt: number } | null = null;
+
 export function registerHubIpc(opts: {
   openModule: (id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>;
   getHandles: () => {
@@ -55,6 +57,34 @@ export function registerHubIpc(opts: {
       };
     }
   });
+
+  ipcMain.handle("super:sendToChat", async (_e, raw: unknown) => {
+    if (!raw || typeof raw !== "object") return { ok: false, error: "invalid context" };
+    const value = raw as { label?: unknown; text?: unknown; source?: unknown };
+    if (typeof value.text !== "string" || !value.text.trim()) return { ok: false, error: "empty context" };
+    const text = value.text.slice(0, 50_000);
+    pendingChatContext = {
+      label: typeof value.label === "string" ? value.label.slice(0, 200) : "SSH terminal selection",
+      text,
+      source: "ssh",
+      createdAt: Date.now()
+    };
+    try {
+      await opts.openModule("cliproxy", { show: true });
+      return { ok: true, truncated: text.length < value.text.length };
+    } catch (err) {
+      pendingChatContext = null;
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  });
+
+  ipcMain.handle("super:consumeChatContext", () => {
+    const context = pendingChatContext;
+    pendingChatContext = null;
+    return context;
+  });
+
+  ipcMain.handle("super:hasChatContext", () => pendingChatContext !== null);
 
   ipcMain.handle("super:showHub", () => {
     showHubWindow();

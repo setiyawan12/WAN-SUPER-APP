@@ -13,7 +13,11 @@ export function biometricAvailable() {
 export async function storeVaultKey(vaultKey: Buffer) {
   if (!biometricAvailable()) throw new Error("BIOMETRIC_UNAVAILABLE");
   const blob = safeStorage.encryptString(vaultKey.toString("base64"));
-  await node_fs.promises.writeFile(keychainPath(), blob);
+  await node_fs.promises.writeFile(keychainPath(), blob, { mode: 0o600 });
+  try {
+    await node_fs.promises.chmod(keychainPath(), 0o600);
+  } catch {
+  }
 }
 
 export async function loadVaultKey(): Promise<Buffer | null> {

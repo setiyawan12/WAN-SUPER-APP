@@ -5,28 +5,134 @@ import { VAULT, isSynced } from "./constants.js";
 
 let dbPath: string;
 let data: any;
+let inMemory = false;
+let recovery: { needed: boolean; message?: string; corruptPath?: string; restoredFrom?: string } = { needed: false };
+
+const CURRENT_SCHEMA_VERSION = 2;
+
+/** In-memory store for unit tests — no Electron app or filesystem required. */
+export function initDbForTest() {
+  inMemory = true;
+  data = empty();
+  recovery = { needed: false };
+}
 
 function empty() {
-  return { schemaVersion: 1, vaultMeta: {}, items: {}, outbox: [], outboxSeq: 0, syncCursor: {} };
+  return { schemaVersion: CURRENT_SCHEMA_VERSION, vaultMeta: {}, items: {}, outbox: [], outboxSeq: 0, syncCursor: {}, settings: {} };
+}
+
+export function normalizeStoreData(raw: any) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) throw new Error("Root database harus berupa object");
+  const normalized = {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    vaultMeta: raw.vaultMeta && typeof raw.vaultMeta === "object" && !Array.isArray(raw.vaultMeta) ? raw.vaultMeta : {},
+    items: raw.items && typeof raw.items === "object" && !Array.isArray(raw.items) ? raw.items : {},
+    outbox: Array.isArray(raw.outbox) ? raw.outbox : [],
+    outboxSeq: Number.isSafeInteger(raw.outboxSeq) && raw.outboxSeq >= 0 ? raw.outboxSeq : 0,
+    syncCursor: raw.syncCursor && typeof raw.syncCursor === "object" && !Array.isArray(raw.syncCursor) ? raw.syncCursor : {},
+    settings: raw.settings && typeof raw.settings === "object" && !Array.isArray(raw.settings) ? raw.settings : {}
+  };
+  for (const [id, row] of Object.entries(normalized.items) as [string, any][]) {
+    if (!row || typeof row !== "object" || row.id !== id || !row.payload || typeof row.payload !== "object") {
+      delete normalized.items[id];
+      continue;
+    }
+    row.deletedAt = row.deletedAt == null ? null : row.deletedAt;
+    row.payload.deletedAt = row.payload.deletedAt == null ? null : row.payload.deletedAt;
+    row.syncState = row.syncState === "pending" ? "pending" : "synced";
+  }
+  normalized.outbox = normalized.outbox.filter((operation: any) =>
+    operation && Number.isSafeInteger(operation.seq) && typeof operation.itemId === "string"
+  );
+  normalized.outboxSeq = normalized.outbox.reduce(
+    (maximum: number, operation: any) => Math.max(maximum, operation.seq),
+    normalized.outboxSeq
+  );
+  return normalized;
+}
+
+function readDatabase(candidate: string) {
+  return normalizeStoreData(JSON.parse(node_fs.readFileSync(candidate, "utf8")));
+}
+
+function backupPath(index: number) {
+  return `${dbPath}.bak${index}`;
+}
+
+function rotateBackups() {
+  if (!node_fs.existsSync(dbPath)) return;
+  for (let index = 3; index >= 2; index -= 1) {
+    const previous = backupPath(index - 1);
+    if (node_fs.existsSync(previous)) node_fs.copyFileSync(previous, backupPath(index));
+  }
+  node_fs.copyFileSync(dbPath, backupPath(1));
+  for (let index = 1; index <= 3; index += 1) {
+    try {
+      node_fs.chmodSync(backupPath(index), 0o600);
+    } catch {
+    }
+  }
 }
 
 export function initDb() {
   dbPath = path.join(app.getPath("userData"), "wann-ssh.json");
+  data = undefined;
+  node_fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+  recovery = { needed: false };
   if (node_fs.existsSync(dbPath)) {
     try {
-      data = JSON.parse(node_fs.readFileSync(dbPath, "utf8"));
-    } catch {
-      data = empty();
+      data = readDatabase(dbPath);
+    } catch (error) {
+      const corruptPath = path.join(path.dirname(dbPath), `wann-ssh.corrupt-${Date.now()}.json`);
+      try {
+        node_fs.copyFileSync(dbPath, corruptPath);
+        node_fs.chmodSync(corruptPath, 0o600);
+      } catch {
+      }
+      let restoredFrom: string | undefined;
+      for (let index = 1; index <= 3; index += 1) {
+        const candidate = backupPath(index);
+        if (!node_fs.existsSync(candidate)) continue;
+        try {
+          data = readDatabase(candidate);
+          restoredFrom = candidate;
+          break;
+        } catch {
+        }
+      }
+      data ??= empty();
+      recovery = {
+        needed: true,
+        message: restoredFrom
+          ? "Database utama rusak; backup terakhir yang valid dipulihkan."
+          : "Database utama rusak dan tidak ada backup valid; database baru dibuat tanpa menghapus salinan rusak.",
+        corruptPath,
+        restoredFrom
+      };
     }
   } else {
     data = empty();
   }
+  persist(false);
 }
 
-function persist() {
+function persist(withBackup = true) {
+  data = normalizeStoreData(data);
+  if (inMemory) return;
   const tmp = `${dbPath}.tmp`;
-  node_fs.writeFileSync(tmp, JSON.stringify(data), "utf8");
+  if (withBackup) rotateBackups();
+  node_fs.writeFileSync(tmp, JSON.stringify(data), { encoding: "utf8", mode: 0o600 });
+  const descriptor = node_fs.openSync(tmp, "r");
+  try {
+    node_fs.fsyncSync(descriptor);
+  } finally {
+    node_fs.closeSync(descriptor);
+  }
   node_fs.renameSync(tmp, dbPath);
+  try {
+    node_fs.chmodSync(dbPath, 0o600);
+  } catch {
+  }
 }
 
 function ensure() {
@@ -79,6 +185,17 @@ export function clearSyncedData(d: any, preserveVaultMeta = false) {
 }
 
 export const jsonStore = {
+  storageStatus() {
+    return {
+      path: dbPath,
+      schemaVersion: ensure().schemaVersion,
+      backups: [1, 2, 3].map(backupPath).filter((candidate) => node_fs.existsSync(candidate)),
+      ...recovery
+    };
+  },
+  acknowledgeRecovery() {
+    recovery = { needed: false };
+  },
   listByType(vaultId: string, type: string) {
     return Object.values(ensure().items).filter((r: any) => r.vaultId === vaultId && r.type === type && r.deletedAt === null).sort((a: any, b: any) => b.updatedAt - a.updatedAt);
   },
@@ -270,6 +387,19 @@ export const metaStore = {
   },
   remove(vaultId: string) {
     delete ensure().vaultMeta[vaultId];
+    persist();
+  }
+};
+
+export const settingsStore = {
+  get(key: string, fallback?: any) {
+    const value = ensure().settings?.[key];
+    return value === undefined ? fallback : value;
+  },
+  set(key: string, value: any) {
+    const d = ensure();
+    d.settings ??= {};
+    d.settings[key] = value;
     persist();
   }
 };

@@ -424,6 +424,29 @@ export function Chat() {
   const fileRef = useRef<HTMLInputElement>(null);
   const coworkRef = useRef<CoworkProject | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    void window.wan.context.consumeSuperApp().then((context) => {
+      if (!context || cancelled) return;
+      setContextItems((items) => [
+        ...items,
+        {
+          id: `super-${context.createdAt}`,
+          kind: "file",
+          label: context.label,
+          text: context.text,
+          meta: "WANN SSH terminal selection",
+          truncated: false
+        }
+      ]);
+      setMode("chat");
+      requestAnimationFrame(() => taRef.current?.focus());
+    }).catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   function setProjectId(v: string | null) {
     projectIdRef.current = v;
     setProjectIdState(v);

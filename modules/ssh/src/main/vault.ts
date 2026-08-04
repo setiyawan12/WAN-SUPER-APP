@@ -74,10 +74,25 @@ export class VaultCore {
     this.state = "unlocked";
     this.resetAutoLock();
   }
+  async verifyPassword(password: string) {
+    const meta = this.meta.load(this.vaultId);
+    if (!meta || !this.vaultKey) throw new VaultError("LOCKED");
+    const mk = await deriveMasterKey(password, Buffer.from(meta.kdfSalt, "base64"));
+    const kek = hkdf(mk, KEK_INFO);
+    let candidate: Buffer | null = null;
+    try {
+      candidate = open(meta.wrappedVaultKey, kek);
+      return candidate.length === this.vaultKey.length && node_crypto.timingSafeEqual(candidate, this.vaultKey);
+    } catch {
+      return false;
+    } finally {
+      wipe(mk, kek, candidate);
+    }
+  }
   /** Unlock langsung dengan Vault Key dari OS keychain (biometrik). */
   unlockWithVaultKey(vaultKey: Buffer) {
     if (!this.meta.load(this.vaultId)) throw new VaultError("NO_VAULT");
-    this.vaultKey = vaultKey;
+    this.vaultKey = Buffer.from(vaultKey);
     this.state = "unlocked";
     this.resetAutoLock();
   }
@@ -152,6 +167,10 @@ export class VaultCore {
     }
   }
   touch() {
+    if (this.isUnlocked()) this.resetAutoLock();
+  }
+  setAutoLockMs(value: number) {
+    this.autoLockMs = value;
     if (this.isUnlocked()) this.resetAutoLock();
   }
   resetAutoLock() {

@@ -4,18 +4,35 @@ import { logger } from "./constants.js";
 import { jsonStore } from "./store.js";
 import { CH } from "./channels.js";
 import { firebaseConfigPath } from "./firebase.js";
+import { knownHosts } from "./knownhosts.js";
 import { requireCtx } from "./runtime.js";
 import {
   PasswordSchema,
+  AutoLockSchema,
+  RevealPasswordSchema,
   HostInputSchema,
   GroupInputSchema,
   IdentityInputSchema,
   SessionOpenSchema,
+  SessionReconnectSchema,
+  SessionAuthAnswerSchema,
+  SessionHostKeyAnswerSchema,
+  LocalSessionOpenSchema,
   KeyGenSchema,
   KeyImportSchema,
   IdSchema,
   SignInSchema,
   FirebaseConfigSchema
+  , TransferListSchema
+  , TransferActionSchema
+  , TransferRenameSchema
+  , TransferRemoveSchema
+  , TransferUploadSchema
+  , TransferDownloadSchema
+  , TunnelStartSchema
+  , SnippetInputSchema
+  , SnippetRunSchema
+  , RecordingStartSchema
 } from "./schemas.js";
 
 /**
@@ -35,13 +52,18 @@ export function registerIpc() {
   ipcMain.handle(CH.vault.changePassword, async (_e, oldPw, newPw) => {
     await requireCtx().vault.changePassword(PasswordSchema.parse(oldPw), PasswordSchema.parse(newPw));
   });
+  ipcMain.handle(CH.vault.settings, () => requireCtx().vaultSettings());
+  ipcMain.handle(CH.vault.setAutoLock, (_e, raw) => requireCtx().setAutoLockMs(AutoLockSchema.parse(raw)));
+  ipcMain.handle(CH.vault.tryBiometricUnlock, () => requireCtx().tryBiometricUnlock());
   ipcMain.handle(CH.vault.biometricAvailable, () => requireCtx().biometricAvailable());
   ipcMain.handle(CH.vault.enableBiometric, async () => requireCtx().enableBiometric());
   ipcMain.handle(CH.hosts.list, () => requireCtx().hosts.listHosts());
   ipcMain.handle(CH.hosts.get, (_e, raw) => requireCtx().hosts.getHost(IdSchema.parse(raw)));
-  ipcMain.handle(CH.hosts.revealPassword, (_e, raw) => ({
-    password: requireCtx().hosts.revealPassword(IdSchema.parse(raw))
-  }));
+  ipcMain.handle(CH.hosts.revealPassword, async (_e, raw) => {
+    const input = RevealPasswordSchema.parse(raw);
+    if (!(await requireCtx().authorizeSensitiveAction(input))) throw new Error("Re-authentication gagal");
+    return { password: requireCtx().hosts.revealPassword(input.id) };
+  });
   ipcMain.handle(CH.hosts.save, (_e, raw) => requireCtx().hosts.saveHost(HostInputSchema.parse(raw)));
   ipcMain.handle(CH.hosts.remove, (_e, raw) => requireCtx().hosts.removeHost(IdSchema.parse(raw)));
   ipcMain.handle(CH.hosts.restoreDeleted, async () => {
@@ -53,6 +75,11 @@ export function registerIpc() {
     return { restored: true, id: restored.id, sync: outcome };
   });
   ipcMain.handle(CH.hosts.testConnection, (_e, raw) => requireCtx().ssh.testConnection(IdSchema.parse(raw)));
+  ipcMain.handle(CH.diagnostics.run, (_e, raw) => requireCtx().diagnostics.run(IdSchema.parse(raw)));
+  ipcMain.handle(CH.knownHosts.list, () => knownHosts.list());
+  ipcMain.handle(CH.knownHosts.remove, (_e, raw) => knownHosts.remove(IdSchema.parse(raw)));
+  ipcMain.handle(CH.storage.status, () => jsonStore.storageStatus());
+  ipcMain.handle(CH.storage.acknowledgeRecovery, () => jsonStore.acknowledgeRecovery());
   ipcMain.handle(CH.groups.list, () => requireCtx().hosts.listGroups());
   ipcMain.handle(CH.groups.save, (_e, raw) => requireCtx().hosts.saveGroup(GroupInputSchema.parse(raw)));
   ipcMain.handle(CH.groups.remove, (_e, raw) => requireCtx().hosts.removeGroup(IdSchema.parse(raw)));
@@ -153,24 +180,130 @@ export function registerIpc() {
     const pub = keys.exportPublic(IdSchema.parse(keyId));
     await ssh.pushKey(pub, IdSchema.parse(hostId));
   });
+  ipcMain.handle(CH.snippets.list, () => requireCtx().snippets.list());
+  ipcMain.handle(CH.snippets.save, (_e, raw) => requireCtx().snippets.save(SnippetInputSchema.parse(raw)));
+  ipcMain.handle(CH.snippets.remove, (_e, raw) => requireCtx().snippets.remove(IdSchema.parse(raw)));
+  ipcMain.handle(CH.snippets.run, (_e, raw) => {
+    const input = SnippetRunSchema.parse(raw);
+    const snippet = requireCtx().snippets.get(input.snippetId);
+    if (!snippet) throw new Error("Snippet tidak ditemukan");
+    const data = `${snippet.command}${input.appendNewline === false ? "" : "\r"}`;
+    const ctx = requireCtx();
+    if (ctx.local.has(input.sessionId)) ctx.local.write(input.sessionId, data);
+    else ctx.ssh.write(input.sessionId, data);
+  });
   ipcMain.handle(CH.session.open, async (_e, raw) => {
     const input = SessionOpenSchema.parse(raw);
     return requireCtx().ssh.open(input.hostId, input.cols, input.rows);
   });
+  ipcMain.handle(CH.session.reconnect, async (_e, raw) => {
+    const input = SessionReconnectSchema.parse(raw);
+    return requireCtx().ssh.reconnect(input.sessionId, input.cols, input.rows);
+  });
+  ipcMain.handle(CH.session.openLocal, (_e, raw) => requireCtx().local.open(LocalSessionOpenSchema.parse(raw)));
   ipcMain.on(CH.session.write, (_e, sessionId, data2) => {
-    if (typeof sessionId === "string" && typeof data2 === "string") requireCtx().ssh.write(sessionId, data2);
+    const parsedId = IdSchema.safeParse(sessionId);
+    if (!parsedId.success || typeof data2 !== "string" || data2.length > 1_000_000) return;
+    const ctx = requireCtx();
+    ctx.vault.touch();
+    ctx.recording.captureInput(parsedId.data, data2);
+    if (ctx.local.has(parsedId.data)) ctx.local.write(parsedId.data, data2);
+    else ctx.ssh.write(parsedId.data, data2);
   });
   ipcMain.on(CH.session.resize, (_e, sessionId, cols, rows) => {
-    requireCtx().ssh.resize(sessionId, cols, rows);
+    const parsedId = IdSchema.safeParse(sessionId);
+    const width = Number(cols);
+    const height = Number(rows);
+    if (!parsedId.success || !Number.isInteger(width) || width < 1 || width > 1000 || !Number.isInteger(height) || height < 1 || height > 1000) return;
+    const ctx = requireCtx();
+    if (ctx.local.has(parsedId.data)) ctx.local.resize(parsedId.data, width, height);
+    else ctx.ssh.resize(parsedId.data, width, height);
   });
   ipcMain.handle(CH.session.close, (_e, raw) => {
-    requireCtx().ssh.close(IdSchema.parse(raw));
+    const sessionId = IdSchema.parse(raw);
+    const ctx = requireCtx();
+    if (ctx.local.has(sessionId)) ctx.local.close(sessionId);
+    else ctx.ssh.close(sessionId);
   });
   ipcMain.handle(CH.session.answerAuthPrompt, (_e, sessionId, answers) => {
-    requireCtx().ssh.answerAuthPrompt(IdSchema.parse(sessionId), answers.map(String));
+    const input = SessionAuthAnswerSchema.parse({ sessionId, answers });
+    requireCtx().ssh.answerAuthPrompt(input.sessionId, input.answers);
   });
   ipcMain.handle(CH.session.answerHostKey, (_e, sessionId, accept) => {
-    requireCtx().ssh.answerHostKey(IdSchema.parse(sessionId), Boolean(accept));
+    const input = SessionHostKeyAnswerSchema.parse({ sessionId, accept });
+    requireCtx().ssh.answerHostKey(input.sessionId, input.accept);
   });
+  ipcMain.handle(CH.transfer.home, (_e, raw) => requireCtx().transfers.home(IdSchema.parse(raw)));
+  ipcMain.handle(CH.transfer.list, (_e, raw) => {
+    const input = TransferListSchema.parse(raw);
+    return requireCtx().transfers.list(input.sessionId, input.path);
+  });
+  ipcMain.handle(CH.transfer.mkdir, (_e, raw) => {
+    const input = TransferActionSchema.parse(raw);
+    return requireCtx().transfers.mkdir(input.sessionId, input.path);
+  });
+  ipcMain.handle(CH.transfer.rename, (_e, raw) => {
+    const input = TransferRenameSchema.parse(raw);
+    return requireCtx().transfers.rename(input.sessionId, input.from, input.to);
+  });
+  ipcMain.handle(CH.transfer.remove, (_e, raw) => {
+    const input = TransferRemoveSchema.parse(raw);
+    return requireCtx().transfers.remove(input.sessionId, input.path, input.directory);
+  });
+  ipcMain.handle(CH.transfer.upload, async (_e, raw) => {
+    const input = TransferUploadSchema.parse(raw);
+    let paths = input.localPaths ?? [];
+    if (!paths.length) {
+      const win = BrowserWindow.getFocusedWindow();
+      const options: any = { title: "Pilih file untuk diunggah", properties: ["openFile", "multiSelections"] };
+      const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+      if (result.canceled) return [];
+      paths = result.filePaths;
+    }
+    return paths.map((localPath) => requireCtx().transfers.upload(
+      input.sessionId,
+      localPath,
+      require("node:path").posix.join(input.remoteDirectory, require("node:path").basename(localPath)),
+      input.resume ?? true
+    ));
+  });
+  ipcMain.handle(CH.transfer.download, async (_e, raw) => {
+    const input = TransferDownloadSchema.parse(raw);
+    const win = BrowserWindow.getFocusedWindow();
+    const options: any = { title: "Simpan file", defaultPath: require("node:path").basename(input.remotePath) };
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) return null;
+    return requireCtx().transfers.download(input.sessionId, input.remotePath, result.filePath, input.resume ?? true);
+  });
+  ipcMain.handle(CH.transfer.jobs, () => requireCtx().transfers.listJobs());
+  ipcMain.handle(CH.transfer.retry, (_e, raw) => requireCtx().transfers.retry(IdSchema.parse(raw)));
+  ipcMain.handle(CH.transfer.cancel, (_e, raw) => requireCtx().transfers.cancel(IdSchema.parse(raw)));
+  ipcMain.handle(CH.tunnels.list, (_e, raw) => requireCtx().tunnels.list(raw ? IdSchema.parse(raw) : undefined));
+  ipcMain.handle(CH.tunnels.start, (_e, raw) => requireCtx().tunnels.start(TunnelStartSchema.parse(raw)));
+  ipcMain.handle(CH.tunnels.stop, (_e, raw) => requireCtx().tunnels.stop(IdSchema.parse(raw)));
+  ipcMain.handle(CH.recording.status, (_e, raw) => requireCtx().recording.status(raw ? IdSchema.parse(raw) : undefined));
+  ipcMain.handle(CH.recording.start, (_e, raw) => {
+    const input = RecordingStartSchema.parse(raw);
+    const ctx = requireCtx();
+    if (!ctx.local.has(input.sessionId) && !ctx.ssh.getSession(input.sessionId)) throw new Error("Sesi tidak ditemukan");
+    return ctx.recording.start(input.sessionId, input.cols, input.rows, input.includeInput ?? false);
+  });
+  ipcMain.handle(CH.recording.stop, async (_e, raw) => {
+    const sessionId = IdSchema.parse(raw);
+    const recording = requireCtx().recording.stop(sessionId);
+    const win = BrowserWindow.getFocusedWindow();
+    const options: any = {
+      title: "Simpan rekaman terminal",
+      defaultPath: `wann-ssh-${new Date(recording.startedAt).toISOString().replace(/[:.]/g, "-")}.cast`,
+      filters: [{ name: "Asciicast", extensions: ["cast"] }]
+    };
+    const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+    if (result.canceled || !result.filePath) {
+      requireCtx().recording.restore(recording);
+      return { saved: false };
+    }
+    return { saved: true, ...requireCtx().recording.save(recording, result.filePath) };
+  });
+  ipcMain.handle(CH.recording.discard, (_e, raw) => requireCtx().recording.discard(IdSchema.parse(raw)));
   logger.info("IPC handlers registered (live ctx)");
 }

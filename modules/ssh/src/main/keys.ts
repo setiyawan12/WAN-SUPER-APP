@@ -35,8 +35,12 @@ function sshString(value: Buffer) {
 }
 
 export function generateKey(alg: string, bits = 4096, passphrase?: string) {
-  const priv: any = passphrase ? { type: "pkcs8", format: "pem", cipher: "aes-256-cbc", passphrase } : { type: "pkcs8", format: "pem" };
-  const { privateKey } = node_crypto.generateKeyPairSync(alg as any, {
+  const nodeAlgorithm = alg === "ecdsa" ? "ec" : alg;
+  const privateKeyType = alg === "ecdsa" ? "sec1" : "pkcs8";
+  const priv: any = passphrase
+    ? { type: privateKeyType, format: "pem", cipher: "aes-256-cbc", passphrase }
+    : { type: privateKeyType, format: "pem" };
+  const { privateKey } = node_crypto.generateKeyPairSync(nodeAlgorithm as any, {
     ...alg === "rsa" ? { modulusLength: bits } : {},
     ...alg === "ecdsa" ? { namedCurve: "prime256v1" } : {},
     publicKeyEncoding: { type: "spki", format: "pem" },

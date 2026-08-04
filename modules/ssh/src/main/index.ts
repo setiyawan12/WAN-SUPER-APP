@@ -48,6 +48,7 @@ export function shutdownSsh() {
     runtime.ctx?.vault.lock();
   } catch {
   }
+  runtime.ctx = null;
   if (ownWindow && !ownWindow.isDestroyed()) {
     try {
       ownWindow.destroy();

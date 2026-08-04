@@ -25,10 +25,13 @@ export class HostService {
       identityId: h.identityId,
       keyId: h.keyId,
       jumpHostId: h.jumpHostId,
+      startupSnippetId: h.startupSnippetId,
       tags: h.tags,
       environment: h.environment,
       favorite: h.favorite,
       agentForwarding: h.agentForwarding,
+      autoReconnect: h.autoReconnect,
+      reconnectLimit: h.reconnectLimit,
       keepAliveInterval: h.keepAliveInterval,
       lastConnectedAt: h.lastConnectedAt,
       effectiveUsername: eff.username,
@@ -69,7 +72,7 @@ export class HostService {
     const existing = input.id ? itemRepo.get(input.id) : null;
     const id = existing?.id ?? itemRepo.newId();
     const vaultId = existing?.vaultId ?? input.vaultId ?? VAULT.defaultVaultId;
-    let identityId = input.identityId ?? existing?.identityId ?? null;
+    let identityId = input.identityId !== undefined ? input.identityId : existing?.identityId ?? null;
     if (input.password || input.username) {
       const identity = this.upsertInlineIdentity(
         identityId,
@@ -88,22 +91,24 @@ export class HostService {
       updatedAt: now,
       version: (existing?.version ?? 0) + 1,
       deletedAt: null,
-      groupId: input.groupId ?? existing?.groupId ?? null,
+      groupId: input.groupId !== undefined ? input.groupId : existing?.groupId ?? null,
       label: input.label,
       address: input.address,
-      port: input.port ?? existing?.port ?? null,
+      port: input.port !== undefined ? input.port : existing?.port ?? null,
       protocol: input.protocol ?? existing?.protocol ?? "ssh",
       identityId,
-      keyId: input.keyId ?? existing?.keyId ?? null,
-      jumpHostId: input.jumpHostId ?? existing?.jumpHostId ?? null,
+      keyId: input.keyId !== undefined ? input.keyId : existing?.keyId ?? null,
+      jumpHostId: input.jumpHostId !== undefined ? input.jumpHostId : existing?.jumpHostId ?? null,
       tags: input.tags ?? existing?.tags ?? [],
       environment: input.environment ?? existing?.environment ?? "none",
       themeId: existing?.themeId ?? null,
       fontId: existing?.fontId ?? null,
-      startupSnippetId: existing?.startupSnippetId ?? null,
+      startupSnippetId: input.startupSnippetId !== undefined ? input.startupSnippetId : existing?.startupSnippetId ?? null,
       backspaceMode: existing?.backspaceMode ?? "del",
       keepAliveInterval: input.keepAliveInterval ?? existing?.keepAliveInterval ?? 0,
       agentForwarding: input.agentForwarding ?? existing?.agentForwarding ?? false,
+      autoReconnect: input.autoReconnect ?? existing?.autoReconnect ?? true,
+      reconnectLimit: input.reconnectLimit ?? existing?.reconnectLimit ?? 3,
       charset: existing?.charset ?? "utf-8",
       notes: existing?.notes ?? null,
       favorite: input.favorite ?? existing?.favorite ?? false,
@@ -150,6 +155,17 @@ export class HostService {
     const now = Date.now();
     const existing = input.id ? itemRepo.get(input.id) : null;
     const id = existing?.id ?? itemRepo.newId();
+    const parentId = input.parentId !== undefined ? input.parentId : existing?.parentId ?? null;
+    if (parentId && id) {
+      const seen = new Set<string>();
+      let cursor: string | null = parentId;
+      while (cursor && !seen.has(cursor)) {
+        if (cursor === id) throw new Error("Parent grup membentuk siklus");
+        seen.add(cursor);
+        const parent = itemRepo.get(cursor);
+        cursor = parent && parent.type === "group" ? parent.parentId ?? null : null;
+      }
+    }
     const group = {
       id,
       type: "group",
@@ -157,7 +173,7 @@ export class HostService {
       updatedAt: now,
       version: (existing?.version ?? 0) + 1,
       deletedAt: null,
-      parentId: input.parentId ?? existing?.parentId ?? null,
+      parentId,
       vaultId: existing?.vaultId ?? VAULT.defaultVaultId,
       name: input.name,
       defaults: input.defaults ?? existing?.defaults ?? {}
@@ -206,7 +222,7 @@ export class IdentityService {
       label: input.label,
       username: input.username,
       secret,
-      keyId: input.keyId ?? existing?.keyId ?? null
+      keyId: input.keyId !== undefined ? input.keyId : existing?.keyId ?? null
     };
     itemRepo.upsert(identity);
     return id;

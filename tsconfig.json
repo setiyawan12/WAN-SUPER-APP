@@ -14,7 +14,8 @@
   },
   "include": [
     "src/hub-renderer/**/*",
-    "modules/cliproxy/renderer/**/*"
+      "modules/cliproxy/renderer/**/*",
+      "modules/ssh/ui/src/**/*"
   ],
   "exclude": [
     "**/*.test.ts",

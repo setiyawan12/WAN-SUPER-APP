@@ -98,6 +98,9 @@ export function App() {
   const [health, setHealth] = useState<HealthLike | null>(null);
 
   useEffect(() => {
+    void window.wan.context.hasSuperApp().then((hasContext) => {
+      if (hasContext) setPage("chat");
+    }).catch(() => undefined);
     void window.wan.health().then((h) => setHealth(h as HealthLike));
     const off = window.wan.onEvent((ev) => {
       if (ev.type === "health") setHealth(ev.payload as HealthLike);

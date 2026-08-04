@@ -60,6 +60,8 @@ contextBridge.exposeInMainWorld("wan", {
   context: {
     pickFiles: () => invoke("context:pickFiles"),
     fetchUrl: (url) => invoke("context:fetchUrl", url),
+    hasSuperApp: () => invoke("super:hasChatContext"),
+    consumeSuperApp: () => invoke("super:consumeChatContext"),
   },
 
   // Projects / Spaces (HANDBOOK M6). Group conversations by project.

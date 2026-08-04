@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
+import * as node_crypto from "node:crypto";
+import fs from "node:fs";
+import * as node_path from "node:path";
 import test from "node:test";
+import * as ssh2 from "ssh2";
 import { RealtimeDbTransport, vaultMetaPath } from "./firebase.js";
 import { generateKey } from "./keys.js";
-import { clearSyncedData, createRestoredPayload, createTombstonePayload, replaceSyncedOutbox } from "./store.js";
+import { knownHostPattern } from "./knownhosts.js";
+import { RecordingManager, redactTerminalText } from "./recording.js";
+import { resolveEffective } from "./repo.js";
+import { SshManager, SshSession } from "./ssh.js";
+import { clearSyncedData, createRestoredPayload, createTombstonePayload, normalizeStoreData, replaceSyncedOutbox } from "./store.js";
 import { SyncEngine } from "./sync.js";
 import { VaultCore } from "./vault.js";
 
@@ -297,4 +305,288 @@ test("generated public keys use one-line OpenSSH format", () => {
   assert.match(generated.publicKey, /^ssh-ed25519 [A-Za-z0-9+/]+=*$/);
   assert.equal(generated.publicKey.includes("\n"), false);
   assert.match(generated.fingerprintSha256, /^SHA256:/);
+});
+
+test("ECDSA key generation produces a usable OpenSSH public key", () => {
+  const generated = generateKey("ecdsa");
+  assert.match(generated.publicKey, /^ecdsa-sha2-nistp256 [A-Za-z0-9+/]+=*$/);
+  assert.match(generated.fingerprintSha256, /^SHA256:/);
+});
+
+test("effective host settings inherit group port and environment variables", () => {
+  const entities: Record<string, any> = {
+    group: {
+      id: "group",
+      type: "group",
+      parentId: null,
+      name: "Production",
+      defaults: {
+        username: "deploy",
+        port: 2202,
+        envVars: { REGION: "ap-southeast-3", ROLE: "api" }
+      }
+    }
+  };
+  const effective = resolveEffective(
+    { id: "host", type: "host", groupId: "group", port: null, identityId: null, keyId: null },
+    (id) => entities[id]
+  );
+
+  assert.equal(effective.username, "deploy");
+  assert.equal(effective.port, 2202);
+  assert.deepEqual(effective.envVars, { REGION: "ap-southeast-3", ROLE: "api" });
+});
+
+test("SSH config honors disabled keepalive, effective port, environment, and target verifier port", () => {
+  const session = new SshSession(
+    { id: "target", address: "target.test", port: 2202, vaultId: "local", keepAliveInterval: 0 },
+    { username: "deploy", port: 2202, envVars: { REGION: "test" } },
+    "uid-test",
+    () => undefined,
+    () => undefined
+  );
+  const cfg = session.connectionConfig(session.host, session.creds);
+  assert.equal(cfg.port, 2202);
+  assert.equal(cfg.keepaliveInterval, 0);
+
+  assert.deepEqual(session.creds.envVars, { REGION: "test" });
+  assert.equal(knownHostPattern(session.host.address, cfg.port), "target.test:2202");
+});
+
+test("store migration drops malformed rows and handles a large outbox without stack spreading", () => {
+  const outbox = Array.from({ length: 50_000 }, (_value, index) => ({
+    seq: index + 1,
+    itemId: `host-${index}`
+  }));
+  const normalized = normalizeStoreData({
+    schemaVersion: 1,
+    items: {
+      valid: {
+        id: "valid",
+        payload: { id: "valid", deletedAt: undefined },
+        deletedAt: undefined,
+        syncState: "unexpected"
+      },
+      malformed: { id: "different" }
+    },
+    outbox,
+    outboxSeq: 2
+  });
+
+  assert.equal(normalized.schemaVersion, 2);
+  assert.equal(normalized.items.malformed, undefined);
+  assert.equal(normalized.items.valid.deletedAt, null);
+  assert.equal(normalized.items.valid.payload.deletedAt, null);
+  assert.equal(normalized.items.valid.syncState, "synced");
+  assert.equal(normalized.outboxSeq, 50_000);
+  assert.deepEqual(normalized.settings, {});
+});
+
+test("recording redacts common secrets and excludes input unless explicitly enabled", () => {
+  assert.equal(
+    redactTerminalText("password=secret token:abcd API_KEY=xyz"),
+    "password=[REDACTED] token:[REDACTED] API_KEY=[REDACTED]"
+  );
+
+  const manager = new RecordingManager();
+  manager.start("session-output-only", 80, 24, false);
+  manager.captureInput("session-output-only", "typed-secret");
+  manager.captureOutput("session-output-only", "token=visible-in-output");
+  const outputOnly: any = manager.stop("session-output-only");
+  assert.equal(outputOnly.lines.some((line: string) => line.includes("typed-secret")), false);
+  assert.equal(outputOnly.lines.some((line: string) => line.includes("token=[REDACTED]")), true);
+
+  manager.start("session-with-input", 80, 24, true);
+  manager.captureInput("session-with-input", "echo hello");
+  const withInput: any = manager.stop("session-with-input");
+  assert.equal(withInput.lines.some((line: string) => line.includes("echo hello")), true);
+});
+
+test("SSH session finish is idempotent, flushes output, wipes credentials, and closes transports", () => {
+  const events: Array<{ channel: string; payload: any }> = [];
+  let endCount = 0;
+  let endedSession = "";
+  const privateKey = Buffer.from("private-key");
+  const credentials = { privateKey, password: "password", passphrase: "passphrase" };
+  const session = new SshSession(
+    { id: "host-1" },
+    credentials,
+    "uid-1",
+    (channel, payload) => events.push({ channel, payload }),
+    (sessionId) => { endedSession = sessionId; }
+  );
+  session.stream = { end: () => { endCount += 1; }, setWindow: () => undefined };
+  session.client = { end: () => { endCount += 1; } } as any;
+  session.auxiliaryClients = [{ end: () => { endCount += 1; } } as any];
+  session.push("hello");
+  session.resize(132, 41);
+
+  session.finish(1, "network-error", "lost connection");
+  session.finish(1, "second-finish");
+
+  assert.equal(endedSession, session.id);
+  assert.equal(endCount, 3);
+  assert.equal(session.cols, 132);
+  assert.equal(session.rows, 41);
+  assert.equal(privateKey.every((byte) => byte === 0), true);
+  assert.equal(credentials.password, undefined);
+  assert.equal(credentials.passphrase, undefined);
+  assert.deepEqual(events.map((event) => event.channel), ["term:output", "session:state", "term:exit"]);
+  assert.equal(events[0].payload.data, "hello");
+});
+
+test("connection diagnostics skip host startup snippets", async () => {
+  const manager = new SshManager({} as any, () => "uid-1", () => undefined);
+  const sessionId = "00000000-0000-4000-8000-000000000001";
+  let openArgs: any[] = [];
+  let closedSession = "";
+  manager.open = async (...args: any[]) => {
+    openArgs = args;
+    return { sessionId };
+  };
+  manager.close = (sessionId: string) => { closedSession = sessionId; };
+
+  const result = await manager.testConnection("host-1");
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(openArgs, ["host-1", 80, 24, false]);
+  assert.equal(closedSession, sessionId);
+});
+
+test("in-process SSH shell opens with a PTY, resizes, emits output, and cleans up on remote close", async (t) => {
+  const { privateKey } = node_crypto.generateKeyPairSync("rsa", {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: "spki", format: "pem" },
+    privateKeyEncoding: { type: "pkcs1", format: "pem" }
+  });
+  let serverStream: any;
+  let initialPty: any;
+  let resizeInfo: any;
+  let resolveServerStream!: (stream: any) => void;
+  let resolveResize!: () => void;
+  const serverStreamReady = new Promise<any>((resolve) => { resolveServerStream = resolve; });
+  const resized = new Promise<void>((resolve) => { resolveResize = resolve; });
+  const server = new (ssh2 as any).Server({ hostKeys: [privateKey] }, (client: any) => {
+    client.on("authentication", (context: any) => {
+      if (context.method === "password" && context.username === "tester" && context.password === "secret") context.accept();
+      else context.reject(["password"]);
+    });
+    client.on("ready", () => {
+      client.once("session", (accept: () => any) => {
+        const session = accept();
+        session.once("pty", (acceptPty: () => void, _reject: () => void, info: any) => {
+          initialPty = info;
+          acceptPty();
+        });
+        session.on("window-change", (acceptResize: (() => void) | undefined, _reject: () => void, info: any) => {
+          resizeInfo = info;
+          acceptResize?.();
+          resolveResize();
+        });
+        session.once("shell", (acceptShell: () => any) => {
+          serverStream = acceptShell();
+          resolveServerStream(serverStream);
+        });
+      });
+    });
+  });
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(() => new Promise<void>((resolve) => server.close(() => resolve())));
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  if (!address || typeof address === "string") throw new Error("SSH test server has no TCP address");
+
+  const events: Array<{ channel: string; payload: any }> = [];
+  let resolveEnded!: () => void;
+  const ended = new Promise<void>((resolve) => { resolveEnded = resolve; });
+  const credentials = { username: "tester", password: "secret" };
+  const session = new SshSession(
+    { id: "host-test", address: "127.0.0.1", port: address.port, vaultId: "local", keepAliveInterval: 0 },
+    credentials,
+    "uid-test",
+    (channel, payload) => events.push({ channel, payload }),
+    () => resolveEnded()
+  );
+  session.verifyHostKeyFor = async () => true;
+
+  await session.connect(80, 24);
+  const stream = await serverStreamReady;
+  assert.equal(session.status, "connected");
+  assert.equal(initialPty.cols, 80);
+  assert.equal(initialPty.rows, 24);
+
+  session.resize(120, 40);
+  await resized;
+  assert.equal(resizeInfo.cols, 120);
+  assert.equal(resizeInfo.rows, 40);
+
+  stream.write("server-ready\n");
+  stream.end();
+  await ended;
+
+  assert.equal(session.status, "disconnected");
+  assert.equal(credentials.password, undefined);
+  assert.equal(events.some((event) => event.channel === "term:output" && event.payload.data.includes("server-ready")), true);
+  assert.equal(events.some((event) => event.channel === "term:exit" && event.payload.reason === "remote-closed"), true);
+});
+
+test("local PTY session reports output, resizes, and cleans up", { skip: process.platform === "win32" }, async () => {
+  const { LocalSessionManager } = await import("./local.js");
+  const listeners = new Set<(channel: string, payload: any) => void>();
+  const manager = new LocalSessionManager((channel, payload) => {
+    for (const listener of listeners) listener(channel, payload);
+  });
+  const { sessionId, pty } = manager.open({ cols: 91, rows: 27, shell: "/bin/sh" });
+  assert.equal(pty, true);
+  assert.equal(manager.has(sessionId), true);
+
+  const sawSize = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("PTY output timeout")), 8000);
+    let buffer = "";
+    listeners.add((channel, payload) => {
+      if (channel !== "term:output" || payload.sessionId !== sessionId) return;
+      buffer += payload.data;
+      if (/45\s+123/.test(buffer)) { clearTimeout(timer); resolve(); }
+    });
+  });
+
+  manager.write(sessionId, "stty size\r");
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  manager.resize(sessionId, 123, 45);
+  manager.write(sessionId, "stty size\r");
+  await sawSize;
+
+  const ended = new Promise<void>((resolve) => {
+    listeners.add((channel, payload) => {
+      if (channel === "term:exit" && payload.sessionId === sessionId) resolve();
+    });
+  });
+  manager.close(sessionId);
+  await ended;
+  assert.equal(manager.has(sessionId), false);
+});
+
+test("saveGroup rejects a parent that would create a cycle", async () => {
+  const { initDbForTest } = await import("./store.js");
+  initDbForTest();
+  const { HostService } = await import("./hosts.js");
+  const vault = { encryptField: () => null, decryptString: () => "" } as any;
+  const hosts = new HostService(vault, () => "uid-test");
+  const parentId = hosts.saveGroup({ name: "Parent", parentId: null, defaults: {} });
+  const childId = hosts.saveGroup({ name: "Child", parentId, defaults: {} });
+  assert.throws(() => hosts.saveGroup({ id: parentId, name: "Parent", parentId: childId, defaults: {} }), /siklus/);
+});
+
+test("preload bridge and channel map stay in sync", async () => {
+  const { CH } = await import("./channels.js");
+  const bridgeSource = fs.readFileSync(node_path.join(__dirname, "../preload/index.js"), "utf8");
+  const flatten = (node: any, prefix = ""): string[] => Object.entries(node).flatMap(([key, value]) =>
+    typeof value === "string" ? [value] : flatten(value, `${prefix}${key}.`)
+  );
+  for (const channel of flatten(CH)) {
+    assert.equal(bridgeSource.includes(`"${channel}"`), true, `preload bridge is missing channel ${channel}`);
+  }
 });

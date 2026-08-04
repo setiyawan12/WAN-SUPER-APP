@@ -1,5 +1,5 @@
 import { VAULT, logger } from "./constants.js";
-import { metaStore, jsonStore, syncStore } from "./store.js";
+import { metaStore, jsonStore, syncStore, settingsStore } from "./store.js";
 import { VaultCore } from "./vault.js";
 import { HostService, IdentityService } from "./hosts.js";
 import { SshManager } from "./ssh.js";
@@ -8,6 +8,12 @@ import { RealtimeDbTransport } from "./firebase.js";
 import { SyncEngine } from "./sync.js";
 import { CH } from "./channels.js";
 import { biometricAvailable, storeVaultKey, loadVaultKey } from "./keychain.js";
+import { TransferManager } from "./transfer.js";
+import { TunnelManager } from "./tunnels.js";
+import { LocalSessionManager } from "./local.js";
+import { SnippetService } from "./snippets.js";
+import { RecordingManager } from "./recording.js";
+import { DiagnosticsService } from "./diagnostics.js";
 
 export class AppContext {
   vault: VaultCore;
@@ -15,6 +21,12 @@ export class AppContext {
   identities: IdentityService;
   ssh: SshManager;
   keys: KeyService;
+  transfers: TransferManager;
+  tunnels: TunnelManager;
+  local: LocalSessionManager;
+  snippets: SnippetService;
+  recording: RecordingManager;
+  diagnostics: DiagnosticsService;
   sync: SyncEngine;
   syncTransport: RealtimeDbTransport;
   sender: any = null;
@@ -23,12 +35,19 @@ export class AppContext {
 
   constructor() {
     this.vault = new VaultCore(metaStore);
+    this.vault.setAutoLockMs(settingsStore.get("autoLockMs", VAULT.autoLockMs));
     const uidFn = () => this.uid;
     const emit = (channel: string, payload: any) => this.emit(channel, payload);
     this.hosts = new HostService(this.vault, uidFn);
     this.identities = new IdentityService(this.vault, uidFn);
     this.ssh = new SshManager(this.vault, uidFn, emit);
     this.keys = new KeyService(this.vault, uidFn);
+    this.transfers = new TransferManager(this.ssh, emit);
+    this.tunnels = new TunnelManager(this.ssh, emit);
+    this.local = new LocalSessionManager(emit);
+    this.snippets = new SnippetService(uidFn);
+    this.recording = new RecordingManager();
+    this.diagnostics = new DiagnosticsService(this.ssh);
     this.syncTransport = new RealtimeDbTransport();
     this.sync = new SyncEngine(
       syncStore,
@@ -59,6 +78,8 @@ export class AppContext {
     };
     this.vault.onLock = () => {
       this.ssh.closeAll("vault-locked");
+      this.local.closeAll("vault-locked");
+      this.recording.discardAll();
       this.emit(CH.evt.vaultLocked, void 0);
     };
     // Pulihkan sesi cloud (bila ada) agar tidak sign-in ulang tiap buka app.
@@ -75,6 +96,9 @@ export class AppContext {
     this.sender = wc;
   }
   emit(channel: string, payload: any) {
+    if (channel === CH.evt.termOutput && payload?.sessionId && typeof payload.data === "string") {
+      this.recording.captureOutput(payload.sessionId, payload.data);
+    }
     if (this.sender && !this.sender.isDestroyed()) this.sender.send(channel, payload);
   }
   biometricAvailable() {
@@ -90,6 +114,36 @@ export class AppContext {
     const key = await loadVaultKey();
     if (!key) return false;
     this.vault.unlockWithVaultKey(key);
+    key.fill(0);
     return true;
+  }
+  async authorizeSensitiveAction(input: { password?: string; biometric?: boolean }) {
+    if (!this.vault.isUnlocked()) return false;
+    if (input.biometric) {
+      const key = await loadVaultKey();
+      if (!key) return false;
+      try {
+        const active = this.vault.exportVaultKey();
+        try {
+          return key.length === active.length && (await import("node:crypto")).timingSafeEqual(key, active);
+        } finally {
+          active.fill(0);
+        }
+      } finally {
+        key.fill(0);
+      }
+    }
+    return typeof input.password === "string" && this.vault.verifyPassword(input.password);
+  }
+  vaultSettings() {
+    return {
+      autoLockMs: this.vault.autoLockMs,
+      biometricAvailable: this.biometricAvailable()
+    };
+  }
+  setAutoLockMs(value: number) {
+    this.vault.setAutoLockMs(value);
+    settingsStore.set("autoLockMs", value);
+    return this.vaultSettings();
   }
 }

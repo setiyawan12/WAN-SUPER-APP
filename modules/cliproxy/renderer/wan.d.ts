@@ -239,6 +239,8 @@ export interface UrlContext {
 export interface WanContext {
   pickFiles: () => Promise<FileContext[]>;
   fetchUrl: (url: string) => Promise<UrlContext>;
+  hasSuperApp: () => Promise<boolean>;
+  consumeSuperApp: () => Promise<{ label: string; text: string; source: "ssh"; createdAt: number } | null>;
 }
 
 // Projects / Spaces (HANDBOOK M6). Mirrors src/main/projects-store.ts.
