@@ -108,12 +108,20 @@ async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<
 // Linux: Chromium's setuid sandbox needs a root-owned `chrome-sandbox` with the
 // SUID bit (mode 4755). AppImage mounts read-only over FUSE so SUID can never
 // apply, and newer kernels (Ubuntu 23.10+) block unprivileged user namespaces
-// unless a matching AppArmor profile is installed. In both cases Electron
-// refuses to start and forces the user to launch with `--no-sandbox` by hand.
-// Drop the sandbox here so the app opens out of the box on every distro/package.
-// Must run before app "ready". (Renderers only load bundled local content.)
-if (process.platform === "linux") {
+// unless a matching AppArmor profile is installed. In both cases Electron either
+// refuses to start or crashes in the zygote (LaunchProcess: failed to execvp …
+// zygote_host_impl_linux.cc Check failed) and forces the user to launch with
+// `--no-sandbox` by hand.
+//
+// `appendSwitch("no-sandbox")` is not honored early enough to stop the setuid
+// sandbox helper from being probed, so the only reliable fix — equivalent to a
+// manual `wan-super-app --no-sandbox` — is to relaunch once with the flag as a
+// real argv argument. The guard prevents a relaunch loop. (Renderers only load
+// bundled local content, so dropping the sandbox is an acceptable trade-off.)
+if (process.platform === "linux" && !process.argv.includes("--no-sandbox")) {
   app.commandLine.appendSwitch("no-sandbox");
+  app.relaunch({ args: process.argv.slice(1).concat("--no-sandbox") });
+  app.exit(0);
 }
 
 if (!app.requestSingleInstanceLock()) {
