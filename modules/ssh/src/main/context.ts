@@ -133,7 +133,7 @@ export class AppContext {
         key.fill(0);
       }
     }
-    return typeof input.password === "string" && this.vault.verifyPassword(input.password);
+    return typeof input.password === "string" && await this.vault.verifyPassword(input.password);
   }
   vaultSettings() {
     return {

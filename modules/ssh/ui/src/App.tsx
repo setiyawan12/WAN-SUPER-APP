@@ -32,7 +32,7 @@ import { Inspector } from "./Inspector";
 import { ResourceExplorer } from "./ResourceExplorer";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import type { Catalog, Host, Session, TransferJob, Tunnel } from "./types";
-import { EnvironmentBadge, IconButton, StatusDot } from "./ui";
+import { EnvironmentBadge, IconButton, StatusDot, useConfirm } from "./ui";
 
 type InspectorView = "files" | "tunnels" | "host" | "snippets";
 type VaultState = "loading" | "locked" | "no-vault" | "unlocked";
@@ -76,8 +76,7 @@ export default function App() {
   const [connectingHostId, setConnectingHostId] = useState<string | null>(null);
   const [sessions, setSessions] = useState<Record<string, Session>>({});
   const [tabs, setTabs] = useState<string[]>([]);
-  const [primarySessionId, setPrimarySessionId] = useState<string | null>(null);
-  const [secondarySessionId, setSecondarySessionId] = useState<string | null>(null);
+  const [panes, setPanes] = useState<string[]>([]);
   const [focusedSessionId, setFocusedSessionId] = useState<string | null>(null);
   const [inspectorOpen, setInspectorOpen] = useState(() => window.innerWidth > 980);
   const [explorerOpen, setExplorerOpen] = useState(false);
@@ -94,8 +93,13 @@ export default function App() {
   const [hostKeyPrompt, setHostKeyPrompt] = useState<any>(null);
   const [authPrompt, setAuthPrompt] = useState<any>(null);
   const [toast, setToast] = useState<{ message: string; tone: "default" | "danger"; id: number } | null>(null);
+  const [tabMenu, setTabMenu] = useState<{ sessionId: string; x: number; y: number } | null>(null);
+  const [dropTarget, setDropTarget] = useState<"add" | "single" | null>(null);
+  const [draggingTab, setDraggingTab] = useState<string | null>(null);
+  const MAX_PANES = 4;
   const terminalRefs = useRef(new Map<string, TerminalHandle>());
   const mockOpened = useRef(false);
+  const confirm = useConfirm();
 
   const showToast = useCallback((message: string, tone: "default" | "danger" = "default") => {
     const id = Date.now();
@@ -146,8 +150,7 @@ export default function App() {
       setVaultState("locked");
       setSessions({});
       setTabs([]);
-      setPrimarySessionId(null);
-      setSecondarySessionId(null);
+      setPanes([]);
       setFocusedSessionId(null);
       setTransfers([]);
       setTunnels([]);
@@ -195,7 +198,8 @@ export default function App() {
   const addSession = useCallback((session: Session) => {
     setSessions((current) => ({ ...current, [session.sessionId]: session }));
     setTabs((current) => current.includes(session.sessionId) ? current : [...current, session.sessionId]);
-    setPrimarySessionId(session.sessionId);
+    // Sesi baru selalu jadi satu-satunya pane aktif (keluar dari mode split).
+    setPanes([session.sessionId]);
     setFocusedSessionId(session.sessionId);
   }, []);
 
@@ -237,7 +241,7 @@ export default function App() {
 
   const closeSession = useCallback(async (sessionId: string) => {
     if (recording[sessionId]) {
-      if (window.confirm("Save the active recording before closing this session?")) {
+      if (await confirm({ title: "Save recording?", message: "This session has an active recording. Save it before closing?", confirmLabel: "Save", cancelLabel: "Discard" })) {
         const result = await api.recording.stop(sessionId);
         if (!result.saved) return;
       } else {
@@ -251,29 +255,71 @@ export default function App() {
     setTabs((current) => {
       const next = current.filter((id) => id !== sessionId);
       const fallback = next.at(-1) ?? null;
-      setPrimarySessionId((value) => value === sessionId ? fallback : value);
-      setSecondarySessionId((value) => value === sessionId ? null : value);
+      setPanes((current) => {
+        const remaining = current.filter((id) => id !== sessionId);
+        return remaining.length ? remaining : (fallback ? [fallback] : []);
+      });
       setFocusedSessionId((value) => value === sessionId ? fallback : value);
       return next;
     });
-  }, [recording]);
+  }, [recording, confirm]);
 
   const selectTab = (sessionId: string) => {
-    if (sessionId !== secondarySessionId) setPrimarySessionId(sessionId);
+    // Klik tab: jika belum tampil di pane manapun, tampilkan sebagai pane tunggal.
+    setPanes((current) => current.includes(sessionId) ? current : [sessionId]);
     setFocusedSessionId(sessionId);
   };
 
   const toggleSplit = () => {
-    if (secondarySessionId) {
-      setSecondarySessionId(null);
-      setFocusedSessionId(primarySessionId);
+    if (panes.length > 1) {
+      setPanes([focusedSessionId ?? panes[0]]);
+      setFocusedSessionId(focusedSessionId ?? panes[0]);
       return;
     }
-    const other = tabs.find((id) => id !== primarySessionId) ?? null;
+    const other = tabs.find((id) => id !== panes[0]) ?? null;
     if (!other) return;
-    setSecondarySessionId(other);
-    setFocusedSessionId(primarySessionId);
+    setPanes([panes[0], other]);
+    setFocusedSessionId(panes[0]);
   };
+
+  /** Tambahkan sesi ke grid split (maks 4 pane). */
+  const splitWith = (sessionId: string) => {
+    setPanes((current) => {
+      if (current.includes(sessionId)) return current;
+      if (current.length >= MAX_PANES) return [...current.slice(1), sessionId];
+      return [...current, sessionId];
+    });
+    setFocusedSessionId(sessionId);
+  };
+
+  /** Tampilkan hanya sesi ini (keluar dari split). */
+  const showSingle = (sessionId: string) => {
+    setPanes([sessionId]);
+    setFocusedSessionId(sessionId);
+  };
+
+  const removeFromSplit = (sessionId: string) => {
+    setPanes((current) => {
+      const next = current.filter((id) => id !== sessionId);
+      return next.length ? next : current;
+    });
+    setFocusedSessionId((value) => value === sessionId ? (panes.find((id) => id !== sessionId) ?? value) : value);
+  };
+
+  const closeSplit = () => {
+    const keep = focusedSessionId && panes.includes(focusedSessionId) ? focusedSessionId : panes[0];
+    setPanes(keep ? [keep] : []);
+    setFocusedSessionId(keep ?? null);
+  };
+
+  useEffect(() => {
+    if (!tabMenu) return;
+    const close = () => setTabMenu(null);
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setTabMenu(null); };
+    window.addEventListener("resize", close);
+    window.addEventListener("keydown", onKey);
+    return () => { window.removeEventListener("resize", close); window.removeEventListener("keydown", onKey); };
+  }, [tabMenu]);
 
   const focusedSession = focusedSessionId ? sessions[focusedSessionId] ?? null : null;
   const selectedHost = catalog.hosts.find((host) => host.id === selectedHostId) ?? null;
@@ -313,7 +359,7 @@ export default function App() {
     if (!focusedSession) return;
     const selection = activeTerminal()?.selection().trim() ?? "";
     if (!selection) return showToast("Select terminal output first", "danger");
-    if (!window.confirm(`Add ${Math.min(selection.length, 50_000).toLocaleString()} characters from ${focusedSession.label} to Chat context? Nothing will be sent automatically.`)) return;
+    if (!await confirm({ title: "Add to Chat context?", message: `Add ${Math.min(selection.length, 50_000).toLocaleString()} characters from ${focusedSession.label} to Chat context. Nothing will be sent automatically.`, confirmLabel: "Add to Chat" })) return;
     const superApp = (window as unknown as { superApp?: { sendToChat?: (input: any) => Promise<{ ok: boolean; error?: string; truncated?: boolean }> } }).superApp;
     if (!superApp?.sendToChat) {
       await navigator.clipboard.writeText(selection.slice(0, 50_000));
@@ -384,7 +430,7 @@ export default function App() {
     };
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [primarySessionId, secondarySessionId, tabs]);
+  }, [panes, focusedSessionId, tabs]);
 
   if (vaultState !== "unlocked") {
     return <VaultScreen
@@ -432,18 +478,51 @@ export default function App() {
         <main className="terminal-workspace">
           <div className="session-tabs">
             <div className="tab-scroll">
-              {tabs.map((id) => {
-                const session = sessions[id];
-                if (!session) return null;
-                const selected = focusedSessionId === id;
-                return <button className={`session-tab ${selected ? "active" : ""}`} key={id} onClick={() => selectTab(id)}>
-                  <span className={`session-environment ${session.environment}`} />
-                  <StatusDot state={session.status} />
-                  <span>{session.label}</span>
-                  <EnvironmentBadge environment={session.environment} />
-                  <span className="tab-close" role="button" aria-label="Close" onClick={(event) => { event.stopPropagation(); void closeSession(id); }}><X size={13} /></span>
-                </button>;
-              })}
+              {(() => {
+                const renderTab = (id: string) => {
+                  const session = sessions[id];
+                  if (!session) return null;
+                  const selected = focusedSessionId === id;
+                  return <button
+                    className={`session-tab ${selected ? "active" : ""}`}
+                    key={id}
+                    draggable
+                    onClick={() => selectTab(id)}
+                    onContextMenu={(event) => { event.preventDefault(); setTabMenu({ sessionId: id, x: event.clientX, y: event.clientY }); }}
+                    onDragStart={(event) => { setDraggingTab(id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("text/plain", id); }}
+                    onDragEnd={() => { setDraggingTab(null); setDropTarget(null); }}
+                  >
+                    <span className={`session-environment ${session.environment}`} />
+                    <StatusDot state={session.status} />
+                    <span>{session.label}</span>
+                    <EnvironmentBadge environment={session.environment} />
+                    <span className="tab-close" role="button" aria-label="Close" onClick={(event) => { event.stopPropagation(); void closeSession(id); }}><X size={13} /></span>
+                  </button>;
+                };
+                // Saat split (≥2 pane), semua pane dikelompokkan dalam satu grup visual.
+                if (panes.length < 2) return tabs.map(renderTab);
+                const grouped = new Set(panes);
+                const nodes: ReactNode[] = [];
+                let groupRendered = false;
+                for (const id of tabs) {
+                  if (grouped.has(id)) {
+                    if (groupRendered) continue;
+                    groupRendered = true;
+                    nodes.push(
+                      <div className="tab-group" key="split-group">
+                        <span className="tab-group-label"><SplitSquareHorizontal size={11} /> Split {panes.length}</span>
+                        <div className="tab-group-items">
+                          {panes.map(renderTab)}
+                        </div>
+                        <button className="tab-group-close" title="Tutup split" onClick={closeSplit}><X size={12} /></button>
+                      </div>
+                    );
+                  } else {
+                    nodes.push(renderTab(id));
+                  }
+                }
+                return nodes;
+              })()}
             </div>
             <IconButton label="New local shell" onClick={() => void openLocal()}><Plus size={16} /></IconButton>
           </div>
@@ -459,7 +538,7 @@ export default function App() {
               <IconButton label="Clear terminal" disabled={!focusedSession} onClick={() => activeTerminal()?.clear()}><Trash2 size={15} /></IconButton>
               <span className="toolbar-separator" />
               <IconButton label="Reconnect" disabled={!focusedSession || focusedSession.local || focusedSession.status === "connected"} onClick={() => void reconnect()}><RefreshCw size={15} /></IconButton>
-              <IconButton label={secondarySessionId ? "Close split" : "Split terminal"} disabled={tabs.length < 2} onClick={toggleSplit}><SplitSquareHorizontal size={15} /></IconButton>
+              <IconButton label={panes.length > 1 ? "Close split" : "Split terminal"} disabled={tabs.length < 2} onClick={toggleSplit}><SplitSquareHorizontal size={15} /></IconButton>
               <IconButton className={recording[focusedSessionId ?? ""] ? "recording" : ""} label={recording[focusedSessionId ?? ""] ? "Stop and save recording" : "Start recording"} disabled={!focusedSession} onClick={() => void toggleRecording()}>{recording[focusedSessionId ?? ""] ? <CircleStop size={15} /> : <Radio size={15} />}</IconButton>
               <IconButton label="Add selection to Chat" disabled={!focusedSession} onClick={() => void sendSelectionToChat()}><Bot size={15} /></IconButton>
               <span className="toolbar-separator" />
@@ -467,17 +546,43 @@ export default function App() {
             </div>
           </div>
 
-          <div className={`terminal-grid ${secondarySessionId ? "split" : ""}`}>
+          <div className={`terminal-grid ${panes.length > 1 ? "split" : ""}`} data-panes={panes.length}>
             {tabs.length === 0 && <div className="workspace-empty"><TerminalSquare size={34} /><strong>Start an operational session</strong><p>Select a host and press Connect, or open a local shell.</p><div><button className="button primary" disabled={!selectedHost} onClick={() => selectedHost && void openHost(selectedHost)}><Play size={15} /> Connect {selectedHost?.label ?? "host"}</button><button className="button" onClick={() => void openLocal()}><SquareTerminal size={15} /> Local shell</button></div></div>}
             {tabs.map((id) => {
               const session = sessions[id];
               if (!session) return null;
-              const column = id === primarySessionId ? 1 : id === secondarySessionId ? 2 : null;
-              return <div key={id} className={`terminal-surface ${column ? "visible" : "hidden"} ${focusedSessionId === id ? "focused" : ""}`} style={column ? { gridColumn: column } : undefined} onMouseDown={() => setFocusedSessionId(id)}>
-                <TerminalPane ref={(handle) => { if (handle) terminalRefs.current.set(id, handle); else terminalRefs.current.delete(id); }} sessionId={id} active={focusedSessionId === id} label={session.label} />
+              const paneIndex = panes.indexOf(id);
+              const visible = paneIndex !== -1;
+              // Posisi grid eksplisit; 3 pane → pane ketiga melebar penuh di baris 2.
+              let placement: { gridColumn: string; gridRow: string } | undefined;
+              if (visible && panes.length > 1) {
+                const spanFull = panes.length === 3 && paneIndex === 2;
+                placement = spanFull
+                  ? { gridColumn: "1 / -1", gridRow: "2" }
+                  : { gridColumn: String((paneIndex % 2) + 1), gridRow: String(Math.floor(paneIndex / 2) + 1) };
+              }
+              return <div key={id} className={`terminal-surface ${visible ? "visible" : "hidden"} ${focusedSessionId === id ? "focused" : ""}`} style={placement} onMouseDown={() => setFocusedSessionId(id)}>
+                {panes.length > 1 && <button className="pane-close" title="Tutup pane" onClick={(event) => { event.stopPropagation(); removeFromSplit(id); }}><X size={13} /></button>}
+                <TerminalPane ref={(handle) => { if (handle) terminalRefs.current.set(id, handle); else terminalRefs.current.delete(id); }} sessionId={id} visible={visible} active={focusedSessionId === id} label={session.label} />
                 {session.status !== "connected" && session.status !== "connecting" && session.status !== "authenticating" && <div className="disconnect-banner"><WifiOff size={15} /><span>{session.message || session.reason || "Session disconnected"}</span>{!session.local && <button className="button compact" onClick={() => { setFocusedSessionId(id); void reconnect(); }}><RefreshCw size={14} /> Reconnect</button>}</div>}
               </div>;
             })}
+            {draggingTab && tabs.length > 0 && (
+              <div className="tab-drop-overlay">
+                <div
+                  className={`tab-drop-zone left ${dropTarget === "single" ? "over" : ""}`}
+                  onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget("single"); }}
+                  onDragLeave={() => setDropTarget((current) => current === "single" ? null : current)}
+                  onDrop={(event) => { event.preventDefault(); const id = draggingTab; setDraggingTab(null); setDropTarget(null); if (id) showSingle(id); }}
+                ><SquareTerminal size={20} /><span>Tampilkan sendiri</span></div>
+                <div
+                  className={`tab-drop-zone right ${dropTarget === "add" ? "over" : ""} ${panes.length >= MAX_PANES ? "disabled" : ""}`}
+                  onDragOver={(event) => { if (panes.length >= MAX_PANES) return; event.preventDefault(); event.dataTransfer.dropEffect = "move"; setDropTarget("add"); }}
+                  onDragLeave={() => setDropTarget((current) => current === "add" ? null : current)}
+                  onDrop={(event) => { event.preventDefault(); const id = draggingTab; setDraggingTab(null); setDropTarget(null); if (id && panes.length < MAX_PANES) splitWith(id); }}
+                ><SplitSquareHorizontal size={20} /><span>{panes.length >= MAX_PANES ? "Split penuh (maks 4)" : `Tambah ke split (${panes.length}/${MAX_PANES})`}</span></div>
+              </div>
+            )}
           </div>
         </main>
 
@@ -518,6 +623,25 @@ export default function App() {
       {hostKeyPrompt && <HostKeyDialog prompt={hostKeyPrompt} onAnswer={(accept) => { void api.session.answerHostKey(hostKeyPrompt.sessionId, accept); setHostKeyPrompt(null); }} />}
       {authPrompt && <AuthPromptDialog prompt={authPrompt} onAnswer={(answers) => { if (answers) void api.session.answerAuthPrompt(authPrompt.sessionId, answers); else void api.session.close(authPrompt.sessionId); setAuthPrompt(null); }} />}
       {toast && <button className={`toast ${toast.tone}`} onClick={() => setToast(null)}>{toast.tone === "danger" ? <WifiOff size={15} /> : <Clipboard size={15} />}{toast.message}<X size={13} /></button>}
+
+      {tabMenu && (() => {
+        const menuSession = sessions[tabMenu.sessionId];
+        if (!menuSession) return null;
+        const inSplit = panes.includes(tabMenu.sessionId);
+        const canAdd = tabs.length > 1 && !inSplit && panes.length < MAX_PANES;
+        return <>
+          <button className="context-menu-backdrop" aria-label="Close menu" onMouseDown={() => setTabMenu(null)} onContextMenu={(event) => { event.preventDefault(); setTabMenu(null); }} />
+          <div className="context-menu" style={{ left: tabMenu.x, top: tabMenu.y }} role="menu">
+            <button role="menuitem" onClick={() => { selectTab(tabMenu.sessionId); setTabMenu(null); }}><TerminalSquare size={14} /> Fokuskan tab</button>
+            {canAdd && <button role="menuitem" onClick={() => { splitWith(tabMenu.sessionId); setTabMenu(null); }}><SplitSquareHorizontal size={14} /> Tambah ke split ({panes.length}/{MAX_PANES})</button>}
+            {panes.length > 1 && <button role="menuitem" onClick={() => { showSingle(tabMenu.sessionId); setTabMenu(null); }}><SquareTerminal size={14} /> Tampilkan sendiri</button>}
+            {inSplit && panes.length > 1 && <button role="menuitem" onClick={() => { removeFromSplit(tabMenu.sessionId); setTabMenu(null); }}><X size={14} /> Keluarkan dari split</button>}
+            {panes.length > 1 && <button role="menuitem" onClick={() => { closeSplit(); setTabMenu(null); }}><X size={14} /> Tutup split</button>}
+            <span className="context-menu-separator" />
+            <button role="menuitem" className="danger" onClick={() => { const id = tabMenu.sessionId; setTabMenu(null); void closeSession(id); }}><Trash2 size={14} /> Tutup tab</button>
+          </div>
+        </>;
+      })()}
     </div>
   );
 }

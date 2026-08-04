@@ -59,6 +59,10 @@ function backupPath(index: number) {
   return `${dbPath}.bak${index}`;
 }
 
+/** Rotasi backup mahal (3× copy sinkron); batasi minimal 1× per interval ini. */
+const BACKUP_MIN_INTERVAL_MS = 30_000;
+let lastBackupAt = 0;
+
 function rotateBackups() {
   if (!node_fs.existsSync(dbPath)) return;
   for (let index = 3; index >= 2; index -= 1) {
@@ -72,6 +76,7 @@ function rotateBackups() {
     } catch {
     }
   }
+  lastBackupAt = Date.now();
 }
 
 export function initDb() {
@@ -120,7 +125,9 @@ function persist(withBackup = true) {
   data = normalizeStoreData(data);
   if (inMemory) return;
   const tmp = `${dbPath}.tmp`;
-  if (withBackup) rotateBackups();
+  // Atomic write tetap tiap kali, tapi rotasi backup dibatasi per interval agar
+  // burst write (mis. full pull sync) tidak memicu ratusan copy sinkron.
+  if (withBackup && Date.now() - lastBackupAt >= BACKUP_MIN_INTERVAL_MS) rotateBackups();
   node_fs.writeFileSync(tmp, JSON.stringify(data), { encoding: "utf8", mode: 0o600 });
   const descriptor = node_fs.openSync(tmp, "r");
   try {

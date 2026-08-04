@@ -1,4 +1,19 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Activity,
+  ArrowUpRight,
+  Bot,
+  Check,
+  Cloud,
+  Download,
+  ExternalLink,
+  Network,
+  RefreshCw,
+  Settings2,
+  ShieldCheck,
+  Terminal,
+  Zap,
+} from "lucide-react";
 import type { ModuleId, SuperAppSettings, UpdateStatus } from "./wan";
 
 const EMPTY_SETTINGS: SuperAppSettings = {
@@ -186,270 +201,161 @@ export function App() {
 
   const showProgress = update.phase === "downloading" || update.phase === "downloaded";
   const progressPct = Math.max(0, Math.min(100, update.percent || 0));
+  const runningModules = [clipRunning, netRunning, sshRunning].filter(Boolean).length;
 
   return (
-    <div className="app">
-      <header className="header">
-        <div className="brand">
+    <main className="app-shell">
+      <div className="ambient-grid" aria-hidden="true" />
+      <div className="app">
+        <header className="header">
           <div className="brand-row">
-            <div className="brand-mark" aria-hidden="true">
-              <svg viewBox="0 0 64 64" width="40" height="40">
-                <defs>
-                  <linearGradient id="wmGold" x1="8" y1="6" x2="56" y2="58" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#F8E7B8" />
-                    <stop offset="50%" stopColor="#C9A227" />
-                    <stop offset="100%" stopColor="#F0D78A" />
-                  </linearGradient>
-                  <linearGradient id="wmAurora" x1="14" y1="12" x2="52" y2="54" gradientUnits="userSpaceOnUse">
-                    <stop offset="0%" stopColor="#7C5CFF" />
-                    <stop offset="100%" stopColor="#5EEAD4" />
-                  </linearGradient>
-                </defs>
-                <rect x="2" y="2" width="60" height="60" rx="16" fill="#0B0A12" stroke="url(#wmGold)" strokeWidth="1.8" />
-                <path
-                  d="M16 20 L24 46 L32 30 L40 46 L48 20"
-                  fill="none"
-                  stroke="url(#wmGold)"
-                  strokeWidth="4.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-                <path
-                  d="M16 20 L24 46 L32 30 L40 46 L48 20"
-                  fill="none"
-                  stroke="url(#wmAurora)"
-                  strokeWidth="1.8"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  opacity="0.95"
-                />
-                <circle cx="32" cy="30" r="1.8" fill="#FFF8E7" />
-              </svg>
-            </div>
-            <div>
-              <h1>WAN Super App</h1>
-              <p>Pilih modul App.</p>
+            <div className="brand-mark" aria-hidden="true"><span>W</span></div>
+            <div className="brand-copy">
+              <h1>WAN</h1>
+              <span>SUPER APP</span>
             </div>
           </div>
-        </div>
-        <div className="version">v{version}</div>
-      </header>
+          <div className="header-status">
+            <span className="system-live"><i /> SYSTEM ONLINE</span>
+            <span className="version">v{version}</span>
+          </div>
+        </header>
 
-      <div className="grid">
-        <section className="card clip">
-          <h2>WANN X RENN CLIProxyAPI</h2>
-          <p className="desc">
-            Chat AI, Cowork Mode, Neuron Activity, VS Code &amp; JetBrains integration.
-            Backend Express + CLIProxyAPI.
-          </p>
-          <div className="pills">
-            <span className={`pill ${clipRunning ? "on" : "off"}`}>
-              {clipRunning ? "Running" : "Idle"}
-            </span>
-            {state.cliproxy.port != null && (
-              <span className="pill">port {String(state.cliproxy.port)}</span>
+        <section className="hero-band">
+          <div className="hero-copy">
+            <span className="eyebrow"><Zap size={13} /> WAN COMMAND CENTER</span>
+            <h2>Everything you need.<br /><em>One powerful workspace.</em></h2>
+            <p>Kelola AI workspace, secure networking, dan remote infrastructure dari satu pusat kendali.</p>
+          </div>
+          <div className="system-summary">
+            <div><span>ACTIVE MODULES</span><strong>{runningModules}<small>/03</small></strong></div>
+            <div><span>NETWORK</span><strong>{tunnels > 0 ? `${tunnels} LIVE` : "STANDBY"}</strong></div>
+            <div><span>SECURITY</span><strong><ShieldCheck size={15} /> SECURED</strong></div>
+          </div>
+        </section>
+
+        <div className="section-heading">
+          <div><span className="section-index">01</span><h3>Workspace modules</h3></div>
+          <p>Select a module to begin</p>
+        </div>
+
+        <div className="module-grid">
+          <article className="module-card module-ai">
+            <div className="module-topline"><span>AI / AUTOMATION</span><Activity size={16} /></div>
+            <div className="module-icon"><Bot size={28} /></div>
+            <div className="module-title"><h4>WANN X RENN</h4><span>CLIProxyAPI</span></div>
+            <p>Advanced AI chat, Cowork Mode, Neuron Activity, and native IDE integration.</p>
+            <div className="module-meta">
+              <span className={`status ${clipRunning ? "online" : "idle"}`}><i />{clipRunning ? "Running" : "Ready"}</span>
+              {state.cliproxy.port != null && <span className="mono">:{String(state.cliproxy.port)}</span>}
+            </div>
+            <button className="module-action" disabled={opening === "cliproxy"} onClick={() => void openModule("cliproxy")}>
+              <span>{opening === "cliproxy" ? "Opening..." : "Launch workspace"}</span><ArrowUpRight size={17} />
+            </button>
+          </article>
+
+          <article className="module-card module-net">
+            <div className="module-topline"><span>EDGE / NETWORK</span><Cloud size={16} /></div>
+            <div className="module-icon"><Network size={28} /></div>
+            <div className="module-title"><h4>WAN NET</h4><span>Secure Tunnel</span></div>
+            <p>Cloudflare quick tunnels, multi-endpoint routing, live inspector, logs, and QR sharing.</p>
+            <div className="module-meta">
+              <span className={`status ${netRunning ? "online" : "idle"}`}><i />{netRunning ? "Running" : "Ready"}</span>
+              {tunnels > 0 && <span className="mono">{tunnels} tunnel{tunnels === 1 ? "" : "s"}</span>}
+            </div>
+            <button className="module-action" disabled={opening === "net"} onClick={() => void openModule("net")}>
+              <span>{opening === "net" ? "Opening..." : "Open network"}</span><ArrowUpRight size={17} />
+            </button>
+          </article>
+
+          <article className="module-card module-ssh">
+            <div className="module-topline"><span>REMOTE / TERMINAL</span><ShieldCheck size={16} /></div>
+            <div className="module-icon"><Terminal size={28} /></div>
+            <div className="module-title"><h4>WANN SSH</h4><span>Secure Shell</span></div>
+            <p>Encrypted SSH vault, verified host keys, full terminal, and optional cloud synchronization.</p>
+            <div className="module-meta">
+              <span className={`status ${sshRunning ? "online" : "idle"}`}><i />{sshRunning ? "Running" : "Ready"}</span>
+              {sshVault && <span className="mono">{sshVault}</span>}
+            </div>
+            <button className="module-action" disabled={opening === "ssh"} onClick={() => void openModule("ssh")}>
+              <span>{opening === "ssh" ? "Opening..." : "Open terminal"}</span><ArrowUpRight size={17} />
+            </button>
+          </article>
+        </div>
+
+        {error && <div className="error" role="alert">{error}</div>}
+
+        <div className="dashboard-grid">
+          <section className={`update-card phase-${update.phase}`}>
+            <div className="panel-heading">
+              <div className="panel-icon"><Download size={18} /></div>
+              <div><span>SYSTEM</span><h3>Software update</h3></div>
+              <span className={`update-state phase-${update.phase}`}><i />{phaseLabel(update.phase)}</span>
+            </div>
+
+            <div className="update-versions">
+              <div><span>INSTALLED</span><strong>v{update.currentVersion || version}</strong></div>
+              <ArrowUpRight size={18} />
+              <div><span>LATEST</span><strong>{update.availableVersion ? `v${update.availableVersion}` : "Current"}</strong></div>
+            </div>
+
+            <p className="update-message">{updateHint}</p>
+
+            {showProgress && (
+              <div className="update-progress">
+                <div className="progress-label"><span>Download progress</span><strong>{Math.round(progressPct)}%</strong></div>
+                <div className="bar"><div className="fill" style={{ width: `${progressPct}%` }} /></div>
+                {update.phase === "downloading" && <span className="transfer-rate">
+                  {formatBytes(update.transferred)}{update.total > 0 ? ` / ${formatBytes(update.total)}` : ""}{update.bytesPerSecond > 0 ? ` · ${formatSpeed(update.bytesPerSecond)}` : ""}
+                </span>}
+              </div>
             )}
-          </div>
-          <div className="actions">
-            <button disabled={opening === "cliproxy"} onClick={() => void openModule("cliproxy")}>
-              {opening === "cliproxy" ? "Opening…" : "Buka CLIProxyAPI"}
-            </button>
-          </div>
-        </section>
 
-        <section className="card net">
-          <h2>WAN NET</h2>
-          <p className="desc">
-            Cloudflare Quick Tunnel, multi-tunnel, Inspector, log &amp; QR. Cloudflared
-            built-in.
-          </p>
-          <div className="pills">
-            <span className={`pill ${netRunning ? "on" : "off"}`}>
-              {netRunning ? "Running" : "Idle"}
-            </span>
-            {tunnels > 0 && <span className="pill on">{tunnels} tunnel(s)</span>}
-          </div>
-          <div className="actions">
-            <button disabled={opening === "net"} onClick={() => void openModule("net")}>
-              {opening === "net" ? "Opening…" : "Buka WAN NET"}
-            </button>
-          </div>
-        </section>
+            <div className="update-footer">
+              <span>Last check: {lastChecked ?? "Not checked"}</span>
+              <div className="update-actions">
+                <button className="icon-button" title="Check for updates" aria-label="Check for updates" disabled={updateBusy || update.phase === "checking" || update.phase === "downloading"} onClick={() => void runCheck()}>
+                  <RefreshCw size={17} className={update.phase === "checking" ? "spin" : ""} />
+                </button>
+                {(update.phase === "available" || (update.phase === "error" && !!update.availableVersion)) && <button disabled={updateBusy} onClick={() => void runDownload()}><Download size={16} />Download</button>}
+                {update.phase === "downloading" && <button disabled><Download size={16} />Downloading</button>}
+                {update.phase === "downloaded" && <button disabled={updateBusy} onClick={() => void runInstall()}><Check size={16} />Restart &amp; install</button>}
+              </div>
+            </div>
+          </section>
 
-        <section className="card ssh">
-          <h2>WANN SSH</h2>
-          <p className="desc">
-            SSH client dengan encrypted vault (Argon2id + AES-256-GCM), TOFU
-            host-key, terminal xterm.js, dan sinkronisasi cloud opsional (Firebase).
-          </p>
-          <div className="pills">
-            <span className={`pill ${sshRunning ? "on" : "off"}`}>
-              {sshRunning ? "Running" : "Idle"}
-            </span>
-            {sshVault && <span className="pill">vault: {sshVault}</span>}
-          </div>
-          <div className="actions">
-            <button disabled={opening === "ssh"} onClick={() => void openModule("ssh")}>
-              {opening === "ssh" ? "Opening…" : "Buka WANN SSH"}
-            </button>
-          </div>
-        </section>
+          <section className="settings">
+            <div className="panel-heading">
+              <div className="panel-icon"><Settings2 size={18} /></div>
+              <div><span>CONTROL</span><h3>Preferences</h3></div>
+            </div>
+            <div className="settings-list">
+              <label className="setting-row">
+                <div><ExternalLink size={16} /><span>Open in new window<small>Dedicated window for every module</small></span></div>
+                <input type="checkbox" checked={settings.openInNewWindow} onChange={(event) => void toggle("openInNewWindow", event.target.checked)} />
+              </label>
+              <label className="setting-row">
+                <div><RefreshCw size={16} /><span>Restore last module<small>Continue where you left off</small></span></div>
+                <input type="checkbox" checked={settings.reopenLastModule} disabled={!settings.openInNewWindow} onChange={(event) => void toggle("reopenLastModule", event.target.checked)} />
+              </label>
+              <label className="setting-row">
+                <div><Activity size={16} /><span>Keep modules active<small>Keep backends running in Hub</small></span></div>
+                <input type="checkbox" checked={settings.keepAliveWhenLeaving} onChange={(event) => void toggle("keepAliveWhenLeaving", event.target.checked)} />
+              </label>
+              <label className="setting-row">
+                <div><Zap size={16} /><span>Launch at login<small>Start automatically with macOS</small></span></div>
+                <input type="checkbox" checked={settings.autoLaunch} onChange={(event) => void toggle("autoLaunch", event.target.checked)} />
+              </label>
+              <label className="setting-row">
+                <div><ShieldCheck size={16} /><span>Start hidden<small>Launch directly into the tray</small></span></div>
+                <input type="checkbox" checked={settings.startHidden} disabled={!settings.autoLaunch} onChange={(event) => void toggle("startHidden", event.target.checked)} />
+              </label>
+            </div>
+          </section>
+        </div>
+
+        <footer><span>WAN SUPER APP</span><span>Built for secure operations</span></footer>
       </div>
-
-      {error && <div className="error">{error}</div>}
-
-      <section className={`update-card phase-${update.phase}`}>
-        <div className="update-head">
-          <div>
-            <h3>App Update</h3>
-            <p className="update-sub">
-              Sumber: GitHub Releases ·{" "}
-              <code>setiyawan12/WAN-SUPER-APP</code>
-            </p>
-          </div>
-          <span className={`pill update-pill phase-${update.phase}`}>
-            {phaseLabel(update.phase)}
-          </span>
-        </div>
-
-        <div className="update-meta">
-          <div>
-            <span className="muted">Installed</span>
-            <strong>v{update.currentVersion || version}</strong>
-          </div>
-          <div>
-            <span className="muted">Latest</span>
-            <strong>
-              {update.availableVersion ? `v${update.availableVersion}` : "—"}
-            </strong>
-          </div>
-          <div>
-            <span className="muted">Last check</span>
-            <strong>{lastChecked ?? "Belum"}</strong>
-          </div>
-        </div>
-
-        <p className="update-msg">{updateHint}</p>
-
-        {showProgress && (
-          <div className="update-progress">
-            <div className="bar">
-              <div className="fill" style={{ width: `${progressPct}%` }} />
-            </div>
-            <div className="progress-meta">
-              <span>{Math.round(progressPct)}%</span>
-              {update.phase === "downloading" && (
-                <span>
-                  {formatBytes(update.transferred)}
-                  {update.total > 0 ? ` / ${formatBytes(update.total)}` : ""}
-                  {update.bytesPerSecond > 0
-                    ? ` · ${formatSpeed(update.bytesPerSecond)}`
-                    : ""}
-                </span>
-              )}
-            </div>
-          </div>
-        )}
-
-        <div className="actions update-actions">
-          <button
-            className="secondary"
-            disabled={
-              updateBusy ||
-              update.phase === "checking" ||
-              update.phase === "downloading"
-            }
-            onClick={() => void runCheck()}
-          >
-            {update.phase === "checking" ? "Checking…" : "Check for updates"}
-          </button>
-
-          {(update.phase === "available" ||
-            (update.phase === "error" && !!update.availableVersion)) && (
-            <button disabled={updateBusy} onClick={() => void runDownload()}>
-              {updateBusy && update.phase !== "available"
-                ? "Starting…"
-                : `Download v${update.availableVersion}`}
-            </button>
-          )}
-
-          {update.phase === "downloading" && (
-            <button disabled>Downloading…</button>
-          )}
-
-          {update.phase === "downloaded" && (
-            <button disabled={updateBusy} onClick={() => void runInstall()}>
-              Restart &amp; install
-            </button>
-          )}
-        </div>
-      </section>
-
-      <section className="settings">
-        <h3>Preferences</h3>
-        <div className="row">
-          <label>
-            <span>Open modules in new window</span>
-            <small>
-              On: tiap modul buka window sendiri (default). Off: ganti halaman Hub
-              dengan UI modul.
-            </small>
-          </label>
-          <input
-            type="checkbox"
-            checked={settings.openInNewWindow}
-            onChange={(e) => void toggle("openInNewWindow", e.target.checked)}
-          />
-        </div>
-        <div className="row">
-          <label>
-            <span>Reopen last module on launch</span>
-            <small>
-              Hanya jika &quot;Open modules in new window&quot; aktif: buka modul
-              terakhir di window terpisah, Hub tetap jadi halaman utama.
-            </small>
-          </label>
-          <input
-            type="checkbox"
-            checked={settings.reopenLastModule}
-            disabled={!settings.openInNewWindow}
-            onChange={(e) => void toggle("reopenLastModule", e.target.checked)}
-          />
-        </div>
-        <div className="row">
-          <label>
-            <span>Keep module alive when leaving</span>
-            <small>Jangan matikan backend saat kembali ke Hub</small>
-          </label>
-          <input
-            type="checkbox"
-            checked={settings.keepAliveWhenLeaving}
-            onChange={(e) => void toggle("keepAliveWhenLeaving", e.target.checked)}
-          />
-        </div>
-        <div className="row">
-          <label>
-            <span>Launch at login</span>
-            <small>Start Super App saat login OS</small>
-          </label>
-          <input
-            type="checkbox"
-            checked={settings.autoLaunch}
-            onChange={(e) => void toggle("autoLaunch", e.target.checked)}
-          />
-        </div>
-        <div className="row">
-          <label>
-            <span>Start hidden</span>
-            <small>Hanya tray jika launch at login</small>
-          </label>
-          <input
-            type="checkbox"
-            checked={settings.startHidden}
-            onChange={(e) => void toggle("startHidden", e.target.checked)}
-          />
-        </div>
-      </section>
-    </div>
+    </main>
   );
 }

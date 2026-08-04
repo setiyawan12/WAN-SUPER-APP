@@ -8,6 +8,7 @@ import { createMainWindow, attachWindow, buildMenu } from "./window.js";
 
 let ownWindow: any = null;
 let booted = false;
+let powerMonitorCleanup: (() => void) | null = null;
 
 export async function initSsh() {
   if (booted) return;
@@ -18,8 +19,14 @@ export async function initSsh() {
     runtime.ipcRegistered = true;
   }
   const { powerMonitor } = await import("electron");
-  powerMonitor.on("suspend", () => runtime.ctx?.vault.lock());
-  powerMonitor.on("lock-screen", () => runtime.ctx?.vault.lock());
+  const onSuspend = () => runtime.ctx?.vault.lock();
+  const onLockScreen = () => runtime.ctx?.vault.lock();
+  powerMonitor.on("suspend", onSuspend);
+  powerMonitor.on("lock-screen", onLockScreen);
+  powerMonitorCleanup = () => {
+    powerMonitor.off("suspend", onSuspend);
+    powerMonitor.off("lock-screen", onLockScreen);
+  };
   booted = true;
   logger.info("WANN SSH embed runtime siap");
 }
@@ -49,6 +56,10 @@ export function shutdownSsh() {
   } catch {
   }
   runtime.ctx = null;
+  if (powerMonitorCleanup) {
+    powerMonitorCleanup();
+    powerMonitorCleanup = null;
+  }
   if (ownWindow && !ownWindow.isDestroyed()) {
     try {
       ownWindow.destroy();

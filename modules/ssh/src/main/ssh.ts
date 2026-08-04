@@ -162,6 +162,7 @@ export class SshSession {
   }
   /** Batching output — pembeda terminal mulus vs patah-patah (Bab 10.1). */
   push(chunk: string) {
+    if (this.ended) return;
     this.outBuf.push(chunk);
     if (this.outBuf.length > SSH.flushChunkThreshold) return this.flush();
     this.flushTimer ??= setTimeout(() => this.flush(), SSH.flushIntervalMs);
@@ -356,7 +357,11 @@ export class SshManager {
     const session = this.sessions.get(sessionId);
     if (!session || reason === "user-closed" || reason === "vault-locked") return;
     const limit = session.host.reconnectLimit ?? 3;
-    if (!session.host.autoReconnect || session.reconnectAttempt >= limit) return;
+    if (!session.host.autoReconnect || session.reconnectAttempt >= limit) {
+      // Reconnect exhausted or disabled — remove stale session from map.
+      this.sessions.delete(sessionId);
+      return;
+    }
     const attempt = ++session.reconnectAttempt;
     const delayMs = Math.min(1000 * 2 ** (attempt - 1), 10_000);
     this.emit("session:state", { sessionId, state: "reconnecting", attempt, delayMs });
@@ -426,6 +431,12 @@ export class SshManager {
   /** Push public key ke authorized_keys server, idempoten (Bab 10.4). */
   async pushKey(publicKey: string, hostId: string) {
     if (!publicKey || publicKey.startsWith("(")) throw new SshError("UNKNOWN", "Public key tidak tersedia");
+    // Validate public key format: must be single-line, no control chars, match
+    // standard "type base64 comment" pattern to prevent shell injection.
+    const trimmed = publicKey.trim();
+    if (/[\x00-\x1f\x7f`$\\]/.test(trimmed) || trimmed.includes("\n") || !/^(ssh-\w+|ecdsa-\S+) [A-Za-z0-9+/=]+ ?.*$/.test(trimmed)) {
+      throw new SshError("UNKNOWN", "Format public key tidak valid atau mengandung karakter berbahaya");
+    }
     const host = itemRepo.get(hostId);
     if (!host) throw new SshError("UNKNOWN", "Host tidak ditemukan");
     const creds = this.resolveCredentials(host);
@@ -445,7 +456,7 @@ export class SshManager {
       cfg.privateKey = creds.privateKey;
       if (creds.passphrase) cfg.passphrase = creds.passphrase;
     } else if (creds.password) cfg.password = creds.password;
-    const q = publicKey.trim().replace(/'/g, `'\\''`);
+    const q = trimmed.replace(/'/g, `'\\''`);
     const cmd = [
       "mkdir -p ~/.ssh && chmod 700 ~/.ssh",
       "touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys",

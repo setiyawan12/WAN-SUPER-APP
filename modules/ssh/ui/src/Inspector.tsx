@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, File, Folder, FolderPlus, PenLine, Play, Plus, RefreshCw, Route, SquareTerminal, Trash2, X } from "lucide-react";
 import { api } from "./api";
 import type { Diagnostics, Host, RemoteEntry, Session, Snippet, TransferJob, Tunnel } from "./types";
-import { EnvironmentBadge, Field, formatBytes, formatRelativeTime, IconButton, Segmented, StatusDot } from "./ui";
+import { EnvironmentBadge, Field, formatBytes, formatRelativeTime, IconButton, Segmented, StatusDot, useConfirm } from "./ui";
 
 type View = "files" | "tunnels" | "host" | "snippets";
 
@@ -31,6 +31,7 @@ function FilesView({ session, transfers, onCancelTransfer, onRetryTransfer, onTo
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+  const confirm = useConfirm();
   const sessionId = session?.local ? null : session?.sessionId ?? null;
 
   const load = async (nextPath = path) => {
@@ -104,7 +105,7 @@ function FilesView({ session, transfers, onCancelTransfer, onRetryTransfer, onTo
                 onToast(renameError instanceof Error ? renameError.message : String(renameError), "danger");
               }
             }}><PenLine size={14} /></IconButton>
-            <IconButton className="row-action danger" label="Hapus" onClick={async () => { if (!window.confirm(`Hapus ${entry.name}?`)) return; await api.transfer.remove({ sessionId, path: entry.path, directory: entry.type === "directory" }); await load(); }}><Trash2 size={14} /></IconButton>
+            <IconButton className="row-action danger" label="Hapus" onClick={async () => { if (!await confirm({ title: `Hapus ${entry.name}?`, message: entry.type === "directory" ? "Folder dan seluruh isinya akan dihapus." : "File akan dihapus permanen.", confirmLabel: "Hapus", tone: "danger" })) return; await api.transfer.remove({ sessionId, path: entry.path, directory: entry.type === "directory" }); await load(); }}><Trash2 size={14} /></IconButton>
           </div>
         ))}
         {!loading && entries.length === 0 && <div className="empty-list">Folder kosong</div>}

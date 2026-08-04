@@ -1,5 +1,5 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { X } from "lucide-react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { AlertTriangle, X } from "lucide-react";
 import type { Environment } from "./types";
 
 export function IconButton({ label, children, className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { label: string; children: ReactNode }) {
@@ -23,6 +23,70 @@ export function Modal({ title, children, onClose, width = 620, footer }: { title
       </section>
     </div>
   );
+}
+
+type ConfirmOptions = {
+  title: string;
+  message?: ReactNode;
+  confirmLabel?: string;
+  cancelLabel?: string;
+  tone?: "default" | "danger";
+};
+
+type ConfirmState = ConfirmOptions & { resolve: (value: boolean) => void };
+
+const ConfirmContext = createContext<((options: ConfirmOptions) => Promise<boolean>) | null>(null);
+
+export function ConfirmProvider({ children }: { children: ReactNode }) {
+  const [state, setState] = useState<ConfirmState | null>(null);
+  const confirmButtonRef = useRef<HTMLButtonElement>(null);
+
+  const confirm = useCallback((options: ConfirmOptions) => {
+    return new Promise<boolean>((resolve) => setState({ ...options, resolve }));
+  }, []);
+
+  const close = useCallback((value: boolean) => {
+    setState((current) => {
+      current?.resolve(value);
+      return null;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!state) return;
+    confirmButtonRef.current?.focus();
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") { event.preventDefault(); close(false); }
+      if (event.key === "Enter") { event.preventDefault(); close(true); }
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [state, close]);
+
+  return (
+    <ConfirmContext.Provider value={confirm}>
+      {children}
+      {state && (
+        <div className="confirm-backdrop" role="presentation" onMouseDown={() => close(false)}>
+          <div className={`confirm-dialog ${state.tone === "danger" ? "danger" : ""}`} role="alertdialog" aria-modal="true" aria-label={state.title} onMouseDown={(event) => event.stopPropagation()}>
+            <div className="confirm-icon"><AlertTriangle size={19} /></div>
+            <h3 className="confirm-title">{state.title}</h3>
+            {state.message && <p className="confirm-message">{state.message}</p>}
+            <div className="confirm-actions">
+              <button className="button" onClick={() => close(false)}>{state.cancelLabel ?? "Batal"}</button>
+              <button ref={confirmButtonRef} className={`button ${state.tone === "danger" ? "danger" : "primary"}`} onClick={() => close(true)}>{state.confirmLabel ?? "OK"}</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </ConfirmContext.Provider>
+  );
+}
+
+export function useConfirm() {
+  const confirm = useContext(ConfirmContext);
+  if (!confirm) throw new Error("useConfirm harus dipakai di dalam ConfirmProvider");
+  return confirm;
 }
 
 export function EnvironmentBadge({ environment }: { environment: Environment }) {

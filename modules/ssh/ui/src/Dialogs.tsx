@@ -20,7 +20,7 @@ import {
 } from "lucide-react";
 import { api } from "./api";
 import type { Catalog, Group, Host, Identity, Snippet, SshKey } from "./types";
-import { EnvironmentBadge, Field, IconButton, Modal, Segmented, StatusDot } from "./ui";
+import { EnvironmentBadge, Field, IconButton, Modal, Segmented, StatusDot, useConfirm } from "./ui";
 
 export function VaultScreen({ state, error, onUnlock, onCreate, onBiometric }: {
   state: "loading" | "locked" | "no-vault";
@@ -92,6 +92,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
   onSave: (input: any) => Promise<string>;
   onDelete: (id: string) => Promise<void>;
 }) {
+  const confirm = useConfirm();
   const [tab, setTab] = useState<HostTab>("connection");
   const [label, setLabel] = useState(initial?.label ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
@@ -192,7 +193,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
 
   return (
     <Modal title={initial ? `Edit ${initial.label}` : "New SSH host"} onClose={onClose} width={720} footer={<>
-      {initial && <button className="button danger-text" onClick={async () => { if (!window.confirm(`Delete ${initial.label}?`)) return; await onDelete(initial.id); onClose(); }}><Trash2 size={15} /> Delete</button>}
+      {initial && <button className="button danger-text" onClick={async () => { if (!await confirm({ title: `Delete ${initial.label}?`, message: "This host profile will be permanently removed.", confirmLabel: "Delete", tone: "danger" })) return; await onDelete(initial.id); onClose(); }}><Trash2 size={15} /> Delete</button>}
       <span className="modal-spacer" />
       {testResult && <span className="test-result">{testResult}</span>}
       <button className="button" disabled={busy || !label || !address} onClick={() => void test()}><Wifi size={15} /> Test</button>
@@ -283,6 +284,7 @@ export function GroupDialog({ groups, keys, onClose, onSave, onDelete, onToast }
   onDelete: (id: string) => Promise<void>;
   onToast: (message: string, tone?: "default" | "danger") => void;
 }) {
+  const confirm = useConfirm();
   const [draft, setDraft] = useState<GroupDraft | null>(() => groups.length ? null : emptyGroupDraft());
 
   const parseEnv = (): Record<string, string> | null => {
@@ -341,7 +343,7 @@ export function GroupDialog({ groups, keys, onClose, onSave, onDelete, onToast }
           <FolderPlus size={16} />
           <span className="manager-copy"><strong>{group.name}</strong><small>{group.parentId ? "nested" : "top level"}{summary ? ` · ${summary}` : ""}</small></span>
           <button className="text-action" onClick={() => setDraft(draftFromGroup(group))}>Edit</button>
-          <IconButton className="danger" label="Delete" onClick={async () => { if (!window.confirm(`Hapus grup "${group.name}"?`)) return; await onDelete(group.id); }}><Trash2 size={14} /></IconButton>
+          <IconButton className="danger" label="Delete" onClick={async () => { if (!await confirm({ title: `Hapus grup "${group.name}"?`, message: "Host di dalam grup tidak ikut terhapus.", confirmLabel: "Hapus", tone: "danger" })) return; await onDelete(group.id); }}><Trash2 size={14} /></IconButton>
         </div>;
       })}
       {!groups.length && !draft && <div className="empty-list">Belum ada grup</div>}

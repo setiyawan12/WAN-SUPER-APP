@@ -20,6 +20,9 @@ export type TerminalHandle = {
 
 type Props = {
   sessionId: string;
+  /** Pane sedang dirender di grid (bukan tab tersembunyi). */
+  visible: boolean;
+  /** Pane sedang difokuskan — hanya satu pane yang aktif. */
   active: boolean;
   label: string;
 };
@@ -41,12 +44,13 @@ const theme = {
   white: "#e7ebe6"
 };
 
-export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalPane({ sessionId, active, label }, ref) {
+export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalPane({ sessionId, visible, active, label }, ref) {
   const mountRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const searchRef = useRef<SearchAddon | null>(null);
   const activeRef = useRef(active);
+  const visibleRef = useRef(visible);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
 
@@ -69,6 +73,10 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
   useEffect(() => {
     activeRef.current = active;
   }, [active]);
+
+  useEffect(() => {
+    visibleRef.current = visible;
+  }, [visible]);
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -104,6 +112,8 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
     searchRef.current = search;
 
     const resize = () => {
+      // Tab tersembunyi berukuran 1×1px — fit() di sana merusak jumlah kolom.
+      if (!visibleRef.current) return;
       try {
         fit.fit();
         api.session.resize(sessionId, terminal.cols, terminal.rows);
@@ -144,13 +154,25 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
   }, [label, sessionId]);
 
   useEffect(() => {
-    if (!active) return;
-    const frame = requestAnimationFrame(() => {
-      fitRef.current?.fit();
-      terminalRef.current?.focus();
+    if (!visible) return;
+    // Double-rAF: frame pertama menunggu layout selesai setelah pane tampil
+    // kembali, frame kedua memastikan dimensi stabil sebelum FitAddon mengukur.
+    const outer = requestAnimationFrame(() => {
+      inner = requestAnimationFrame(() => {
+        try {
+          fitRef.current?.fit();
+          const t = terminalRef.current;
+          if (t) api.session.resize(sessionId, t.cols, t.rows);
+        } catch {}
+        if (activeRef.current) terminalRef.current?.focus();
+      });
     });
-    return () => cancelAnimationFrame(frame);
-  }, [active]);
+    let inner: number;
+    return () => {
+      cancelAnimationFrame(outer);
+      cancelAnimationFrame(inner);
+    };
+  }, [visible, active, sessionId]);
 
   const find = (previous = false) => {
     if (!query) return;

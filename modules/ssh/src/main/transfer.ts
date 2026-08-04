@@ -45,6 +45,10 @@ export class TransferManager {
   queue: string[] = [];
   active = 0;
   maxConcurrent = 2;
+  /** Batasi channel SFTP serempak per sesi agar tak melewati MaxSessions server. */
+  private sftpChannels = new Map<string, number>();
+  private sftpWaiters = new Map<string, Array<() => void>>();
+  private maxSftpPerSession = 6;
 
   constructor(ssh: SshManager, emit: EmitFn) {
     this.ssh = ssh;
@@ -58,8 +62,49 @@ export class TransferManager {
     return session;
   }
 
-  openSftp(session: SshSession) {
-    return callbackPromise<any>((done) => session.client.sftp(done));
+  private async acquireSftpSlot(sessionId: string) {
+    const current = this.sftpChannels.get(sessionId) ?? 0;
+    if (current < this.maxSftpPerSession) {
+      this.sftpChannels.set(sessionId, current + 1);
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const waiters = this.sftpWaiters.get(sessionId) ?? [];
+      waiters.push(resolve);
+      this.sftpWaiters.set(sessionId, waiters);
+    });
+    this.sftpChannels.set(sessionId, (this.sftpChannels.get(sessionId) ?? 0) + 1);
+  }
+
+  private releaseSftpSlot(sessionId: string) {
+    const current = this.sftpChannels.get(sessionId) ?? 1;
+    this.sftpChannels.set(sessionId, Math.max(0, current - 1));
+    const waiters = this.sftpWaiters.get(sessionId);
+    const next = waiters?.shift();
+    if (waiters && waiters.length === 0) this.sftpWaiters.delete(sessionId);
+    next?.();
+  }
+
+  async openSftp(session: SshSession) {
+    await this.acquireSftpSlot(session.id);
+    let sftp: any;
+    try {
+      sftp = await callbackPromise<any>((done) => session.client.sftp(done));
+    } catch (error) {
+      this.releaseSftpSlot(session.id);
+      throw error;
+    }
+    // Bungkus end() agar slot dilepas tepat sekali walau dipanggil berkali-kali.
+    const originalEnd = sftp.end.bind(sftp);
+    let released = false;
+    sftp.end = () => {
+      if (!released) {
+        released = true;
+        this.releaseSftpSlot(session.id);
+      }
+      return originalEnd();
+    };
+    return sftp;
   }
 
   async home(sessionId: string) {
@@ -186,6 +231,11 @@ export class TransferManager {
     for (const job of this.jobs.values()) {
       if (job.sessionId === sessionId) this.cancel(job.id);
     }
+    // Lepas semua slot & waiter agar operasi SFTP yang menunggu tak menggantung.
+    const waiters = this.sftpWaiters.get(sessionId);
+    if (waiters) for (const resolve of waiters.splice(0)) resolve();
+    this.sftpWaiters.delete(sessionId);
+    this.sftpChannels.delete(sessionId);
   }
 
   publish(job: TransferJob, error?: string) {
@@ -212,9 +262,17 @@ export class TransferManager {
       }).finally(() => {
         job.cancel = null;
         this.active -= 1;
+        this.pruneFinishedJobs();
         this.pump();
       });
     }
+  }
+
+  /** Buang job selesai/gagal/batal terlama agar Map tidak tumbuh tanpa batas. */
+  pruneFinishedJobs(keep = 50) {
+    const finished = [...this.jobs.values()].filter((job) => job.state === "completed" || job.state === "failed" || job.state === "canceled");
+    if (finished.length <= keep) return;
+    for (const job of finished.slice(0, finished.length - keep)) this.jobs.delete(job.id);
   }
 
   async run(job: TransferJob) {
