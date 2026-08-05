@@ -99,7 +99,7 @@ function updateRateChart(){
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function mc(m){return['GET','POST','PUT','DELETE','PATCH','HEAD','OPTIONS'].includes(m)?m:'OTHER';}
 function statusClass(s){if(s===0)return'sabrt';if(!s)return'sunk';if(s<300)return's2xx';if(s<400)return's3xx';if(s<500)return's4xx';return's5xx';}
-function msColor(ms){if(ms==null)return'#555';if(ms<200)return'#34d399';if(ms<500)return'#fbbf24';return'#f97316';}
+function msColor(ms){if(ms==null)return'var(--dim2)';if(ms<200)return'var(--g)';if(ms<500)return'var(--y)';return'var(--o)';}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function escAttr(s){return String(s).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
 function isJSON(s){try{JSON.parse(s);return true;}catch{return false;}}
@@ -305,7 +305,7 @@ function makeRow(r, maxMs){
     <span class="method m\${mc(r.method)}">\${r.method}</span>
     <span class="rpath">\${esc(r.url)}</span>
     <span class="rstatus \${sc}" style="\${r.status?'':'color:var(--dim2)'}">\${r.status||'…'}</span>
-    <button class="pin-btn\${pinned.has(r.id)?' on':''}" onclick="togglePin(event,'\${r.id}')">📌</button>
+    <button class="pin-btn\${pinned.has(r.id)?' on':''}" aria-label="\${pinned.has(r.id)?'Unpin request':'Pin request'}" title="\${pinned.has(r.id)?'Unpin request':'Pin request'}" onclick="togglePin(event,'\${r.id}')"></button>
     <div class="rmeta">
       <span class="rtime" data-time="\${esc(r.time)}">\${relTime(r.time)}</span>
       \${r.localPort?(\`<span class="port-badge">\${!isNaN(r.localPort)?':'+r.localPort:r.localPort}</span>\`):''}
@@ -748,7 +748,7 @@ window.addEventListener('message',e=>{
     portFilter=p||'all';
     render();
     // Scroll sidebar to top so user sees filtered results
-    const sb=document.getElementById('req-list');
+    const sb=document.getElementById('reqlist');
     if(sb)sb.scrollTop=0;
   }
 });

@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WAN NET</title>
+  <link rel="stylesheet" href="../../../../node_modules/@fontsource/dm-sans/400.css">
+  <link rel="stylesheet" href="../../../../node_modules/@fontsource/dm-sans/500.css">
+  <link rel="stylesheet" href="../../../../node_modules/@fontsource/manrope/600.css">
+  <link rel="stylesheet" href="../../../../node_modules/@fontsource/manrope/700.css">
   <link rel="stylesheet" href="launcher.css">
 </head>
 <body>
@@ -15,10 +19,16 @@
     <div class="dash-logo">
       <button type="button" id="super-back-btn" title="Back to Super App hub"
         onclick="try{window.superApp&&window.superApp.showHub()}catch(e){}"
-        style="display:none;margin-right:10px;padding:4px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.06);color:inherit;cursor:pointer;font-size:12px">← Super App</button>
-      <span class="dash-logo-icon">⚡</span>
-      <span class="dash-logo-name">WAN NET</span>
-      <span id="app-version" style="font-size:10px;color:var(--muted,#6b7280);font-weight:400;margin-left:4px;margin-top:2px;letter-spacing:.3px"></span>
+        class="super-back-btn" style="display:none">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        <span>Super App</span>
+      </button>
+      <span class="dash-logo-icon" aria-hidden="true"><span>W</span></span>
+      <span class="dash-brand-copy">
+        <span class="dash-logo-name">WAN NET</span>
+        <span class="dash-logo-meta">EDGE CONSOLE</span>
+      </span>
+      <span id="app-version"></span>
     </div>
     <script>
       (function () {
@@ -31,6 +41,7 @@
       })();
     </script>
     <div class="dash-status-wrap">
+      <span class="system-pulse" aria-hidden="true"></span>
       <span id="insp-subtitle">memuat…</span>
     </div>
     <div class="dash-spacer"></div>
@@ -38,52 +49,82 @@
       <button class="cf-chip" id="cf-chip" onclick="handleCFChipClick()" title="Status Cloudflare / Kelola Tunnel">
         <span id="cf-dot">○</span><span id="cf-label">Login CF</span>
       </button>
-      <button class="btn-hdr" id="btn-check-update" onclick="checkForUpdate()" title="Check for Update">⬆</button>
-      <button class="btn-hdr danger" id="btn-delete-all" onclick="deleteAll()" style="display:none" title="Hapus semua tunnel">🗑</button>
-      <button class="btn-hdr" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">
-        <svg id="lnch-moon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
-        <svg id="lnch-sun"  width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <button class="btn-hdr" id="btn-check-update" onclick="checkForUpdate()" title="Check for Update" aria-label="Check for Update">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0-12 4 4m-4-4L8 7M5 21h14"/></svg>
       </button>
-      <button class="btn-hdr" onclick="openSettings()" title="Settings">⚙</button>
+      <button class="btn-hdr danger" id="btn-delete-all" onclick="deleteAll()" style="display:none" title="Hapus semua tunnel" aria-label="Hapus semua tunnel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2m-9 0 1 14h8l1-14M10 10v6m4-6v6"/></svg>
+      </button>
+      <button class="btn-hdr" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark">
+        <svg id="lnch-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5 8.5 8.5 0 1 0 20.5 14.2Z"/></svg>
+        <svg id="lnch-sun" viewBox="0 0 24 24" style="display:none" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M4.93 4.93l1.42 1.42m11.3 11.3 1.42 1.42M2 12h2m16 0h2M4.93 19.07l1.42-1.42m11.3-11.3 1.42-1.42"/></svg>
+      </button>
+      <button class="btn-hdr" onclick="openSettings()" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H3V9.6h.09A1.7 1.7 0 0 0 4.6 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 9 4.6a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V3h4v.09A1.7 1.7 0 0 0 15.5 4.6a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 9c.36.27.58.66.6 1.1v3.8c-.02.44-.24.83-.6 1.1Z"/></svg>
+      </button>
     </div>
   </header>
 
   <div class="add-section">
-    <div class="add-bar">
-      <span class="add-bar-icon">⚡</span>
-      <input type="number" id="port-input"
-        placeholder="Port lokal (contoh: 3000)"
-        min="1" max="65535"
-        onkeydown="if(event.key==='Enter') addTunnel()"
-        oninput="onPortInput()"
-      />
-      <input type="text" id="host-input"
-        placeholder="Host lokal (contoh: setiyawan.test)"
-        style="display:none; flex:1; background:transparent; border:none; outline:none; color:var(--fg); font-size:14px; padding:0 4px;"
-        onkeydown="if(event.key==='Enter') addTunnel()"
-      />
-      <button class="btn-start" id="btn-add" onclick="addTunnel()">▶ Start</button>
+    <div class="command-copy">
+      <span class="command-eyebrow">NEW EDGE SESSION</span>
+      <div>
+        <h1>Publish a local service</h1>
+        <p>Route development traffic through an encrypted public edge.</p>
+      </div>
     </div>
-
-    <!-- Mode selector — always visible -->
-    <div class="mode-row" id="mode-row">
-      <span class="mode-label">Mode:</span>
-      <button class="mode-pill active" id="mode-quick" onclick="setTunnelMode('quick')">⚡ Quick Tunnel</button>
-      <button class="mode-pill" id="mode-custom" onclick="setTunnelMode('custom')" style="display:none">🔗 Custom Domain</button>
-      <button class="mode-pill" id="mode-host" onclick="setTunnelMode('host')">🖥 Static Host</button>
-      <select class="mode-route-select" id="mode-route-select" style="display:none" onchange="onModeRouteChange()">
-        <option value="">– Pilih subdomain route –</option>
-      </select>
-      <span class="mode-no-routes" id="mode-no-routes" style="display:none">
-        Belum ada route. <a onclick="openCFManager()">Tambah di CF Manager →</a>
-      </span>
+    <div class="launch-console">
+      <div class="mode-row" id="mode-row">
+        <span class="mode-label">ROUTE MODE</span>
+        <div class="mode-segment">
+          <button class="mode-pill active" id="mode-quick" onclick="setTunnelMode('quick')">Quick</button>
+          <button class="mode-pill" id="mode-custom" onclick="setTunnelMode('custom')" style="display:none">Domain</button>
+          <button class="mode-pill" id="mode-host" onclick="setTunnelMode('host')">Host</button>
+        </div>
+        <select class="mode-route-select" id="mode-route-select" style="display:none" onchange="onModeRouteChange()">
+          <option value="">Pilih subdomain route</option>
+        </select>
+        <span class="mode-no-routes" id="mode-no-routes" style="display:none">
+          Belum ada route. <a onclick="openCFManager()">Buka CF Manager</a>
+        </span>
+      </div>
+      <div class="add-bar">
+        <span class="add-bar-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v3m0 12v3M3 12h3m12 0h3M5.64 5.64l2.12 2.12m8.48 8.48 2.12 2.12m0-12.72-2.12 2.12M7.76 16.24l-2.12 2.12"/></svg>
+        </span>
+        <span class="target-prefix">LOCAL</span>
+        <input type="number" id="port-input"
+          placeholder="Port, e.g. 3000"
+          min="1" max="65535"
+          onkeydown="if(event.key==='Enter') addTunnel()"
+          oninput="onPortInput()"
+        />
+        <input type="text" id="host-input"
+          placeholder="Hostname, e.g. app.test"
+          style="display:none"
+          onkeydown="if(event.key==='Enter') addTunnel()"
+        />
+        <button class="btn-start" id="btn-add" onclick="addTunnel()">
+          <span>Start tunnel</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="ops-summary" aria-label="Network overview">
+      <div><span>LIVE EDGES</span><strong id="summary-live">0</strong></div>
+      <div><span>SESSIONS</span><strong id="summary-total">0</strong></div>
+      <div><span>REQUESTS</span><strong id="summary-requests">0</strong></div>
+      <div><span>INSPECTOR</span><strong id="summary-inspector">BOOTING</strong></div>
     </div>
   </div>
 
   <div id="err-msg"></div>
+  <div class="tunnel-section-head">
+    <div><span class="section-index">01</span><strong>Active edges</strong></div>
+    <span>Runtime sessions and public routes</span>
+  </div>
   <div class="tunnel-list" id="tunnel-list">
-    <div class="empty"><span class="icon">🌐</span><span>Belum ada tunnel aktif.</span>
-      <span style="font-size:11px">Masukkan port lokal dan klik <b>Start Tunnel</b>.</span></div>
+    <div class="empty"><span>Belum ada tunnel aktif.</span></div>
   </div>
 
   <!-- Mini global stats — hanya muncul kalau ada request -->
@@ -96,9 +137,11 @@
   </div>
 
   <div class="insp-bar">
-    <span>Inspector:</span>
+    <span class="insp-bar-label"><span class="system-pulse"></span>REQUEST INSPECTOR</span>
     <a class="insp-bar-url" id="insp-link" href="#" onclick="showInspector(); return false;">–</a>
-    <button class="btn-icon" title="Salin URL inspector" onclick="copyInsp()" style="width:22px;height:22px;font-size:11px">⎘</button>
+    <button class="btn-icon" title="Salin URL inspector" onclick="copyInsp()" aria-label="Salin URL inspector">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+    </button>
     <span style="flex:1"></span>
     <button id="insp-requests" class="insp-req-btn" onclick="showInspector()" title="Buka Inspector">0 req</button>
   </div>

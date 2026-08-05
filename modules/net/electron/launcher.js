@@ -649,6 +649,11 @@ async function pollRequests() {
     const errPct = total ? Math.round(errors / total * 100) : 0;
     const hasErr = errors > 0;
 
+    const summaryRequests = document.getElementById('summary-requests');
+    const summaryInspector = document.getElementById('summary-inspector');
+    if (summaryRequests) summaryRequests.textContent = String(total);
+    if (summaryInspector) summaryInspector.textContent = 'ONLINE';
+
     // Bottom bar request button
     const reqBtn = document.getElementById('insp-requests');
     reqBtn.textContent = hasErr ? `${total} req · ${errors} err` : `${total} req`;
@@ -779,7 +784,9 @@ async function addTunnel() {
   }
 
   const btn = document.getElementById('btn-add');
-  btn.disabled = true; btn.textContent = 'Memulai…';
+  const btnLabel = btn.querySelector('span');
+  btn.disabled = true;
+  if (btnLabel) btnLabel.textContent = 'Starting';
   try {
     const res = await window.wanNet.startTunnel(port, opts);
     if (!res.ok) setErr(res.error || 'Gagal memulai tunnel.');
@@ -788,7 +795,10 @@ async function addTunnel() {
       document.getElementById('host-input').value = '';
     }
   } catch (e) { setErr('Error: ' + e.message); }
-  finally { btn.disabled = false; btn.textContent = '▶ Start'; }
+  finally {
+    btn.disabled = false;
+    if (btnLabel) btnLabel.textContent = 'Start tunnel';
+  }
 }
 async function stopTunnel(key)   { await window.wanNet.stopTunnel(key); }
 async function deleteTunnel(key) { await window.wanNet.deleteTunnel(key); }
@@ -1001,6 +1011,10 @@ function render() {
   const live  = _tunnels.filter(t => t.status === 'live').length;
   const total = _tunnels.filter(t => t.status !== 'stopped').length;
   const sub = document.getElementById('insp-subtitle');
+  const summaryLive = document.getElementById('summary-live');
+  const summaryTotal = document.getElementById('summary-total');
+  if (summaryLive) summaryLive.textContent = String(live);
+  if (summaryTotal) summaryTotal.textContent = String(total);
   if (total === 0) {
     sub.innerHTML = 'Tidak ada tunnel aktif';
   } else {
@@ -1011,9 +1025,9 @@ function render() {
   if (_tunnels.length === 0) {
     container.innerHTML = `
       <div class="empty">
-        <div class="empty-icon">🌐</div>
-        <span class="empty-title">Belum ada tunnel aktif</span>
-        <span class="empty-sub">Masukkan port lokal di atas dan klik <b>▶ Start</b></span>
+        <div class="empty-icon" aria-hidden="true"></div>
+        <span class="empty-title">No edge sessions yet</span>
+        <span class="empty-sub">Choose a route mode, enter a local target, then start the tunnel.</span>
       </div>`;
     return;
   }
@@ -1038,14 +1052,14 @@ function cardHTML(t) {
 
   // Named tunnel badge
   const namedBadge = t.customDomain
-    ? `<div class="named-badge">🔗 ${esc(t.customDomain)}
+    ? `<div class="named-badge"><span class="badge-mark">DOMAIN</span>${esc(t.customDomain)}
          <button onclick="removeDomain(${kq})" title="Hapus custom domain"
            style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:10px;padding:0 0 0 4px;line-height:1">✕</button>
        </div>` : '';
 
   // Static host badge
   const hostBadge = t.staticHost
-    ? `<div class="named-badge" style="background:rgba(99,102,241,.15);color:#818cf8">🖥 ${esc(t.staticHost)}</div>` : '';
+    ? `<div class="named-badge host-badge"><span class="badge-mark">HOST</span>${esc(t.staticHost)}</div>` : '';
 
   // URL block
   const urlBlock = `
@@ -1053,8 +1067,8 @@ function cardHTML(t) {
       <div class="tcard-url-inner">
         ${t.url
           ? `<span class="tcard-url-link" onclick="openUrl('${escOnclick(t.url)}')" title="Buka di browser">${esc(t.url)}</span>
-             <button class="btn-icon" title="Salin URL" onclick="copyUrl('${escOnclick(t.url)}')">⎘</button>
-             <button class="btn-icon" title="QR Code"   onclick="openQR('${escOnclick(t.url)}')">▦</button>`
+             <button class="btn-icon icon-copy" title="Salin URL" aria-label="Salin URL" onclick="copyUrl('${escOnclick(t.url)}')"></button>
+             <button class="btn-icon icon-qr" title="QR Code" aria-label="QR Code" onclick="openQR('${escOnclick(t.url)}')"></button>`
           : `<span class="tcard-url-placeholder">${t.status === 'stopped' ? '–' : t.customDomain ? `Menghubungkan ke ${esc(t.customDomain)}…` : 'Menunggu URL…'}</span>`
         }
       </div>
@@ -1080,12 +1094,12 @@ function cardHTML(t) {
 
   // Action bar
   const actionsBtns = t.status === 'stopped'
-    ? `<button class="tact warn"   onclick="restartTunnel(${kq})">↺ Restart</button>
-       <button class="tact danger" onclick="deleteTunnel(${kq})">🗑 Hapus</button>`
-    : `<button class="tact primary" onclick="showInspector(${kq})" ${t.status !== 'live' ? 'disabled' : ''}>🔍 Inspector</button>
-       <button class="tact sm" onclick="setRateLimit(${kq})" title="${rl ? `🚦 ${rl.maxReq} req/s — klik untuk ubah` : 'Set rate limit'}">🚦${rl ? rl.maxReq+'/s' : ''}</button>
-       <button class="tact"         onclick="stopTunnel(${kq})">■ Stop</button>
-       <button class="tact danger sm" onclick="deleteTunnel(${kq})" title="Hapus">🗑</button>`;
+     ? `<button class="tact warn" onclick="restartTunnel(${kq})"><span class="tact-icon">↺</span>Restart</button>
+       <button class="tact danger" onclick="deleteTunnel(${kq})"><span class="tact-icon">×</span>Delete</button>`
+     : `<button class="tact primary" onclick="showInspector(${kq})" ${t.status !== 'live' ? 'disabled' : ''}><span class="tact-icon">⌕</span>Inspector</button>
+       <button class="tact sm" onclick="setRateLimit(${kq})" title="${rl ? `${rl.maxReq} req/s — klik untuk ubah` : 'Set rate limit'}"><span class="tact-icon">≋</span>${rl ? rl.maxReq+'/s' : 'Limit'}</button>
+       <button class="tact" onclick="stopTunnel(${kq})"><span class="tact-icon">■</span>Stop</button>
+       <button class="tact danger sm" onclick="deleteTunnel(${kq})" title="Hapus" aria-label="Hapus"><span class="tact-icon">×</span></button>`;
 
   return `
     <div class="tcard ${t.status}">

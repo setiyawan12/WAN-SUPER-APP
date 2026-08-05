@@ -19,44 +19,35 @@ const INSPECTOR_HTML = `<!DOCTYPE html>
 <body>
 
 <header>
-  <div class="logo"><div class="logo-icon">⚡</div>WAN NET</div>
-  <div class="live-badge off" id="badge"><div class="live-dot"></div><span id="badge-txt">connecting</span></div>
-  <div class="sep"></div>
-  <div class="stat-grp">
-    <div class="stat"><div class="stat-val" id="s-total">0</div><div class="stat-lbl">Requests</div></div>
-    <div class="stat"><div class="stat-val" id="s-avg">—</div><div class="stat-lbl">Avg ms</div></div>
-    <div class="stat"><div class="stat-val" id="s-err">0</div><div class="stat-lbl">Errors</div></div>
-  </div>
-  <div class="sep"></div>
-  <div class="rate-wrap" title="Requests per minute (last 10 min)">
-    <svg id="rate-chart" width="80" height="28" style="display:block"></svg>
-    <div class="rate-lbl">req<br>/min</div>
-  </div>
-  <div class="spacer"></div>
-  <div style="position:relative">
-    <button class="hbtn" id="shortcuts-btn" onclick="toggleShortcuts()" title="Keyboard shortcuts">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
-    </button>
-    <div class="shortcut-popup" id="shortcut-popup">
-      <div class="sc-title">Keyboard Shortcuts</div>
-      <table>
-        <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span></td><td>Navigasi request</td></tr>
-        <tr><td><span class="kbd">R</span></td><td>Replay request</td></tr>
-        <tr><td><span class="kbd">U</span></td><td>Copy as cURL</td></tr>
-        <tr><td><span class="kbd">C</span></td><td>Copy request body</td></tr>
-        <tr><td><span class="kbd">Esc</span></td><td>Tutup modal</td></tr>
-      </table>
+  <div class="header-primary">
+    <div class="brand-lockup">
+      <div class="logo-icon" aria-hidden="true"><span>W</span></div>
+      <div class="brand-copy"><strong>Request Inspector</strong><span>WAN NET EDGE OBSERVABILITY</span></div>
     </div>
+    <div class="live-badge off" id="badge"><div class="live-dot"></div><span id="badge-txt">connecting</span></div>
+    <div class="stat-grp">
+      <div class="stat"><div class="stat-lbl">Requests</div><div class="stat-val" id="s-total">0</div></div>
+      <div class="stat"><div class="stat-lbl">Avg latency</div><div class="stat-val" id="s-avg">—</div></div>
+      <div class="stat"><div class="stat-lbl">Errors</div><div class="stat-val" id="s-err">0</div></div>
+      <div class="rate-wrap" title="Requests per minute (last 10 min)">
+        <svg id="rate-chart" width="80" height="28" style="display:block"></svg>
+        <div class="rate-lbl">10 MIN<br>RATE</div>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <span class="rail-label">LIVE CAPTURE</span>
+    <button class="hbtn" id="pause-btn" onclick="togglePause()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+      Pause
+    </button>
+    <button class="hbtn" id="notif-btn" onclick="toggleNotif()">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+      Notify
+    </button>
   </div>
-  <button class="hbtn" id="pause-btn" onclick="togglePause()">
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
-    Pause
-  </button>
-  <button class="hbtn" id="notif-btn" onclick="toggleNotif()">
-    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
-    Notify
-  </button>
-  <button class="hbtn" id="mocks-btn" onclick="openMocksList()">
+  <div class="command-rail">
+    <span class="rail-label">WORKBENCH</span>
+    <button class="hbtn" id="mocks-btn" onclick="openMocksList()">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
     Mocks <span class="badge-cnt" id="mocks-cnt" style="display:none">0</span>
   </button>
@@ -76,6 +67,8 @@ const INSPECTOR_HTML = `<!DOCTYPE html>
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>
     Stats
   </button>
+  <div class="rail-spacer"></div>
+  <span class="rail-label">EXPORT</span>
   <button class="hbtn" onclick="exportHAR()">
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
     HAR
@@ -85,6 +78,21 @@ const INSPECTOR_HTML = `<!DOCTYPE html>
     Postman
   </button>
   <div class="sep"></div>
+  <div class="shortcut-wrap">
+    <button class="hbtn icon-only" id="shortcuts-btn" onclick="toggleShortcuts()" title="Keyboard shortcuts" aria-label="Keyboard shortcuts">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8"/></svg>
+    </button>
+    <div class="shortcut-popup" id="shortcut-popup">
+      <div class="sc-title">Keyboard Shortcuts</div>
+      <table>
+        <tr><td><span class="kbd">↑</span> <span class="kbd">↓</span></td><td>Navigasi request</td></tr>
+        <tr><td><span class="kbd">R</span></td><td>Replay request</td></tr>
+        <tr><td><span class="kbd">U</span></td><td>Copy as cURL</td></tr>
+        <tr><td><span class="kbd">C</span></td><td>Copy request body</td></tr>
+        <tr><td><span class="kbd">Esc</span></td><td>Tutup modal</td></tr>
+      </table>
+    </div>
+  </div>
   <button class="hbtn" id="theme-btn" onclick="toggleTheme()" title="Toggle light/dark mode">
     <svg id="theme-icon-moon" width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
     <svg id="theme-icon-sun" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -94,11 +102,16 @@ const INSPECTOR_HTML = `<!DOCTYPE html>
     <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3,6 5,6 21,6"/><path d="M19,6l-1,14H6L5,6"/></svg>
     Clear
   </button>
+  </div>
 </header>
 
 <main>
   <div id="sidebar">
     <div class="sb-top">
+      <div class="sb-heading">
+        <div><span class="section-index">01</span><strong>Traffic stream</strong></div>
+        <span>REAL TIME</span>
+      </div>
       <div class="search-wrap">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="search" placeholder="Filter path, method, or :port…" oninput="onSearchInput()">
@@ -109,19 +122,19 @@ const INSPECTOR_HTML = `<!DOCTYPE html>
         <button class="fbtn f3xx" onclick="setFilter('3xx',this)">3xx</button>
         <button class="fbtn f4xx" onclick="setFilter('4xx',this)">4xx</button>
         <button class="fbtn f5xx" onclick="setFilter('5xx',this)">5xx</button>
-        <button class="fbtn pin" onclick="setFilter('pin',this)">📌 Pinned</button>
+        <button class="fbtn pin" onclick="setFilter('pin',this)">Pinned</button>
       </div>
       <div class="filter-bar" id="port-bar" style="display:none"></div>
     </div>
     <div class="sb-cnt">
-      <span class="cnt-lbl">Requests</span>
+      <span class="cnt-lbl">Captured requests</span>
       <span class="cnt-num" id="cnt">0</span>
     </div>
     <div id="reqlist">
       <div class="empty-state" id="empty">
-        <div class="empty-icon">🌐</div>
-        <div class="empty-title">No requests yet</div>
-        <div class="empty-sub">Requests akan muncul<br>di sini secara real-time</div>
+        <div class="empty-icon" aria-hidden="true"></div>
+        <div class="empty-title">Listening for traffic</div>
+        <div class="empty-sub">Incoming requests will appear here<br>as soon as an edge session receives traffic.</div>
       </div>
     </div>
   </div>
@@ -129,8 +142,10 @@ const INSPECTOR_HTML = `<!DOCTYPE html>
   <div id="resize-handle"></div>
   <div id="detail-pane">
     <div class="no-sel" id="nosel">
-      <div class="no-sel-icon">↖</div>
-      <div class="no-sel-txt">Pilih request untuk melihat detail</div>
+      <div class="no-sel-art" aria-hidden="true"><span></span></div>
+      <div class="no-sel-eyebrow">TRACE WORKSPACE</div>
+      <div class="no-sel-title">Select a captured request</div>
+      <div class="no-sel-txt">Inspect headers, payloads, response timing, and replay controls.</div>
     </div>
     <div id="detail">
       <div class="det-head" id="det-head"></div>
