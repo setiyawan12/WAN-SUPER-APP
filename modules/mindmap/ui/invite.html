@@ -135,6 +135,7 @@
       display: flex; align-items: center; justify-content: center;
     }
   </style>
+  <link rel="stylesheet" href="css/premium.css">
 </head>
 <body>
   <button id="theme-btn" title="Toggle tema">🌙</button>
@@ -143,7 +144,11 @@
     <!-- Loading state -->
     <div id="state-loading">
       <div class="spinner"></div>
-      <p style="color:var(--muted);font-size:.9rem">Memuat info grup…</p>
+      <p>Memuat informasi undangan...</p>
+      <div class="wcf-shimmer-list" style="margin-top:20px;text-align:left">
+        <div class="wcf-shimmer-list-row"><span class="wcf-shimmer-avatar"></span><span class="wcf-shimmer-list-copy"><span class="wcf-shimmer-line is-title"></span><span class="wcf-shimmer-line is-short"></span></span></div>
+        <div class="wcf-shimmer-list-row"><span class="wcf-shimmer-avatar"></span><span class="wcf-shimmer-list-copy"><span class="wcf-shimmer-line is-title"></span><span class="wcf-shimmer-line is-short"></span></span></div>
+      </div>
     </div>
 
     <!-- Error state -->

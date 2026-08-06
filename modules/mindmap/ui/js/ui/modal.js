@@ -47,15 +47,16 @@ export function wcfPrompt(title, def = '') {
   });
 }
 
-export function wcfConfirm(title, okLabel = 'Hapus') {
+export function wcfConfirm(title, okLabel = 'Hapus', tone = 'danger') {
   return new Promise(resolve => {
     $mMsg().textContent = title;
     const inp = $mInput();
     inp.classList.add('hidden');
     const okBtn = $mOk();
     okBtn.textContent = okLabel;
-    okBtn.className   = delCls;
+    okBtn.className   = tone === 'danger' ? delCls : okCls;
     open();
+    setTimeout(() => okBtn.focus(), 50);
 
     const ok     = () => { cleanup(); close(); resolve(true); };
     const cancel = () => { cleanup(); close(); resolve(false); };

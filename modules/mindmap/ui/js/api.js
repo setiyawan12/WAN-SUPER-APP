@@ -186,6 +186,8 @@ export async function apiCreateUser(data) {
 }
 export const apiUpdateUser = (id, data) => callFunction('adminUpdateUser', { uid: id, ...data });
 export const apiDeleteUser = (id) => callFunction('adminDeleteUser', { uid: id });
+export const apiSendEmailBlast = (recipients, subject, html) =>
+  callFunction('sendEmailBlast', { recipients, subject, html });
 async function listMyGroupsFallback() {
   const services = await firebaseServices();
   const uid = services.auth?.currentUser?.uid;

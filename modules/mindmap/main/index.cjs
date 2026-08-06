@@ -40,6 +40,20 @@ function preloadFile() {
   return path.join(__dirname, '../preload/index.cjs');
 }
 
+function isInternalRendererUrl(url) {
+  try {
+    const target = new URL(url);
+    const devUrl = rendererUrl();
+    if (devUrl) return target.origin === new URL(devUrl).origin;
+    if (target.protocol !== 'file:') return false;
+    const rendererDir = path.resolve(__dirname, '../renderer');
+    const targetPath = path.resolve(decodeURIComponent(target.pathname));
+    return targetPath === rendererDir || targetPath.startsWith(`${rendererDir}${path.sep}`);
+  } catch {
+    return false;
+  }
+}
+
 function loadContent(win) {
   const devUrl = rendererUrl();
   if (devUrl) return win.loadURL(devUrl);
@@ -47,7 +61,9 @@ function loadContent(win) {
 }
 
 function secureWindow(win) {
-  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  win.webContents.on('will-navigate', (event, url) => {
+    if (!isInternalRendererUrl(url)) event.preventDefault();
+  });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith('https:')) void shell.openExternal(url);
     return { action: 'deny' };

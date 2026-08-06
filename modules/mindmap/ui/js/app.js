@@ -27,6 +27,7 @@ import { smartPaste, looksLikeTree }        from './features/smart-paste.js';
 import { initFindReplace, openFindReplace, closeFindReplace } from './features/find-replace.js';
 import { apiGroupGetInfo, apiMe }    from './api.js';
 import { ensureAuthenticated }       from './auth-gate.js';
+import { hideLoadingShell, updateLoadingShell } from './ui/loading.js';
 import { firebaseServices }          from './firebase/client.js';
 import { reloadMindmap, setWorkspaceContext, workspaceContext } from './data/repository.js';
 import { createGroup, ungroupSelected } from './canvas/groups.js';
@@ -746,7 +747,9 @@ document.addEventListener('wcf:rerender', () => renderLines());
 
 // ── Boot ──────────────────────────────────────────────────────
 async function init() {
+  updateLoadingShell('Memeriksa sesi Firebase...');
   await ensureAuthenticated();
+  updateLoadingShell('Memuat profil dan izin...');
   const meRes = await apiMe().catch(() => null);
   if (!meRes || !meRes.ok) {
     throw new Error(meRes?.error || 'Autentikasi gagal');
@@ -808,7 +811,9 @@ async function init() {
   initHistoryPanel();
   initFindReplace();
   try {
+    updateLoadingShell('Menyusun proyek dan folder...');
     await loadWorkspace();
+    updateLoadingShell('Mengambil mindmap dari Firebase...');
     await loadCurrentProject();   // sets refs.initialized = true di dalamnya
   } catch (error) {
     if (workspaceContext().type === 'group') {
@@ -846,6 +851,7 @@ async function init() {
   if (zl) zl.textContent = '100%';
   // Expose applyData ke window agar admin workspace viewer bisa pakai
   window.wcfApplyData = applyData;
+  hideLoadingShell();
 
   // Zoom presets
   const zoomLbl = $id('zoom-label');
@@ -1091,4 +1097,8 @@ async function init() {
   })();
 }
 
-init();
+init().catch(error => {
+  console.error('[WCF] init failed:', error);
+  updateLoadingShell(error?.message || 'Workspace gagal dimuat.');
+  window.setTimeout(() => hideLoadingShell(), 1600);
+});

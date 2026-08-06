@@ -8,6 +8,7 @@ import {
   updateProfile,
 } from 'firebase/auth';
 import { firebaseServices } from './firebase/client.js';
+import { hideLoadingShell, showLoadingShell, updateLoadingShell } from './ui/loading.js';
 
 function waitForUser(auth) {
   return new Promise((resolve) => {
@@ -62,6 +63,7 @@ function messageFor(error) {
 }
 
 async function showAuthGate(services) {
+  hideLoadingShell();
   const shell = authShell();
   const form = shell.querySelector('#wan-auth-form');
   const email = shell.querySelector('#wan-auth-email');
@@ -82,6 +84,7 @@ async function showAuthGate(services) {
       try {
         const credential = await signInWithEmailAndPassword(services.auth, email.value.trim(), password.value);
         shell.remove();
+        showLoadingShell('Menyiapkan workspace Firebase...');
         resolve(credential.user);
       } catch (authError) {
         error.textContent = messageFor(authError);
@@ -101,6 +104,7 @@ async function showAuthGate(services) {
         await updateProfile(credential.user, { displayName: email.value.split('@')[0] });
         await sendEmailVerification(credential.user).catch(() => {});
         shell.remove();
+        showLoadingShell('Membuat workspace pertama...');
         resolve(credential.user);
       } catch (authError) {
         error.textContent = messageFor(authError);
@@ -126,6 +130,7 @@ async function showAuthGate(services) {
 }
 
 export async function ensureAuthenticated() {
+  updateLoadingShell('Memeriksa sesi Firebase...');
   const services = await firebaseServices();
   if (!services.configured) return { uid: 'local-user', displayName: 'Local Workspace', local: true };
   const existing = await waitForUser(services.auth);
