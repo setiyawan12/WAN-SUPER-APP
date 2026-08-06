@@ -39,7 +39,10 @@ function sanitize(raw: Partial<SuperAppSettings> | null | undefined): SuperAppSe
   const last = merged.lastModule;
   return {
     ...merged,
-    lastModule: last === "cliproxy" || last === "net" || last === "ssh" ? last : null,
+    lastModule:
+      last === "cliproxy" || last === "net" || last === "ssh" || last === "mindmap"
+        ? last
+        : null,
     reopenLastModule: !!merged.reopenLastModule,
     autoLaunch: !!merged.autoLaunch,
     startHidden: !!merged.startHidden,

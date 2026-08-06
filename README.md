@@ -4,11 +4,11 @@
 
 # WAN Super App
 
-**Satu shell Electron. Tiga modul kelas produksi. Nol ribet.**
+**Satu shell Electron. Empat modul kelas produksi. Nol ribet.**
 
 CLIProxyAPI desktop (Chat · Cowork · Neuron · VS Code / JetBrains), WAN NET
 (Cloudflare tunnel + inspector), dan WANN SSH (SSH client + encrypted vault)
-berpadu dalam satu aplikasi native yang elegan.
+dan WAN Mindmap berpadu dalam satu aplikasi native yang elegan.
 
 <br/>
 
@@ -44,15 +44,16 @@ berpadu dalam satu aplikasi native yang elegan.
 
 ## Sekilas
 
-WAN Super App membungkus **tiga aplikasi mandiri** ke dalam satu shell Electron:
+WAN Super App membungkus **empat aplikasi mandiri** ke dalam satu shell Electron:
 
 | Modul | Berbasis | Kemampuan |
 |-------|----------|-----------|
 | **WANN X RENN CLIProxyAPI** | `wan-cliproxyapi` | Chat AI, Cowork Mode, Neuron Activity, sinkronisasi VS Code / JetBrains |
 | **WAN NET** | `wan-net` | Cloudflare Tunnel + inspector lalu-lintas |
 | **WANN SSH** | `wann-ssh` | SSH client + encrypted vault (Argon2id + AES-256-GCM), TOFU host-key, terminal xterm.js, sync cloud opsional (Firebase **Realtime Database**) |
+| **WAN Mindmap** | `mindmap-app` | Visual workspace, offline cache, Firebase Auth, Firestore metadata, dan RTDB canvas sync |
 
-> **Alur pemakaian:** Buka app → **Hub** (3 kartu) → pilih modul → UI & fungsi persis seperti app aslinya.
+> **Alur pemakaian:** Buka app → **Hub** (4 kartu) → pilih modul → UI modul berjalan di shell Electron yang sama.
 
 Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP.md)**.
 
@@ -63,6 +64,7 @@ Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP
 - 🧩 **Tiga modul, satu binary** — tidak perlu memasang tiga aplikasi terpisah.
 - 🪟 **Hub terpusat** — landing dengan tiga kartu modul, dukungan mode window/replace.
 - 🔐 **SSH aman** — vault zero-knowledge (Argon2id + AES-256-GCM), auto-lock, TOFU host-key.
+- 🧠 **Mindmap visual** — canvas kaya fitur, cache lokal, dan Firebase sync opsional.
 - 🔄 **Auto-update in-app** — feed langsung dari GitHub Releases.
 - 🖥️ **Cross-platform** — macOS (arm64), Windows (NSIS), Linux (AppImage/deb).
 - 🎨 **Branding premium** — ikon monogram + tray template icon adaptif dark/light.
@@ -121,6 +123,11 @@ npm run dev
 | `npm start` | Build lalu jalankan Electron |
 | `npm run typecheck` | Type-check tanpa emit (main + cliproxy) |
 | `npm run dist` | Bundling installer via `electron-builder` |
+| `npm run firebase:emulators` | Jalankan Auth, Firestore, RTDB, Functions, dan Hosting emulator |
+| `npm run firebase:test:rules` | Uji permission personal, share, dan grup pada emulator |
+| `npm run firebase:test:bootstrap` | Uji bootstrap admin pertama pada emulator |
+| `npm run firebase:bootstrap-admin -- email@domain.com` | Promosikan akun pertama menjadi admin, satu kali saja |
+| `npm run firebase:deploy` | Deploy backend WAN Mindmap ke Firebase |
 | `npm run vendor:sync` | Rsync dari sibling `wan-cliproxyapi` / `wan-net`; build + vendor bundle `wann-ssh` |
 | `npm run clean` | Hapus folder `out/` |
 
@@ -137,7 +144,7 @@ npm run dev
 │                  │                        │                     │
 │        ┌─────────▼────────┐ ┌─────────────▼──────────────┐      │
 │        │   Hub Renderer   │ │       Module Windows       │      │
-│        │    (3 cards)     │ │   cliproxy / net / ssh     │      │
+│        │    (4 cards)     │ │ cliproxy / net / ssh / map │      │
 │        └──────────────────┘ └────────────────────────────┘      │
 └────────────────────────────────────────────────────────────────┘
 ```
@@ -146,6 +153,8 @@ npm run dev
 - **WAN NET** dimuat via `createRequire` (`boot.cjs`, CommonJS).
 - **WANN SSH** dimuat via `createRequire` (`modules/ssh/adapter/boot.cjs`); bundle
   di-*build* electron-vite lalu di-*vendor* (CJS + native `argon2`).
+- **WAN Mindmap** dimuat via adapter CJS dengan renderer Vite sandboxed. Firebase
+  client berjalan melalui Security Rules; operasi admin berada di Cloud Functions.
 - Setiap modul meng-guard lifecycle di balik `WAN_SUPER_APP_EMBED` — hanya Super App
   yang memiliki `app.whenReady`, tray, dan proses quit.
 
@@ -159,6 +168,8 @@ src/hub-renderer/   # Hub UI (3 cards)
 modules/cliproxy/   # Working copy CLIProxyAPI + super-boot
 modules/net/        # Working copy WAN NET + embed API
 modules/ssh/        # Bundle WANN SSH (main/preload/renderer) + adapter/boot.cjs
+modules/mindmap/    # WAN Mindmap runtime, preload, renderer, dan Firebase adapter
+firebase/           # Rules, indexes, Functions, dan Hosting public share
 vendor/             # Snapshot read-only sumber modul
 build/              # Ikon, entitlements, notarize
 scripts/            # Build helper (copy-assets, dev, vendor-sync)
@@ -175,6 +186,29 @@ scripts/            # Build helper (copy-assets, dev, vendor-sync)
 | WAN NET config | `{userData}/wan-net-cfg.json` |
 | WANN SSH store | `{userData}/wann-ssh.json` (item/outbox/vault-meta) |
 | WANN SSH Firebase config | `{userData}/firebase-config.json` (opsional, sync cloud RTDB; wajib `databaseURL`) |
+| WAN Mindmap local cache | Chromium local storage/IndexedDB dalam `{userData}` |
+| WAN Mindmap Firebase | Config bersama `{userData}/firebase-config.json` |
+
+### WAN Mindmap fresh setup
+
+WAN Mindmap menggunakan database Firebase baru. Data, akun, password, dan admin
+dari aplikasi MySQL/Docker lama tidak digunakan.
+
+1. Buat project Firebase lalu aktifkan Email/Password Auth, Firestore, dan RTDB.
+2. Salin `.firebaserc.example` menjadi `.firebaserc`, lalu isi project ID.
+3. Deploy backend dengan `npm run firebase:deploy`.
+4. Masukkan Firebase web config ke `{userData}/firebase-config.json`.
+5. Daftar akun baru dari WAN Mindmap.
+6. Siapkan Application Default Credentials, lalu jalankan:
+
+```bash
+export FIREBASE_PROJECT_ID="project-id-anda"
+export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/service-account.json"
+npm run firebase:bootstrap-admin -- admin-baru@domain.com
+```
+
+Bootstrap hanya menerima admin pertama. Setelah berhasil, logout/login ulang agar
+custom claim admin diperbarui. Admin berikutnya dibuat melalui panel admin.
 
 > `{userData}` di macOS = `~/Library/Application Support/WAN Super App/`.
 >
@@ -228,8 +262,8 @@ users/{uid}/vaults/{vaultId}/items/{itemId}
 }
 ```
 
-Data lama di **Firestore tidak ikut pindah** otomatis — migrasi manual / `sync:pushAll`
-dari klien setelah sign-in jika ingin mengisi RTDB dari lokal.
+Untuk **WANN SSH saja**, data vault lama di Firestore tidak ikut pindah otomatis;
+gunakan `sync:pushAll` setelah sign-in bila perlu mengisi RTDB dari vault lokal.
 
 **Sesi Auth:** setelah Sign in sekali, refresh token disimpan di
 `{userData}/firebase-auth-session.bin` (dienkripsi `safeStorage` bila tersedia).

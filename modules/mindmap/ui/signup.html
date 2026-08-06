@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Case Flow — Daftar Akun</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #06060a;
+      --bg-card:     rgba(12,12,22,0.85);
+      --bg-input:    rgba(255,255,255,0.04);
+      --border:      rgba(255,255,255,0.07);
+      --border-focus:rgba(139,124,248,0.55);
+      --text-1:      rgba(255,255,255,0.92);
+      --text-2:      rgba(255,255,255,0.55);
+      --text-3:      rgba(255,255,255,0.28);
+      --accent:      #8b7cf8;
+      --accent-h:    #7c6dfa;
+      --accent-dim:  rgba(139,124,248,0.18);
+      --accent-glow: rgba(139,124,248,0.30);
+      --error-bg:    rgba(248,113,113,0.10);
+      --error-bd:    rgba(248,113,113,0.30);
+      --error-txt:   #f87171;
+      --ok-bg:       rgba(52,211,153,0.10);
+      --ok-bd:       rgba(52,211,153,0.30);
+      --ok-txt:      #34d399;
+      --dot:         rgba(255,255,255,0.048);
+      --shadow:      0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.70);
+    }
+    html.light {
+      --bg:          #f0f0f8;
+      --bg-card:     rgba(255,255,255,0.88);
+      --bg-input:    rgba(0,0,0,0.04);
+      --border:      rgba(0,0,0,0.09);
+      --border-focus:rgba(109,94,224,0.50);
+      --text-1:      #0e0e1a;
+      --text-2:      #5a5880;
+      --text-3:      #9896be;
+      --accent:      #6d5ee0;
+      --accent-h:    #5546cc;
+      --accent-dim:  rgba(109,94,224,0.10);
+      --accent-glow: rgba(109,94,224,0.22);
+      --error-bg:    rgba(220,38,38,0.08);
+      --error-bd:    rgba(220,38,38,0.22);
+      --error-txt:   #b91c1c;
+      --ok-bg:       rgba(5,150,105,0.08);
+      --ok-bd:       rgba(5,150,105,0.22);
+      --ok-txt:      #065f46;
+      --dot:         rgba(0,0,0,0.055);
+      --shadow:      0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.12);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-feature-settings: "cv02","cv03","cv04","cv11";
+      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+      background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+      background-size: 28px 28px;
+      color: var(--text-1);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: background-color 0.25s, color 0.2s;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 40px 36px 32px;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      transition: border-color 0.25s;
+    }
+
+    .logo { text-align: center; margin-bottom: 26px; }
+    .logo-icon { font-size: 2.2rem; display: block; margin-bottom: 10px; }
+    .logo h1 {
+      font-size: 1.25rem; font-weight: 800; letter-spacing: -0.3px;
+      background: linear-gradient(135deg, #c4b5fd 0%, var(--accent) 55%, #60a5fa 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    html.light .logo h1 {
+      background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .logo p { font-size: .78rem; color: var(--text-3); margin-top: 4px; }
+
+    /* ── Stepper ── */
+    .stepper {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .step { display: flex; align-items: center; gap: 6px; flex: 1; }
+    .step-num {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .70rem; font-weight: 700; color: var(--text-3);
+      flex-shrink: 0;
+      transition: background .2s, border-color .2s, color .2s;
+    }
+    .step-label { font-size: .70rem; color: var(--text-3); transition: color .2s; }
+    .step-line  { flex: 1; height: 1px; background: var(--border); }
+    .step.active .step-num  { background: var(--accent); border-color: var(--accent); color: #fff; box-shadow: 0 0 10px var(--accent-glow); }
+    .step.active .step-label{ color: var(--text-1); font-weight: 600; }
+    .step.done .step-num    { background: #10b981; border-color: #10b981; color: #fff; }
+    .step.done .step-label  { color: var(--text-2); }
+
+    /* ── Fields ── */
+    .field { margin-top: 16px; }
+    label {
+      display: block; font-size: .70rem; font-weight: 700;
+      color: var(--text-3); text-transform: uppercase; letter-spacing: .7px; margin-bottom: 6px;
+    }
+    input {
+      width: 100%; background: var(--bg-input);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 10px 13px; color: var(--text-1);
+      font-size: .91rem; font-family: inherit;
+      outline: none; transition: border-color .18s, box-shadow .18s;
+    }
+    input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--accent-dim); }
+    input::placeholder { color: var(--text-3); }
+
+    /* OTP input */
+    #inp-otp {
+      text-align: center; font-size: 1.5rem; font-weight: 800;
+      letter-spacing: 10px; font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+
+    /* ── Buttons ── */
+    .btn {
+      width: 100%; margin-top: 22px; padding: 12px;
+      background: var(--accent); color: #fff; border: none;
+      border-radius: 10px; font-size: .93rem; font-weight: 700;
+      font-family: inherit; cursor: pointer; letter-spacing: .1px;
+      box-shadow: 0 0 18px var(--accent-glow);
+      transition: background .18s, box-shadow .18s, transform .12s;
+    }
+    .btn:hover   { background: var(--accent-h); box-shadow: 0 0 28px var(--accent-glow); }
+    .btn:active  { transform: scale(.98); }
+    .btn:disabled { background: var(--accent-dim); box-shadow: none; cursor: not-allowed; }
+
+    .btn-ghost {
+      width: 100%; margin-top: 8px; padding: 10px;
+      background: transparent; color: var(--text-3);
+      border: 1px solid var(--border); border-radius: 10px;
+      font-size: .82rem; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: background .15s, color .15s, border-color .15s;
+    }
+    .btn-ghost:hover { background: var(--bg-input); color: var(--text-1); border-color: var(--border-focus); }
+
+    /* ── Alerts ── */
+    .alert {
+      margin-top: 12px; padding: 9px 13px; border-radius: 9px;
+      font-size: .83rem; line-height: 1.5; display: none;
+    }
+    .alert.show { display: block; }
+    .alert.error { background: var(--error-bg); border: 1px solid var(--error-bd); color: var(--error-txt); }
+    .alert.ok    { background: var(--ok-bg);    border: 1px solid var(--ok-bd);    color: var(--ok-txt); }
+
+    /* ── Hint ── */
+    .hint { font-size: .73rem; color: var(--text-3); margin-top: 6px; line-height: 1.5; }
+    .countdown { font-weight: 700; color: var(--accent); }
+
+    /* ── Footer ── */
+    .divider { height: 1px; background: var(--border); margin: 20px 0 0; }
+    .footer-note { text-align: center; margin-top: 14px; font-size: .73rem; color: var(--text-3); }
+    .footer-note a { color: var(--accent); text-decoration: none; font-weight: 500; }
+    .footer-note a:hover { text-decoration: underline; }
+
+    /* ── Theme btn ── */
+    .theme-btn {
+      position: fixed; top: 16px; right: 16px;
+      width: 34px; height: 34px; border-radius: 50%;
+      border: 1px solid var(--border); background: var(--bg-card);
+      color: var(--text-2); font-size: .9rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 8px rgba(0,0,0,.18);
+      transition: background .18s, border-color .18s;
+    }
+    .theme-btn:hover { background: var(--accent-dim); border-color: var(--border-focus); }
+
+    /* Hidden util */
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <button class="theme-btn" id="btn-theme" title="Ganti tema">🌙</button>
+
+  <div class="card">
+    <div class="logo">
+      <span class="logo-icon">🧠</span>
+      <h1>WAN Case Flow</h1>
+      <p>Buat akun baru</p>
+    </div>
+
+    <!-- Stepper -->
+    <div class="stepper">
+      <div class="step active" id="step-1">
+        <div class="step-num">1</div>
+        <div class="step-label">Data akun</div>
+      </div>
+      <div class="step-line"></div>
+      <div class="step" id="step-2">
+        <div class="step-num">2</div>
+        <div class="step-label">Verifikasi email</div>
+      </div>
+    </div>
+
+    <!-- ── Step 1: isi username + email ── -->
+    <div id="panel-1">
+      <div class="field">
+        <label for="inp-username">Username</label>
+        <input id="inp-username" type="text" placeholder="Huruf, angka, underscore (3–30 karakter)"
+               autocomplete="username" autofocus>
+      </div>
+      <div class="field">
+        <label for="inp-email">Email</label>
+        <input id="inp-email" type="email" placeholder="nama@domain.com"
+               autocomplete="email">
+      </div>
+      <div class="alert error" id="alert-1"></div>
+      <button class="btn" id="btn-send-otp">Kirim Kode Verifikasi →</button>
+    </div>
+
+    <!-- ── Step 2: masukkan OTP ── -->
+    <div id="panel-2" class="hidden">
+      <p class="hint" style="margin-top:0">
+        Kode 6 digit dikirim ke <strong id="label-email"></strong>.
+        Berlaku 10 menit.
+      </p>
+      <div class="field">
+        <label for="inp-otp">Kode OTP</label>
+        <input id="inp-otp" type="text" inputmode="numeric" pattern="[0-9]*"
+               maxlength="6" placeholder="000000" autocomplete="one-time-code">
+      </div>
+      <div class="alert error" id="alert-2"></div>
+      <button class="btn" id="btn-verify-otp">Verifikasi & Buat Akun</button>
+      <button class="btn-ghost" id="btn-resend">
+        Kirim ulang kode
+        <span class="countdown hidden" id="countdown"></span>
+      </button>
+      <button class="btn-ghost" id="btn-back" style="margin-top:6px">← Ubah data</button>
+    </div>
+
+    <div class="divider"></div>
+    <p class="footer-note">
+      Sudah punya akun? <a href="/login.html">Masuk di sini</a>
+    </p>
+  </div>
+
+  <script>
+    // ── Theme ────────────────────────────────────────────────────
+    (function () {
+      const saved = localStorage.getItem('wcf_theme');
+      const preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      applyTheme((saved ? (saved === 'light') : preferLight) ? 'light' : 'dark');
+    })();
+    function applyTheme(theme) {
+      const html = document.documentElement;
+      const btn  = document.getElementById('btn-theme');
+      html.classList.toggle('light', theme === 'light');
+      if (btn) btn.textContent = theme === 'light' ? '☀️' : '🌙';
+      localStorage.setItem('wcf_theme', theme);
+    }
+    document.getElementById('btn-theme').addEventListener('click', () => {
+      applyTheme(document.documentElement.classList.contains('light') ? 'dark' : 'light');
+    });
+
+    // ── Redirect jika sudah login ────────────────────────────────
+    (async () => {
+      const token = localStorage.getItem('wcf_token');
+      if (!token) return;
+      try {
+        const r = await fetch('/api/auth/me', { headers: { Authorization: 'Bearer ' + token } });
+        if (r.ok) window.location.replace('/');
+      } catch {}
+    })();
+
+    // ── State ────────────────────────────────────────────────────
+    let currentEmail = '', resendTimer = null;
+
+    const panel1      = document.getElementById('panel-1');
+    const panel2      = document.getElementById('panel-2');
+    const step1       = document.getElementById('step-1');
+    const step2       = document.getElementById('step-2');
+    const alert1      = document.getElementById('alert-1');
+    const alert2      = document.getElementById('alert-2');
+    const btnSend     = document.getElementById('btn-send-otp');
+    const btnVerify   = document.getElementById('btn-verify-otp');
+    const btnResend   = document.getElementById('btn-resend');
+    const btnBack     = document.getElementById('btn-back');
+    const labelEmail  = document.getElementById('label-email');
+    const inpOtp      = document.getElementById('inp-otp');
+    const countdown   = document.getElementById('countdown');
+
+    function showAlert(el, msg, type = 'error') {
+      el.textContent = msg;
+      el.className   = `alert ${type} show`;
+    }
+    function hideAlert(el) { el.classList.remove('show'); }
+
+    // ── Step 1 — Kirim OTP ───────────────────────────────────────
+    btnSend.addEventListener('click', sendOtp);
+    document.getElementById('inp-email').addEventListener('keydown', e => { if (e.key === 'Enter') sendOtp(); });
+
+    async function sendOtp() {
+      const username = document.getElementById('inp-username').value.trim();
+      const email    = document.getElementById('inp-email').value.trim().toLowerCase();
+      hideAlert(alert1);
+
+      if (!username || !email) return showAlert(alert1, 'Isi semua kolom terlebih dahulu');
+
+      btnSend.disabled    = true;
+      btnSend.textContent = 'Mengirim…';
+
+      try {
+        const res  = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, username }),
+        });
+        const json = await res.json();
+
+        if (!json.ok) {
+          showAlert(alert1, json.error || 'Gagal mengirim kode');
+        } else {
+          currentEmail       = email;
+          labelEmail.textContent = email;
+          panel1.classList.add('hidden');
+          panel2.classList.remove('hidden');
+          step1.classList.replace('active', 'done');
+          step1.querySelector('.step-num').textContent = '✓';
+          step2.classList.add('active');
+          inpOtp.focus();
+          startResendCooldown(60);
+        }
+      } catch {
+        showAlert(alert1, 'Tidak dapat menghubungi server');
+      } finally {
+        btnSend.disabled    = false;
+        btnSend.textContent = 'Kirim Kode Verifikasi →';
+      }
+    }
+
+    // ── Step 2 — Verifikasi OTP ──────────────────────────────────
+    btnVerify.addEventListener('click', verifyOtp);
+    inpOtp.addEventListener('keydown', e => { if (e.key === 'Enter') verifyOtp(); });
+
+    // Auto-submit saat 6 digit terisi
+    inpOtp.addEventListener('input', () => {
+      inpOtp.value = inpOtp.value.replace(/\D/g, '').slice(0, 6);
+      if (inpOtp.value.length === 6) verifyOtp();
+    });
+
+    async function verifyOtp() {
+      const otp = inpOtp.value.trim();
+      hideAlert(alert2);
+      if (otp.length !== 6) return showAlert(alert2, 'Masukkan 6 digit kode OTP');
+
+      btnVerify.disabled    = true;
+      btnVerify.textContent = 'Memverifikasi…';
+
+      try {
+        const res  = await fetch('/api/auth/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: currentEmail, otp }),
+        });
+        const json = await res.json();
+
+        if (!json.ok) {
+          showAlert(alert2, json.error || 'Verifikasi gagal');
+          if (json.error?.includes('kadaluarsa') || json.error?.includes('banyak')) inpOtp.value = '';
+        } else {
+          showAlert(alert2, '✓ Akun berhasil dibuat! Mengalihkan…', 'ok');
+          localStorage.setItem('wcf_token', json.token);
+          localStorage.setItem('wcf_user',  JSON.stringify(json.user));
+          setTimeout(() => window.location.replace('/change-password.html'), 1200);
+        }
+      } catch {
+        showAlert(alert2, 'Tidak dapat menghubungi server');
+      } finally {
+        btnVerify.disabled    = false;
+        btnVerify.textContent = 'Verifikasi & Buat Akun';
+      }
+    }
+
+    // ── Resend cooldown ──────────────────────────────────────────
+    function startResendCooldown(seconds) {
+      btnResend.disabled = true;
+      countdown.classList.remove('hidden');
+      let left = seconds;
+      const tick = () => {
+        countdown.textContent = `(${left}s)`;
+        if (left <= 0) {
+          btnResend.disabled = false;
+          countdown.classList.add('hidden');
+          clearInterval(resendTimer);
+        }
+        left--;
+      };
+      tick();
+      resendTimer = setInterval(tick, 1000);
+    }
+
+    btnResend.addEventListener('click', async () => {
+      if (btnResend.disabled) return;
+      hideAlert(alert2);
+      // Kirim ulang ke email yang sama (perlu username juga)
+      const username = document.getElementById('inp-username').value.trim();
+      try {
+        const res  = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email: currentEmail, username }),
+        });
+        const json = await res.json();
+        if (json.ok) {
+          inpOtp.value = '';
+          showAlert(alert2, '✓ Kode baru dikirim!', 'ok');
+          startResendCooldown(60);
+        } else {
+          showAlert(alert2, json.error || 'Gagal kirim ulang');
+        }
+      } catch {
+        showAlert(alert2, 'Tidak dapat menghubungi server');
+      }
+    });
+
+    // ── Kembali ke step 1 ────────────────────────────────────────
+    btnBack.addEventListener('click', () => {
+      clearInterval(resendTimer);
+      panel2.classList.add('hidden');
+      panel1.classList.remove('hidden');
+      step1.classList.remove('done');
+      step1.classList.add('active');
+      step1.querySelector('.step-num').textContent = '1';
+      step2.classList.remove('active');
+      inpOtp.value = '';
+      hideAlert(alert2);
+    });
+  </script>
+</body>
+</html>

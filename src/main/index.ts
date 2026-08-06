@@ -21,10 +21,16 @@ const require = createRequire(import.meta.url);
 let cliproxyHandle: ModuleHandle | null = null;
 let netHandle: ModuleHandle | null = null;
 let sshHandle: ModuleHandle | null = null;
+let mindmapHandle: ModuleHandle | null = null;
 let cleanedUp = false;
 
 function getHandles() {
-  return { cliproxy: cliproxyHandle, net: netHandle, ssh: sshHandle };
+  return {
+    cliproxy: cliproxyHandle,
+    net: netHandle,
+    ssh: sshHandle,
+    mindmap: mindmapHandle,
+  };
 }
 
 async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<ModuleHandle> {
@@ -88,8 +94,28 @@ async function openModule(id: ModuleId, opts: { show?: boolean } = {}): Promise<
       sshHandle.show();
     }
     handle = sshHandle!;
+  } else if (id === "mindmap") {
+    if (!mindmapHandle) {
+      const bootPath = path.join(__dirname, "../modules/mindmap/adapter/boot.cjs");
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const mod = require(bootPath) as {
+        bootMindmap: (o: {
+          show: boolean;
+          embedOnly?: boolean;
+          moduleRoot: string;
+        }) => Promise<ModuleHandle>;
+      };
+      mindmapHandle = await mod.bootMindmap({
+        show: show && openInNewWindow,
+        embedOnly: !openInNewWindow,
+        moduleRoot: path.join(__dirname, "../modules/mindmap"),
+      });
+    } else if (show && openInNewWindow) {
+      mindmapHandle.show();
+    }
+    handle = mindmapHandle;
   } else {
-    throw new Error(`Unknown module: ${id}`);
+    throw new Error(`Unknown module: ${id satisfies never}`);
   }
 
   // Replace mode: swap hub shell content with the selected module UI.

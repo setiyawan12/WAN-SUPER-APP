@@ -1,0 +1,189 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return signedIn() && request.auth.token.admin == true;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function mindmapDoc(mindmapId) {
+      return get(/databases/$(database)/documents/mindmaps/$(mindmapId));
+    }
+
+    function ownsMindmap(mindmapId) {
+      return signedIn() && mindmapDoc(mindmapId).data.ownerId == request.auth.uid;
+    }
+
+    function groupMember(groupId) {
+      return signedIn() && exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
+    function groupCanWrite(groupId) {
+      return groupMember(groupId)
+        && get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role in ['owner', 'editor'];
+    }
+
+    function groupCanManage(groupId) {
+      return groupMember(groupId)
+        && get(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'owner';
+    }
+
+    function sharedWithUser(mindmapId) {
+      return signedIn() && exists(/databases/$(database)/documents/mindmaps/$(mindmapId)/members/$(request.auth.uid));
+    }
+
+    function canReadMindmap(mindmapId) {
+      return ownsMindmap(mindmapId)
+        || sharedWithUser(mindmapId)
+        || (mindmapDoc(mindmapId).data.ownerType == 'group' && groupMember(mindmapDoc(mindmapId).data.ownerId))
+        || isAdmin();
+    }
+
+    function canWriteMindmap(mindmapId) {
+      return ownsMindmap(mindmapId)
+        || (sharedWithUser(mindmapId)
+          && get(/databases/$(database)/documents/mindmaps/$(mindmapId)/members/$(request.auth.uid)).data.permission == 'write')
+        || (mindmapDoc(mindmapId).data.ownerType == 'group' && groupCanWrite(mindmapDoc(mindmapId).data.ownerId))
+        || isAdmin();
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      allow create: if isSelf(uid)
+        && request.resource.data.uid == uid
+        && request.resource.data.role == 'user';
+      allow update: if isSelf(uid)
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.active == resource.data.active;
+      allow delete: if isAdmin();
+
+      match /private/{documentId} {
+        allow read, write: if isSelf(uid) || isAdmin();
+      }
+
+      match /groupMemberships/{groupId} {
+        allow read: if isSelf(uid) || isAdmin();
+        allow create: if isAdmin()
+          || groupCanManage(groupId)
+          || (isSelf(uid)
+            && get(/databases/$(database)/documents/groups/$(groupId)/members/$(uid)).data.uid == uid
+            && request.resource.data.groupId == groupId
+            && request.resource.data.role == get(/databases/$(database)/documents/groups/$(groupId)/members/$(uid)).data.role);
+        allow update: if isAdmin() || groupCanManage(groupId);
+        allow delete: if isAdmin() || groupCanManage(groupId);
+      }
+    }
+
+    match /usernames/{username} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+
+    match /mindmaps/{mindmapId} {
+      allow create: if signedIn()
+        && request.resource.data.createdBy == request.auth.uid
+        && (
+          (request.resource.data.ownerType == 'user' && request.resource.data.ownerId == request.auth.uid)
+          || (request.resource.data.ownerType == 'group' && groupCanWrite(request.resource.data.ownerId))
+        );
+      allow read: if canReadMindmap(mindmapId);
+      allow update: if canWriteMindmap(mindmapId)
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.ownerType == resource.data.ownerType
+        && request.resource.data.createdBy == resource.data.createdBy;
+      allow delete: if ownsMindmap(mindmapId) || isAdmin();
+
+      match /members/{uid} {
+        allow read: if canReadMindmap(mindmapId);
+        allow write: if ownsMindmap(mindmapId) || isAdmin();
+      }
+
+      match /comments/{commentId} {
+        allow read: if canReadMindmap(mindmapId);
+        allow create: if canReadMindmap(mindmapId)
+          && request.resource.data.userId == request.auth.uid;
+        allow update, delete: if signedIn()
+          && (resource.data.userId == request.auth.uid || ownsMindmap(mindmapId) || isAdmin());
+      }
+
+      match /history/{historyId} {
+        allow read: if canReadMindmap(mindmapId);
+        allow write: if false;
+      }
+    }
+
+    match /{path=**}/members/{memberId} {
+      allow read: if signedIn()
+        && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
+    match /groups/{groupId} {
+      allow read: if groupMember(groupId) || isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.ownerId == request.auth.uid
+        && request.resource.data.memberCount == 1;
+      allow update, delete: if isAdmin() || groupCanManage(groupId);
+
+      match /members/{uid} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow create: if isAdmin()
+          && isSelf(uid)
+          && request.resource.data.uid == uid
+          && request.resource.data.role == 'owner'
+          && getAfter(/databases/$(database)/documents/groups/$(groupId)).data.createdBy == uid
+          || (groupCanManage(groupId)
+            && request.resource.data.uid == uid
+            && request.resource.data.role in ['editor', 'viewer']);
+        allow update: if groupCanManage(groupId)
+          && request.resource.data.uid == resource.data.uid
+          && request.resource.data.role in ['editor', 'viewer'];
+        allow delete: if groupCanManage(groupId) && uid != request.auth.uid;
+      }
+
+      match /private/{documentId} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow create: if isAdmin()
+          && getAfter(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid)).data.role == 'owner';
+        allow update, delete: if groupCanWrite(groupId) || isAdmin();
+      }
+
+      match /mindmaps/{projectId} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow create, update, delete: if groupCanWrite(groupId) || isAdmin();
+      }
+    }
+
+    match /shares/{shareId} {
+      allow read: if signedIn()
+        && (resource.data.ownerId == request.auth.uid || resource.data.targetId == request.auth.uid || isAdmin());
+      allow write: if false;
+    }
+
+    match /publicShares/{token} {
+      allow read, write: if false;
+    }
+
+    match /invites/{token} {
+      allow read, write: if false;
+    }
+
+    match /activityLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /system/{documentId} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Case Flow — Shared View</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    /* ── Share viewer overrides ── */
+    body { margin:0; overflow:hidden; background:var(--bg-base); color:var(--text-1); font-family:'Inter',system-ui,sans-serif; }
+
+    #share-topbar {
+      position: fixed; top: 0; left: 0; right: 0; z-index: 100;
+      height: 48px;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 16px;
+      background: var(--bg-glass);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    #share-topbar .brand {
+      display: flex; align-items: center; gap: 8px;
+    }
+    #share-topbar .brand-logo {
+      width: 28px; height: 28px; border-radius: 8px;
+      background: linear-gradient(135deg, #8b7cf8, #6d5ce7);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 14px; color: #fff;
+      box-shadow: 0 0 12px rgba(139,124,248,0.4);
+    }
+    #share-topbar .brand-name {
+      font-size: 13px; font-weight: 700; color: var(--text-1);
+    }
+    #share-topbar .file-info {
+      display: flex; align-items: center; gap: 6px;
+      max-width: 40%;
+    }
+    #share-topbar .file-name {
+      font-size: 12px; font-weight: 600; color: var(--text-2);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    #share-topbar .file-owner {
+      font-size: 11px; color: var(--text-4);
+      white-space: nowrap;
+    }
+    #share-topbar .cta-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 99px; font-size: 12px; font-weight: 600;
+      background: var(--accent); color: #fff;
+      border: none; cursor: pointer;
+      box-shadow: 0 4px 14px rgba(139,124,248,0.35);
+      transition: opacity 0.15s, transform 0.15s;
+      text-decoration: none;
+    }
+    #share-topbar .cta-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+
+    #share-canvas-wrap {
+      position: fixed; inset: 48px 0 0 0; overflow: hidden;
+    }
+    #container {
+      position: absolute; inset: 0; overflow: hidden; cursor: grab;
+    }
+    #container.grabbing { cursor: grabbing; }
+    #canvas {
+      position: absolute; inset: 0; overflow: visible; z-index: 1;
+      transform-origin: 0 0; will-change: transform;
+      transition: transform 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    }
+    #canvas.is-panning { transition: none; }
+    /* svg-lines harus DALAM #canvas agar ikut transform zoom/pan */
+    #svg-lines { position: absolute; top: 0; left: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+    /* Read-only badge */
+    #readonly-badge {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 200;
+      display: flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 99px; font-size: 11px; font-weight: 600;
+      background: var(--bg-glass); backdrop-filter: blur(16px);
+      border: 1px solid var(--border); color: var(--text-3);
+      pointer-events: none;
+    }
+
+    /* Zoom controls */
+    #zoom-controls {
+      position: fixed; bottom: 16px; right: 16px; z-index: 200;
+      display: flex; gap: 4px;
+    }
+    #zoom-controls button {
+      width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-glass); backdrop-filter: blur(16px);
+      color: var(--text-2); font-size: 16px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.15s;
+    }
+    #zoom-controls button:hover { background: var(--bg-elevated); }
+    #zoom-label {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 10px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--bg-glass); backdrop-filter: blur(16px);
+      color: var(--text-3); font-size: 11px; font-weight: 600; min-width: 48px;
+    }
+
+    /* Error / loading state */
+    #share-loading, #share-error {
+      position: fixed; inset: 0; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 12px; z-index: 300;
+      background: var(--bg-base);
+    }
+    #share-error { display: none; }
+    .share-spinner {
+      width: 36px; height: 36px; border-radius: 50%;
+      border: 3px solid rgba(139,124,248,0.15);
+      border-top-color: var(--accent);
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Node override for read-only */
+    .node { pointer-events: none !important; user-select: none; }
+    .node-resize-handle { display: none !important; }
+    .node-conn-dot { display: none !important; }
+    .node-note-btn { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div id="share-topbar">
+    <div class="brand">
+      <div class="brand-logo">✦</div>
+      <span class="brand-name">WAN Case Flow</span>
+    </div>
+    <div class="file-info">
+      <span class="file-name" id="hdr-file-name">Memuat...</span>
+      <span class="file-owner" id="hdr-owner"></span>
+    </div>
+    <a href="/login.html" class="cta-btn">🔑 Masuk / Daftar</a>
+  </div>
+
+  <!-- Canvas area -->
+  <div id="share-canvas-wrap">
+    <div id="container">
+      <div id="canvas">
+        <svg id="svg-lines" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- Read-only badge -->
+  <div id="readonly-badge">👁 Mode baca — tidak bisa diedit</div>
+
+  <!-- Zoom controls -->
+  <div id="zoom-controls">
+    <button id="btn-zoom-out" title="Perkecil">−</button>
+    <span id="zoom-label">100%</span>
+    <button id="btn-zoom-in" title="Perbesar">+</button>
+    <button id="btn-zoom-fit" title="Fit semua node" style="font-size:12px;width:auto;padding:0 8px">Fit</button>
+  </div>
+
+  <!-- Loading -->
+  <div id="share-loading">
+    <div class="share-spinner"></div>
+    <p style="font-size:13px;color:var(--text-3)">Memuat mindmap...</p>
+  </div>
+
+  <!-- Error -->
+  <div id="share-error">
+    <div style="font-size:40px">🔒</div>
+    <p style="font-size:15px;font-weight:700;color:var(--text-1)" id="share-error-msg">Link tidak valid</p>
+    <p style="font-size:12px;color:var(--text-4)">Mungkin link sudah dinonaktifkan oleh pemilik.</p>
+    <a href="/login.html" style="margin-top:8px;padding:8px 20px;border-radius:99px;background:var(--accent);color:#fff;font-size:12px;font-weight:600;text-decoration:none">Kembali ke Beranda</a>
+  </div>
+
+  <script type="module">
+    import { state }           from './js/state.js';
+    import { applyTransform }  from './js/canvas/transform.js';
+    import { renderLines }     from './js/canvas/connection.js';
+    import { applyData }       from './js/canvas/node.js';
+
+    // ── State minimal untuk viewer ────────────────────────────
+    const $c   = document.getElementById('container');
+    const $cv  = document.getElementById('canvas');
+    const $zl  = document.getElementById('zoom-label');
+    const ui   = { panning: false, panAnchor: null };
+
+    // ── Load data dari token ──────────────────────────────────
+    const token = new URLSearchParams(location.search).get('t');
+    if (!token) showError('Token tidak ditemukan di URL');
+    else loadShare(token);
+
+    async function loadShare(t) {
+      try {
+        const res = await fetch(`/api/public/share/${t}`);
+        const r   = await res.json();
+        if (!r.ok) { showError(r.error || 'Link tidak valid'); return; }
+
+        // Set header info
+        document.getElementById('hdr-file-name').textContent = '📄 ' + r.file_name;
+        document.getElementById('hdr-owner').textContent =
+          r.type === 'group' ? '👥 ' + r.owner : '👤 ' + r.owner;
+        document.title = r.file_name + ' — WAN Case Flow';
+
+        // Render canvas
+        applyData(r.data);
+        fitToNodes();
+        document.getElementById('share-loading').style.display = 'none';
+      } catch (err) {
+        showError('Gagal memuat data: ' + err.message);
+      }
+    }
+
+    function showError(msg) {
+      document.getElementById('share-loading').style.display = 'none';
+      document.getElementById('share-error').style.display  = 'flex';
+      document.getElementById('share-error-msg').textContent = msg;
+    }
+
+    // ── Pan ───────────────────────────────────────────────────
+    $c.addEventListener('mousedown', e => {
+      if (e.button !== 0 && e.button !== 1) return;
+      ui.panning   = true;
+      ui.panAnchor = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
+      $c.classList.add('grabbing');
+      $cv?.classList.add('is-panning');
+      e.preventDefault();
+    });
+    window.addEventListener('mousemove', e => {
+      if (!ui.panning) return;
+      state.pan.x = e.clientX - ui.panAnchor.x;
+      state.pan.y = e.clientY - ui.panAnchor.y;
+      applyTransform();
+    });
+    window.addEventListener('mouseup', () => {
+      if (!ui.panning) return;
+      ui.panning = false;
+      $c.classList.remove('grabbing');
+      $cv?.classList.remove('is-panning');
+    });
+
+    // ── Touch pan ─────────────────────────────────────────────
+    let lastTouch = null;
+    $c.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+    $c.addEventListener('touchmove', e => {
+      if (e.touches.length === 1 && lastTouch) {
+        const dx = e.touches[0].clientX - lastTouch.x;
+        const dy = e.touches[0].clientY - lastTouch.y;
+        state.pan.x += dx; state.pan.y += dy;
+        lastTouch = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        applyTransform();
+      }
+    }, { passive: true });
+    $c.addEventListener('touchend', () => { lastTouch = null; }, { passive: true });
+
+    // ── Wheel zoom ────────────────────────────────────────────
+    $c.addEventListener('wheel', e => {
+      e.preventDefault();
+      const delta = e.deltaY < 0 ? 0.08 : -0.08;
+      const r  = $c.getBoundingClientRect();
+      const mx = e.clientX - r.left, my = e.clientY - r.top;
+      const bx = (mx - state.pan.x) / state.zoom;
+      const by = (my - state.pan.y) / state.zoom;
+      state.zoom  = Math.min(3, Math.max(0.15, state.zoom + delta));
+      state.pan.x = mx - bx * state.zoom;
+      state.pan.y = my - by * state.zoom;
+      applyTransform();
+      if ($zl) $zl.textContent = Math.round(state.zoom * 100) + '%';
+    }, { passive: false });
+
+    // ── Zoom buttons ──────────────────────────────────────────
+    document.getElementById('btn-zoom-in')?.addEventListener('click', () => zoomBy(0.15));
+    document.getElementById('btn-zoom-out')?.addEventListener('click', () => zoomBy(-0.15));
+    document.getElementById('btn-zoom-fit')?.addEventListener('click', fitToNodes);
+
+    function zoomBy(delta) {
+      const r  = $c.getBoundingClientRect();
+      const cx = r.width / 2, cy = r.height / 2;
+      const bx = (cx - state.pan.x) / state.zoom;
+      const by = (cy - state.pan.y) / state.zoom;
+      state.zoom  = Math.min(3, Math.max(0.15, state.zoom + delta));
+      state.pan.x = cx - bx * state.zoom;
+      state.pan.y = cy - by * state.zoom;
+      applyTransform();
+      if ($zl) $zl.textContent = Math.round(state.zoom * 100) + '%';
+    }
+
+    function fitToNodes() {
+      const nodes = Object.values(state.nodes);
+      if (!nodes.length) return;
+      const PAD = 60;
+      const xs = nodes.map(n => n.x), ys = nodes.map(n => n.y);
+      const ws = nodes.map(n => n.width || 160);
+      const minX = Math.min(...xs), minY = Math.min(...ys);
+      const maxX = Math.max(...xs.map((x,i) => x + ws[i]));
+      const maxY = Math.max(...ys.map((y,i) => y + 80));
+      const r = $c.getBoundingClientRect();
+      const scaleX = (r.width  - PAD * 2) / (maxX - minX || 1);
+      const scaleY = (r.height - PAD * 2) / (maxY - minY || 1);
+      state.zoom  = Math.min(scaleX, scaleY, 1.5);
+      state.pan.x = PAD - minX * state.zoom;
+      state.pan.y = PAD - minY * state.zoom;
+      applyTransform();
+      if ($zl) $zl.textContent = Math.round(state.zoom * 100) + '%';
+    }
+  </script>
+</body>
+</html>

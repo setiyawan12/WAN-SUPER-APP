@@ -48,6 +48,10 @@ function sshPreloadPath(): string {
   return path.join(__dirname, "../../modules/ssh/preload/index.js");
 }
 
+function mindmapPreloadPath(): string {
+  return path.join(__dirname, "../../modules/mindmap/preload/index.cjs");
+}
+
 function loadHubContent(win: BrowserWindow): void {
   const devUrl = process.env.VITE_DEV_SERVER_URL_HUB;
   if (devUrl) {
@@ -81,6 +85,17 @@ function loadSshContent(win: BrowserWindow): void {
   } else {
     void win.loadFile(
       path.join(__dirname, "../../modules/ssh/renderer/index.html")
+    );
+  }
+}
+
+function loadMindmapContent(win: BrowserWindow): void {
+  const devUrl = process.env.VITE_DEV_SERVER_URL_MINDMAP;
+  if (devUrl) {
+    void win.loadURL(devUrl);
+  } else {
+    void win.loadFile(
+      path.join(__dirname, "../../modules/mindmap/renderer/index.html")
     );
   }
 }
@@ -283,6 +298,23 @@ export function ensureModuleShell(
     });
     shellView = "ssh";
     loadSshContent(win);
+    return win;
+  }
+
+  if (id === "mindmap") {
+    const win = createShellWindow({
+      title: "WAN Super App — Mindmap",
+      preload: mindmapPreloadPath(),
+      startHidden: opts.startHidden,
+      minWidth: 980,
+      minHeight: 640,
+      width: getSettings().windowBoundsHub?.width ?? 1440,
+      height: getSettings().windowBoundsHub?.height ?? 900,
+      sandbox: true,
+      additionalArguments: ["--wan-super-app-embed"],
+    });
+    shellView = "mindmap";
+    loadMindmapContent(win);
     return win;
   }
 

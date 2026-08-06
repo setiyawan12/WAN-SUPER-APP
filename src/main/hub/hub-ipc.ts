@@ -18,6 +18,7 @@ export function registerHubIpc(opts: {
     cliproxy: ModuleHandle | null;
     net: ModuleHandle | null;
     ssh: ModuleHandle | null;
+    mindmap: ModuleHandle | null;
   };
 }): void {
   ipcMain.handle("super:getSettings", () => getSettings());
@@ -44,7 +45,7 @@ export function registerHubIpc(opts: {
   });
 
   ipcMain.handle("super:openModule", async (_e, id: ModuleId) => {
-    if (id !== "cliproxy" && id !== "net" && id !== "ssh") {
+    if (id !== "cliproxy" && id !== "net" && id !== "ssh" && id !== "mindmap") {
       return { ok: false, error: "unknown module" };
     }
     try {
@@ -96,11 +97,13 @@ export function registerHubIpc(opts: {
     const cliproxy = h.cliproxy;
     const net = h.net;
     const ssh = h.ssh;
+    const mindmap = h.mindmap;
     let cliproxyStatus: Record<string, unknown> = {
       running: !!cliproxy?.isRunning(),
     };
     let netStatus: Record<string, unknown> = { running: !!net?.isRunning() };
     let sshStatus: Record<string, unknown> = { running: !!ssh?.isRunning() };
+    let mindmapStatus: Record<string, unknown> = { running: !!mindmap?.isRunning() };
     try {
       if (cliproxy?.getStatus) cliproxyStatus = { ...cliproxyStatus, ...(await cliproxy.getStatus()) };
     } catch {
@@ -116,7 +119,14 @@ export function registerHubIpc(opts: {
     } catch {
       /* ignore */
     }
-    return { cliproxy: cliproxyStatus, net: netStatus, ssh: sshStatus };
+    try {
+      if (mindmap?.getStatus) {
+        mindmapStatus = { ...mindmapStatus, ...(await mindmap.getStatus()) };
+      }
+    } catch {
+      /* ignore */
+    }
+    return { cliproxy: cliproxyStatus, net: netStatus, ssh: sshStatus, mindmap: mindmapStatus };
   });
 
   ipcMain.handle("super:getVersion", () => app.getVersion());

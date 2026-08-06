@@ -7,6 +7,7 @@ import {
   Cloud,
   Download,
   ExternalLink,
+  GitBranch,
   Network,
   RefreshCw,
   Settings2,
@@ -86,7 +87,8 @@ export function App() {
     cliproxy: Record<string, unknown>;
     net: Record<string, unknown>;
     ssh: Record<string, unknown>;
-  }>({ cliproxy: {}, net: {}, ssh: {} });
+    mindmap: Record<string, unknown>;
+  }>({ cliproxy: {}, net: {}, ssh: {}, mindmap: {} });
 
   const refresh = useCallback(async () => {
     if (!window.superApp) return;
@@ -183,6 +185,8 @@ export function App() {
   const tunnels = Number(state.net.liveTunnels ?? state.net.tunnels ?? 0);
   const sshRunning = !!state.ssh.running;
   const sshVault = String(state.ssh.vault ?? "");
+  const mindmapRunning = !!state.mindmap.running;
+  const mindmapCloud = !!state.mindmap.cloud;
 
   const updateHint = useMemo(() => {
     if (update.message) return update.message;
@@ -201,7 +205,7 @@ export function App() {
 
   const showProgress = update.phase === "downloading" || update.phase === "downloaded";
   const progressPct = Math.max(0, Math.min(100, update.percent || 0));
-  const runningModules = [clipRunning, netRunning, sshRunning].filter(Boolean).length;
+  const runningModules = [clipRunning, netRunning, sshRunning, mindmapRunning].filter(Boolean).length;
 
   return (
     <main className="app-shell">
@@ -228,7 +232,7 @@ export function App() {
             <p>Kelola AI workspace, secure networking, dan remote infrastructure dari satu pusat kendali.</p>
           </div>
           <div className="system-summary">
-            <div><span>ACTIVE MODULES</span><strong>{runningModules}<small>/03</small></strong></div>
+            <div><span>ACTIVE MODULES</span><strong>{runningModules}<small>/04</small></strong></div>
             <div><span>NETWORK</span><strong>{tunnels > 0 ? `${tunnels} LIVE` : "STANDBY"}</strong></div>
             <div><span>SECURITY</span><strong><ShieldCheck size={15} /> SECURED</strong></div>
           </div>
@@ -279,6 +283,20 @@ export function App() {
             </div>
             <button className="module-action" disabled={opening === "ssh"} onClick={() => void openModule("ssh")}>
               <span>{opening === "ssh" ? "Opening..." : "Open terminal"}</span><ArrowUpRight size={17} />
+            </button>
+          </article>
+
+          <article className="module-card module-mindmap">
+            <div className="module-topline"><span>KNOWLEDGE / VISUAL</span><GitBranch size={16} /></div>
+            <div className="module-icon"><GitBranch size={28} /></div>
+            <div className="module-title"><h4>WAN MINDMAP</h4><span>Case Flow</span></div>
+            <p>Visual strategy workspace with structured canvases, offline recovery, and Firebase synchronization.</p>
+            <div className="module-meta">
+              <span className={`status ${mindmapRunning ? "online" : "idle"}`}><i />{mindmapRunning ? "Running" : "Ready"}</span>
+              <span className="mono">{mindmapCloud ? "Firebase" : "Local"}</span>
+            </div>
+            <button className="module-action" disabled={opening === "mindmap"} onClick={() => void openModule("mindmap")}>
+              <span>{opening === "mindmap" ? "Opening..." : "Open mindmap"}</span><ArrowUpRight size={17} />
             </button>
           </article>
         </div>

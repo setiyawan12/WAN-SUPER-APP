@@ -12,8 +12,12 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 let tray: Tray | null = null;
 let openModuleFn: ((id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>) | null =
   null;
-let getHandles: (() => { cliproxy: ModuleHandle | null; net: ModuleHandle | null; ssh: ModuleHandle | null }) | null =
-  null;
+let getHandles: (() => {
+  cliproxy: ModuleHandle | null;
+  net: ModuleHandle | null;
+  ssh: ModuleHandle | null;
+  mindmap: ModuleHandle | null;
+}) | null = null;
 
 function loadIcon(): Electron.NativeImage {
   // Compiled to out/main/tray.js — icons copied next to it.
@@ -36,7 +40,12 @@ function loadIcon(): Electron.NativeImage {
 
 export function setTrayCallbacks(opts: {
   openModule: (id: ModuleId, opts?: { show?: boolean }) => Promise<ModuleHandle>;
-  getHandles: () => { cliproxy: ModuleHandle | null; net: ModuleHandle | null; ssh: ModuleHandle | null };
+  getHandles: () => {
+    cliproxy: ModuleHandle | null;
+    net: ModuleHandle | null;
+    ssh: ModuleHandle | null;
+    mindmap: ModuleHandle | null;
+  };
 }): void {
   openModuleFn = opts.openModule;
   getHandles = opts.getHandles;
@@ -45,7 +54,7 @@ export function setTrayCallbacks(opts: {
 
 export function rebuildTrayMenu(): void {
   if (!tray) return;
-  const handles = getHandles?.() ?? { cliproxy: null, net: null, ssh: null };
+  const handles = getHandles?.() ?? { cliproxy: null, net: null, ssh: null, mindmap: null };
   const settings = getSettings();
 
   const menu = Menu.buildFromTemplate([
@@ -88,6 +97,19 @@ export function rebuildTrayMenu(): void {
         },
         {
           label: handles.ssh?.isRunning() ? "Running" : "Not started",
+          enabled: false,
+        },
+      ],
+    },
+    {
+      label: "WAN Mindmap",
+      submenu: [
+        {
+          label: "Buka workspace",
+          click: () => void openModuleFn?.("mindmap", { show: true }),
+        },
+        {
+          label: handles.mindmap?.isRunning() ? "Running" : "Not started",
           enabled: false,
         },
       ],

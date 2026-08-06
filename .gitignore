@@ -21,5 +21,12 @@ modules/ssh/main/
 .DS_Store
 npm-debug.log*
 
+# Firebase local credentials, emulator state, and migration reports
+.firebaserc
+firebase-debug.log
+firebase/**/.runtimeconfig.json
+firebase/functions/.secret.local
+**/service-account*.json
+
 # graphify knowledge-graph output (local tool)
 graphify-out/

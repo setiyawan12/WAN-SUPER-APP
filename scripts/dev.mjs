@@ -33,9 +33,17 @@ await ssh.listen();
 const sshUrl = ssh.resolvedUrls?.local?.[0];
 if (!sshUrl) throw new Error("SSH Vite server has no URL");
 
+const mindmap = await createServer({
+  configFile: path.join(root, "vite.config.mindmap.ts"),
+});
+await mindmap.listen();
+const mindmapUrl = mindmap.resolvedUrls?.local?.[0];
+if (!mindmapUrl) throw new Error("Mindmap Vite server has no URL");
+
 console.log(`[dev] hub ${hubUrl}`);
 console.log(`[dev] cliproxy renderer ${clipUrl}`);
 console.log(`[dev] ssh renderer ${sshUrl}`);
+console.log(`[dev] mindmap renderer ${mindmapUrl}`);
 
 const child = spawn(electronPath, ["."], {
   stdio: "inherit",
@@ -45,6 +53,7 @@ const child = spawn(electronPath, ["."], {
     VITE_DEV_SERVER_URL_HUB: hubUrl,
     VITE_DEV_SERVER_URL: clipUrl,
     VITE_DEV_SERVER_URL_SSH: sshUrl,
+    VITE_DEV_SERVER_URL_MINDMAP: mindmapUrl,
   },
 });
 
@@ -52,5 +61,6 @@ child.on("close", async () => {
   await hub.close();
   await clip.close();
   await ssh.close();
+  await mindmap.close();
   process.exit(0);
 });

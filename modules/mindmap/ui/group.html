@@ -1,0 +1,3670 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Case Flow — Workspace Grup</title>
+  <link rel="stylesheet" href="./css/tailwind.css">
+  <link rel="stylesheet" href="css/style.css">
+  <script>
+    // Terapkan tema sebelum render untuk menghindari flash
+    (function(){
+      const t = localStorage.getItem('wcf_theme') || 'dark';
+      if (t === 'light') document.documentElement.classList.remove('dark');
+      else document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    /* Group-workspace spesifik */
+    .grp-rename-input {
+      background: var(--bg-input); border: 1px solid var(--accent-border);
+      border-radius: 5px; color: var(--text-1); font-size: 12px; padding: 1px 5px;
+      outline: none; width: 100%; min-width: 0;
+    }
+    .grp-tree-item { border-left: 1px solid transparent; }
+    .grp-tree-item:hover { border-left-color: var(--accent-border); }
+    .wcf-search-match { outline: 2px solid #facc15 !important; }
+    .wcf-search-match-active { outline: 2px solid #f97316 !important; }
+
+    /* ── Typing indicator ── */
+    @keyframes wcf-typing-bounce {
+      0%,80%,100% { transform: scale(0.6); opacity:.4; }
+      40%         { transform: scale(1.0); opacity:1; }
+    }
+    .wcf-typing-indicator {
+      position: absolute;
+      bottom: -22px;
+      left: 0;
+      font-size: 9px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 99px;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 1px 6px rgba(0,0,0,.4);
+    }
+    .wcf-typing-dot {
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: wcf-typing-bounce 1.2s infinite;
+    }
+    .wcf-typing-dot:nth-child(2) { animation-delay: .15s; }
+    .wcf-typing-dot:nth-child(3) { animation-delay: .30s; }
+
+    /* ── Notification panel ── */
+    #notif-panel {
+      position: fixed;
+      top: 52px;
+      right: 14px;
+      width: 300px;
+      max-height: 380px;
+      z-index: 250;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-md);
+      border-radius: 14px;
+      box-shadow: var(--shadow-menu);
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+    #notif-panel.hidden { display: none; }
+    #notif-badge {
+      position: absolute;
+      top: -5px; right: -5px;
+      min-width: 16px; height: 16px;
+      border-radius: 99px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      pointer-events: none;
+    }
+    #notif-badge.hidden { display: none; }
+
+    /* ── Comment / History side panel ── */
+    .wcf-side-panel {
+      position: fixed;
+      top: 0; right: 0;
+      width: 300px;
+      height: 100%;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-md);
+      box-shadow: -8px 0 32px rgba(0,0,0,.45);
+      transform: translateX(0);
+      transition: transform 0.25s ease;
+    }
+    .wcf-side-panel.hidden {
+      display: none;
+    }
+    .wcf-side-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .wcf-side-panel-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-2);
+    }
+    .wcf-side-panel-close {
+      color: var(--text-3);
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: background .15s, color .15s;
+    }
+    .wcf-side-panel-close:hover { background: var(--bg-glass-light); color: var(--text-1); }
+    .wcf-comment-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .wcf-comment-author {
+      font-size: 10px; font-weight: 700;
+      color: var(--text-2);
+      margin-bottom: 3px;
+    }
+    .wcf-comment-text {
+      font-size: 12px;
+      color: var(--text-1);
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .wcf-comment-time {
+      font-size: 9px;
+      color: var(--text-4);
+      margin-top: 3px;
+    }
+    .wcf-history-item {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .wcf-history-icon {
+      flex-shrink: 0;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+    .wcf-history-body { flex: 1; min-width: 0; }
+    .wcf-history-who {
+      font-size: 10px; font-weight: 700;
+      color: var(--text-2);
+    }
+    .wcf-history-desc {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-top: 2px;
+      word-break: break-word;
+    }
+    .wcf-history-time {
+      font-size: 9px;
+      color: var(--text-4);
+      margin-top: 2px;
+    }
+
+    /* Comment badge on node */
+    .wcf-comment-badge {
+      position: absolute;
+      top: -7px; left: -7px;
+      background: #7c6dfa;
+      color: #fff;
+      font-size: 8px;
+      font-weight: 700;
+      min-width: 14px; height: 14px;
+      border-radius: 99px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,.4);
+    }
+  </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden" style="background:var(--bg-base);color:var(--text-1);font-family:'Inter',system-ui,sans-serif">
+
+<!-- ── Topbar ───────────────────────────────────────────────── -->
+<div id="toolbar">
+
+  <button id="btn-sidebar-toggle" title="Buka/tutup sidebar">&#9776;</button>
+
+  <a href="/" style="display:flex;align-items:center;height:30px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500;color:var(--text-3);text-decoration:none">&#x2190; Kembali</a>
+  <div class="toolbar-sep"></div>
+
+  <span id="grp-name-label" style="font-size:11px;font-weight:700;color:var(--accent);opacity:.8;user-select:none">&#x1F465; Workspace Grup</span>
+  <span id="grp-member-badge" style="display:none;font-size:9px;background:var(--accent-muted);color:var(--accent);border:1px solid var(--accent-border);border-radius:99px;padding:2px 8px;"></span>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-save" title="Simpan">&#x1F4BE; Simpan</button>
+  <button id="btn-load" title="Muat ulang">&#x21BB; Muat</button>
+  <button id="btn-clear" title="Hapus semua" style="color:#f87171">&#x1F5D1;</button>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-undo" title="Undo">&#x21A9;</button>
+  <button id="btn-redo" title="Redo">&#x21AA;</button>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-zoom-out" style="width:28px;padding:0" title="Zoom out">&#x2212;</button>
+  <span id="zoom-label" style="font-size:11px;color:var(--text-3);min-width:34px;text-align:center;font-variant-numeric:tabular-nums;user-select:none">100%</span>
+  <button id="btn-zoom-in"  style="width:28px;padding:0" title="Zoom in">+</button>
+  <button id="btn-zoom-reset" style="width:26px;padding:0;font-size:14px" title="Reset zoom">&#x2299;</button>
+  <button id="btn-zoom-fit"   style="width:26px;padding:0;font-size:14px" title="Fit semua node">&#x229E;</button>
+  <button id="btn-auto-layout" title="Auto Layout">&#x2B21; Layout</button>
+
+  <!-- Canvas tools dropdown -->
+  <div style="position:relative">
+    <button id="btn-canvas-tools-trigger" title="Canvas tools">&#x2395; Canvas &#x25BE;</button>
+    <div id="canvas-tools-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:160px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <button id="btn-snap-grid" title="Snap to grid" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x229E; Snap Grid</button>
+      <button id="btn-canvas-bg" title="Latar canvas" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2B21; Background</button>
+      <button id="btn-sticky" title="Sticky Note (Shift+Dblclick)" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F5D2; Sticky Note</button>
+      <button id="btn-frame" title="Gambar frame/section" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4D0; Frame</button>
+      <button id="btn-kanban" title="Kanban view" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4CB; Kanban</button>
+      <button id="btn-cmd" title="Command Palette (Ctrl+K)" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2318; Cmd</button>
+    </div>
+  </div>
+  <div class="toolbar-sep"></div>
+
+  <!-- Export dropdown -->
+  <div style="position:relative">
+    <button id="btn-export-trigger" title="Export">&#x2B06; Export &#x25BE;</button>
+    <div id="export-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:150px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <button id="btn-export-json" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">{ } JSON</button>
+      <button id="btn-export-png"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F5BC; PNG</button>
+      <button id="btn-export-svg"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F537; SVG</button>
+      <button id="btn-export-md"   style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4DD; Markdown</button>
+      <button id="btn-export-pdf"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4C4; PDF</button>
+    </div>
+  </div>
+
+  <button id="btn-snapshot"    title="Riwayat Versi">&#x1F551; Versi</button>
+  <button id="btn-activity"    title="Aktivitas Grup">&#x1F4CA; Aktivitas</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- More dropdown -->
+  <div style="position:relative">
+    <button id="btn-more-trigger" title="Lainnya">&#x22EF; Lainnya &#x25BE;</button>
+    <div id="more-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:170px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <button id="btn-import-mermaid" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2B07; Import Mermaid</button>
+      <button id="btn-import-json"    style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2B07; Import JSON/MD</button>
+      <button id="btn-template"       style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4CB; Template</button>
+      <button id="btn-presentation"   style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x229E; Presentasi</button>
+      <button id="btn-global-search"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F310; Cari Global</button>
+    </div>
+  </div>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-theme-toggle" style="width:30px;padding:0" title="Ganti tema">&#x1F319;</button>
+  <button id="btn-shortcuts"    style="width:30px;padding:0;font-weight:700" title="Shortcut keyboard">?</button>
+
+  <div style="position:relative">
+    <button id="btn-notifications" style="width:30px;padding:0" title="Notifikasi">&#x1F514;</button>
+    <span id="notif-badge" class="hidden" style="position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;background:#ef4444;color:#fff;border-radius:99px;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 3px;pointer-events:none">0</span>
+  </div>
+
+  <span style="flex:1"></span>
+
+  <div id="online-strip" style="display:flex;align-items:center;gap:3px"></div>
+
+  <span id="grp-status" style="font-size:10px;color:var(--text-4);user-select:none">Belum ada file dibuka</span>
+  <div class="toolbar-sep"></div>
+  <span id="user-display" style="font-size:11px;color:var(--text-3);user-select:none"></span>
+</div>
+
+<!-- ── Main layout ───────────────────────────────────────────── -->
+<div style="display:flex;flex:1;min-height:0;overflow:hidden">
+
+  <!-- ── Sidebar ─────────────────────────────────────────────── -->
+  <div id="sidebar">
+
+    <!-- Sidebar header -->
+    <div style="display:flex;align-items:center;gap:4px;padding:0 10px;height:44px;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,var(--bg-surface2) 0%,var(--bg-surface) 100%)">
+      <button id="btn-new-file" title="File baru di root"
+              style="display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-3);font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap">
+        &#x1F4C4; + File
+      </button>
+      <button id="btn-new-folder" title="Folder baru di root"
+              style="display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-3);font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap">
+        &#x1F4C1; + Folder
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input id="grp-search" type="text" placeholder="Cari file&#x2026;"
+             style="width:100%;padding:5px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-1);font-size:11px;font-family:inherit;outline:none"
+             onfocus="this.style.borderColor='var(--accent-border)';this.style.boxShadow='0 0 0 3px var(--accent-muted)'"
+             onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+    </div>
+
+    <!-- Starred section -->
+    <div id="sidebar-starred" class="hidden" style="flex-shrink:0">
+      <div id="starred-header" style="display:flex;align-items:center;gap:5px;padding:8px 14px 4px;cursor:pointer;user-select:none">
+        <span id="starred-arrow" style="font-size:9px;color:var(--text-4)">&#x25BE;</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-4)">Bintang</span>
+      </div>
+      <div id="starred-list" style="padding-bottom:2px"></div>
+      <div style="height:1px;background:var(--border);margin:4px 12px"></div>
+    </div>
+
+    <!-- Recently opened section -->
+    <div id="sidebar-recent" class="hidden" style="flex-shrink:0">
+      <div id="recent-header" style="display:flex;align-items:center;gap:5px;padding:8px 14px 4px;cursor:pointer;user-select:none">
+        <span id="recent-arrow" style="font-size:9px;color:var(--text-4)">&#x25BE;</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-4)">Terakhir Dibuka</span>
+      </div>
+      <div id="recent-list" style="padding-bottom:2px"></div>
+      <div style="height:1px;background:var(--border);margin:4px 12px"></div>
+    </div>
+
+    <!-- Tree -->
+    <div id="project-list" style="flex:1;overflow-y:auto;padding:6px 0"></div>
+  </div>
+
+  <!-- ── Canvas ────────────────────────────────────────────────── -->
+  <div id="container">
+    <!-- Box-select rubber-band (positioned in container space) -->
+    <div id="wcf-select-box" style="display:none;position:absolute;pointer-events:none;
+         border:1.5px solid rgba(6,182,212,0.75);background:rgba(6,182,212,0.07);
+         border-radius:3px;z-index:5;"></div>
+    <div id="canvas">
+      <div id="frame-layer"></div>
+      <svg id="svg-lines"></svg>
+    </div>
+
+    <!-- Minimap -->
+        <div id="minimap-wrap"
+          class="hidden" style="position:absolute;bottom:12px;right:12px;z-index:40;">
+      <canvas id="minimap" width="180" height="130" class="block cursor-pointer"></canvas>
+      <canvas id="minimap-cursors" width="180" height="130"
+              style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+    </div>
+
+    <!-- Canvas coordinates HUD -->
+    <div id="canvas-coords" style="position:absolute;bottom:28px;left:12px;font-size:9px;color:rgba(255,255,255,0.2);font-variant-numeric:tabular-nums;pointer-events:none;user-select:none;font-family:monospace;letter-spacing:.03em;display:none">X: 0  Y: 0</div>
+
+    <!-- Canvas search overlay (Ctrl+F) -->
+    <div id="canvas-search-bar" class="hidden" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;box-shadow:var(--shadow-menu)">
+      <span class="text-white/40 text-xs">🔍</span>
+      <input id="canvas-search-input" type="text" placeholder="Cari node…"
+             class="bg-transparent outline-none text-sm text-white placeholder-white/25 w-48">
+      <span id="canvas-search-count" class="text-[10px] text-white/30 min-w-[30px]"></span>
+      <button id="canvas-search-prev" class="text-white/40 hover:text-white text-xs px-1">▲</button>
+      <button id="canvas-search-next" class="text-white/40 hover:text-white text-xs px-1">▼</button>
+      <button id="canvas-search-close"
+              class="text-white/30 hover:text-white text-xs ml-1">✕</button>
+    </div>
+
+    <!-- Empty state overlay -->
+    <div id="canvas-empty"
+         class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <div class="text-center opacity-30">
+        <div class="text-5xl mb-3">👥</div>
+        <p class="text-sm font-semibold text-white/60">Workspace Grup</p>
+        <p class="text-xs text-white/30 mt-1">Buat file baru atau pilih file di sidebar</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Node Context Menu ─────────────────────────────────────── -->
+<div id="ctx-menu"
+     class="ctx-menu hidden" style="z-index:100;min-width:215px">
+  <!-- Tab bar -->
+  <div class="ctx-tabs-bar">
+    <button class="ctx-tab-btn active" data-tab="gaya">🎨 Tampilan</button>
+    <button class="ctx-tab-btn"        data-tab="node">⚡ Node</button>
+  </div>
+
+  <!-- ─── Tab: Tampilan ─── -->
+  <div class="ctx-tab-panel" data-panel="gaya">
+    <!-- Colors: compact 1 row -->
+    <div class="flex items-center gap-1 px-2 py-1.5 text-xs">
+      <div id="ctx-color" class="flex items-center gap-1 flex-1 min-w-0 text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer rounded px-1.5 py-0.5 transition">
+        🎨 <span class="text-[10px]">Node</span>
+        <input id="ctx-color-pick" type="color" value="#7c6dfa"
+               class="ml-auto w-5 h-5 rounded border-0 cursor-pointer bg-transparent flex-shrink-0" />
+      </div>
+      <button id="ctx-reset-color" title="Reset warna node"
+              class="text-white/30 hover:text-white/70 text-[11px] px-1 py-0.5 hover:bg-white/[0.07] rounded transition flex-shrink-0">↩</button>
+      <div class="w-px h-4 bg-white/10 mx-0.5 flex-shrink-0"></div>
+      <div id="ctx-text-color" class="flex items-center gap-1 flex-1 min-w-0 text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer rounded px-1.5 py-0.5 transition">
+        🔤 <span class="text-[10px]">Teks</span>
+        <input id="ctx-text-color-pick" type="color" value="#ffffff"
+               class="ml-auto w-5 h-5 rounded border-0 cursor-pointer bg-transparent flex-shrink-0" />
+      </div>
+      <button id="ctx-reset-text-color" title="Reset warna teks"
+              class="text-white/30 hover:text-white/70 text-[11px] px-1 py-0.5 hover:bg-white/[0.07] rounded transition flex-shrink-0">↩</button>
+    </div>
+    <!-- Font size + Align in one row -->
+    <div class="flex items-center gap-1 px-2 pb-1.5 text-[10px]">
+      <button id="ctx-fs-sm" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">S</button>
+      <button id="ctx-fs-md" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">M</button>
+      <button id="ctx-fs-lg" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">L</button>
+      <button id="ctx-fs-xl" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">XL</button>
+      <div class="flex-1"></div>
+      <button id="ctx-align-left"    title="Rata kiri"   class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">⬅</button>
+      <button id="ctx-align-center"  title="Tengah"      class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">↔</button>
+      <button id="ctx-align-right"   title="Rata kanan"  class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">➡</button>
+      <button id="ctx-align-justify" title="Justify"     class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">▤</button>
+    </div>
+    <!-- Shape Picker -->
+    <div class="px-2 py-1.5 border-t border-white/[0.04]">
+      <p class="text-[9px] text-white/25 mb-1 select-none uppercase tracking-wide">Bentuk</p>
+      <div id="ctx-shape-grid" class="grid grid-cols-7 gap-1">
+        <button data-shape="" title="Default" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="11" rx="3"/></svg>
+        </button>
+        <button data-shape="sharp" title="Kotak" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="11" rx="0.5"/></svg>
+        </button>
+        <button data-shape="pill" title="Kapsul" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="16" height="9" rx="4.5"/></svg>
+        </button>
+        <button data-shape="oval" title="Oval" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="9" cy="6.5" rx="8" ry="5"/></svg>
+        </button>
+        <button data-shape="circle" title="Lingkaran" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="6"/></svg>
+        </button>
+        <button data-shape="diamond" title="Berlian" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,7 7,13 1,7"/></svg>
+        </button>
+        <button data-shape="hexagon" title="Segienam" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,4 13,10 7,13 1,10 1,4"/></svg>
+        </button>
+        <button data-shape="triangle" title="Segitiga" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,13 1,13"/></svg>
+        </button>
+        <button data-shape="parallelogram" title="Jajar Genjang" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 12" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="3,1 17,1 15,11 1,11"/></svg>
+        </button>
+        <button data-shape="trapezoid" title="Trapesium" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 12" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="4,1 14,1 17,11 1,11"/></svg>
+        </button>
+        <button data-shape="pentagon" title="Pentagon" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,5 10.5,13 3.5,13 1,5"/></svg>
+        </button>
+        <button data-shape="chevron" title="Panah" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 14" width="16" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="0,3 12,3 12,0 17,7 12,14 12,11 0,11"/></svg>
+        </button>
+        <button data-shape="cylinder" title="Silinder" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 16" width="12" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="12" height="11" rx="1"/><ellipse cx="7" cy="4" rx="6" ry="2.5"/></svg>
+        </button>
+        <button data-shape="star" title="Bintang" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3"><polygon points="7,1 8.5,5.2 13,5.2 9.4,7.9 10.7,12.5 7,9.9 3.3,12.5 4.6,7.9 1,5.2 5.5,5.2"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Emoji / Icon grid -->
+    <div class="px-2 py-1.5 border-t border-white/[0.04]">
+      <p class="text-[9px] text-white/25 mb-1 select-none uppercase tracking-wide">Icon</p>
+      <div id="ctx-emoji-grid" class="grid grid-cols-8 gap-0.5 text-base">
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" title="Hapus icon" data-emoji="">✕</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="⭐">⭐</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="✅">✅</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="❌">❌</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="⚠️">⚠️</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="💡">💡</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🔥">🔥</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🎯">🎯</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="📌">📌</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="📝">📝</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🔑">🔑</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🚀">🚀</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="💬">💬</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🔗">🔗</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="📊">📊</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🛠️">🛠️</button>
+      </div>
+    </div>
+    <!-- Border -->
+    <div class="flex items-center gap-1 px-2 py-1.5 border-t border-white/[0.04]">
+      <span class="text-[9px] text-white/25 uppercase tracking-wide mr-1">Border</span>
+      <button id="ctx-border-solid"  class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Solid">▬</button>
+      <button id="ctx-border-dashed" class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Dashed">╌</button>
+      <button id="ctx-border-dotted" class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Dotted">┄</button>
+      <button id="ctx-border-none"   class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Tanpa border">✕</button>
+    </div>
+  </div><!-- /tab gaya -->
+
+  <!-- ─── Tab: Node ─── -->
+  <div class="ctx-tab-panel hidden" data-panel="node">
+    <!-- Status row -->
+    <div class="flex gap-1 px-2 pt-1.5 pb-1">
+      <button id="ctx-status-none"     title="Hapus status" class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition">—</button>
+      <button id="ctx-status-todo"     title="Todo"         class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-slate-400  hover:bg-white/[0.07] transition">○ Todo</button>
+      <button id="ctx-status-progress" title="In Progress"  class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-yellow-400 hover:bg-white/[0.07] transition">◑ WIP</button>
+      <button id="ctx-status-done"     title="Done"         class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-emerald-400 hover:bg-white/[0.07] transition">● Done</button>
+    </div>
+    <div class="h-px bg-white/[0.06] mx-2 mb-1"></div>
+    <!-- 2-column action grid -->
+    <div class="grid grid-cols-2 gap-px px-1 pb-1">
+      <div id="ctx-pin"       class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📌 Pin Node</div>
+      <div id="ctx-note"      class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📝 Catatan</div>
+      <div id="ctx-file-link" class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">🔗 Link File</div>
+      <div id="ctx-due-date"  class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📅 Due Date</div>
+      <div id="ctx-tags"      class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">🏷 Tags</div>
+      <div id="ctx-checklist" class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">☑ Checklist</div>
+      <div id="ctx-image"     class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">🖼 Gambar</div>
+      <div id="ctx-comment"   class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">💬 Komentar</div>
+      <div id="ctx-history"   class="col-span-2 px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📜 Riwayat Node</div>
+    </div>
+    <div class="h-px bg-white/[0.06] mx-2 my-0.5"></div>
+    <div id="ctx-disconnect"
+         class="px-3 py-1.5 text-xs text-white/50 hover:bg-white/[0.07] hover:text-white/80 cursor-pointer transition">
+      ✂ Putus Koneksi
+    </div>
+    <button id="ctx-delete" type="button"
+            class="w-full px-3 py-1.5 text-left text-xs text-red-400/70 hover:bg-red-500/10 hover:text-red-400 cursor-pointer transition">
+      Hapus Node
+    </button>
+  </div><!-- /tab node -->
+</div>
+
+<!-- ── Sidebar File/Folder Context Menu ─────────────────────── -->
+<div id="proj-ctx"
+     class="ctx-menu hidden" style="z-index:100;min-width:170px">
+  <div id="grp-ctx-add-file"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📄 Tambah File
+  </div>
+  <div id="grp-ctx-add-folder"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📁 Tambah Folder
+  </div>
+  <div class="h-px bg-white/[0.06] mx-2 my-0.5" id="grp-ctx-sep"></div>
+  <div id="grp-ctx-rename"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ✏️ Ubah Nama
+  </div>
+  <div id="grp-ctx-delete"
+       class="px-3 py-1.5 text-xs text-red-400/70 hover:bg-red-500/10 hover:text-red-400 cursor-pointer transition">
+    🗑 Hapus
+  </div>
+  <!-- File-only actions -->
+  <div class="h-px bg-white/[0.06] mx-2 my-0.5" id="grp-ctx-file-sep2"></div>
+  <div id="grp-ctx-duplicate"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📋 Salin File
+  </div>
+  <div id="grp-ctx-star"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ⭐ Tandai Bintang
+  </div>
+  <div id="grp-ctx-move"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📦 Pindah ke Grup…
+  </div>
+  <div id="grp-ctx-pubshare"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    🌐 Share Publik…
+  </div>
+</div>
+
+<!-- ── Public Share Modal (group) ───────────────────────────── -->
+<div id="grp-pubshare-modal"
+     class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="modal-box w-96 p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-sm font-semibold text-white/80">🌐 Share Publik</div>
+      <button id="grp-pubshare-close" class="text-white/30 hover:text-white/60 transition text-lg leading-none">✕</button>
+    </div>
+    <p id="grp-pubshare-filename" class="text-[11px] text-white/35 mb-4"></p>
+
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <p class="text-xs font-semibold text-white/70">Link Akses Publik</p>
+        <p class="text-[10px] text-white/30 mt-0.5">Siapapun dengan link bisa melihat tanpa login</p>
+      </div>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <span id="grp-pub-status" class="text-[11px] text-white/40">Nonaktif</span>
+        <div class="relative">
+          <input type="checkbox" id="grp-pub-toggle" class="sr-only peer">
+          <div class="w-9 h-5 rounded-full border border-white/10 bg-white/5
+                      peer-checked:bg-purple-600/70 peer-checked:border-purple-500/50 transition-all"></div>
+          <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/30
+                      peer-checked:translate-x-4 peer-checked:bg-white transition-all"></div>
+        </div>
+      </label>
+    </div>
+
+    <div id="grp-pub-link-row" style="display:none" class="flex gap-2 items-center">
+      <input id="grp-pub-url" readonly
+             class="flex-1 modal-input text-[11px] text-white/60 cursor-pointer">
+      <button id="grp-pub-copy"
+              class="px-3 py-1.5 rounded text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30
+                     text-purple-300 border border-purple-500/30 transition whitespace-nowrap">
+        Salin
+      </button>
+      <a id="grp-pub-open" href="#" target="_blank"
+         class="px-3 py-1.5 rounded text-xs font-semibold bg-white/5 hover:bg-white/10
+                text-white/50 border border-white/10 transition whitespace-nowrap">
+        Buka
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ── Move to group modal ───────────────────────────────────── -->
+<div id="move-group-modal"
+     class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="modal-box w-80 p-5">
+    <div class="text-sm font-semibold text-white/80 mb-1">📦 Pindah ke Grup</div>
+    <div class="text-[11px] text-white/35 mb-3" id="move-modal-filename"></div>
+    <select id="move-group-select"
+            class="modal-input w-full text-xs mb-4 outline-none">
+      <option value="">Pilih grup tujuan…</option>
+    </select>
+    <div class="flex gap-2">
+      <button id="move-group-confirm"
+              class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium py-2 rounded-lg transition">
+        Pindah
+      </button>
+      <button id="move-group-cancel"
+              class="flex-1 bg-white/5 hover:bg-white/10 text-white/60 text-xs py-2 rounded-lg transition">
+        Batal
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Find & Replace Panel ─────────────────────────────────── -->
+<div id="find-replace-panel" class="hidden"
+     style="position:fixed;top:60px;right:16px;z-index:500;
+            background:var(--bg-surface);border:1px solid var(--border-md);
+            border-radius:14px;box-shadow:var(--shadow-menu);
+            padding:12px 14px;width:320px;backdrop-filter:blur(20px);">
+  <div class="flex items-center mb-2">
+    <span style="font-size:12px;font-weight:600;color:var(--text-1)">🔍 Find &amp; Replace</span>
+    <span id="fr-counter" style="margin-left:8px;font-size:11px;color:var(--text-3)"></span>
+    <button id="fr-close" style="margin-left:auto;background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px" title="Tutup (Esc)">✕</button>
+  </div>
+  <input id="fr-find" placeholder="Cari teks…" autocomplete="off"
+         style="width:100%;box-sizing:border-box;background:var(--bg-input);border:1px solid var(--border-md);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text-1);margin-bottom:6px;outline:none"/>
+  <input id="fr-replace" placeholder="Ganti dengan…" autocomplete="off"
+         style="width:100%;box-sizing:border-box;background:var(--bg-input);border:1px solid var(--border-md);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text-1);margin-bottom:8px;outline:none"/>
+  <div class="flex items-center gap-2 flex-wrap">
+    <label style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input id="fr-case" type="checkbox" style="margin:0"/> Case sensitive
+    </label>
+    <button id="fr-prev"        style="margin-left:auto;background:var(--bg-glass-light);border:1px solid var(--border-md);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text-2);cursor:pointer">◀</button>
+    <button id="fr-next"        style="background:var(--bg-glass-light);border:1px solid var(--border-md);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text-2);cursor:pointer">▶</button>
+    <button id="fr-replace-one" style="background:var(--accent-muted);border:1px solid var(--accent);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--accent);cursor:pointer">Ganti</button>
+    <button id="fr-replace-all" style="background:var(--accent-muted);border:1px solid var(--accent);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--accent);cursor:pointer">Semua</button>
+  </div>
+</div>
+
+<!-- ── Snapshot Panel ────────────────────────────────────────── -->
+<div id="snap-panel" class="hidden">
+  <div id="snap-panel-header">
+    🕑 Riwayat Versi
+    <span id="snap-save-btn"
+          class="ml-auto text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 cursor-pointer hover:bg-purple-500/35 transition">
+      + Simpan
+    </span>
+    <button id="snap-panel-close" class="ml-1 text-white/30 hover:text-white/70 transition text-xs leading-none">✕</button>
+  </div>
+  <div id="snap-list">
+    <div id="snap-empty">Belum ada snapshot.</div>
+  </div>
+</div>
+
+<!-- ── Activity Panel ────────────────────────────────────────── -->
+<div id="activity-panel" class="hidden" style="
+  position:fixed; top:52px; right:12px; width:360px; max-height:520px;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.5);
+  display:none; flex-direction:column; z-index:900; overflow:hidden;">
+  <div style="display:flex;align-items:center;padding:12px 14px 8px;border-bottom:1px solid var(--border);gap:8px;">
+    <span style="font-size:.8rem;font-weight:600;color:var(--text-primary);flex:1">📊 Aktivitas Grup</span>
+    <button id="activity-refresh" style="font-size:.7rem;padding:2px 8px;border-radius:6px;
+      background:var(--bg-hover);color:var(--text-secondary);border:1px solid var(--border);cursor:pointer;">↻ Refresh</button>
+    <button id="activity-close" style="font-size:.75rem;color:var(--text-tertiary);background:none;border:none;cursor:pointer;padding:0 2px;">✕</button>
+  </div>
+  <div id="activity-list" style="overflow-y:auto;flex:1;padding:6px 0;">
+    <div id="activity-empty" style="padding:20px;text-align:center;font-size:.75rem;color:var(--text-tertiary);">
+      Belum ada aktivitas.
+    </div>
+  </div>
+</div>
+
+<!-- ── Connection context menu ──────────────────────────────── -->
+<div id="conn-ctx"
+     class="absolute hidden" style="z-index:50;overflow:hidden;padding:4px 0;min-width:160px;">
+  <div id="conn-ctx-label"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ✏️ Edit Label
+  </div>
+  <div id="conn-ctx-style"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    〰 Gaya Garis
+  </div>
+  <div id="conn-ctx-color"
+       class="flex items-center gap-2 px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    🎨 Warna Garis
+    <input id="conn-ctx-color-pick" type="color" value="#a78bfa"
+           class="ml-auto w-5 h-5 rounded border-0 cursor-pointer bg-transparent" />
+  </div>
+  <div id="conn-ctx-reset-color"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ↩ Reset Warna
+  </div>
+  <div class="h-px bg-white/[0.06] mx-2 my-0.5"></div>
+  <div id="conn-ctx-delete"
+       class="px-3 py-1.5 text-xs text-red-400/70 hover:bg-red-500/10 hover:text-red-400 cursor-pointer transition">
+    🗑 Hapus Koneksi
+  </div>
+</div>
+
+<!-- ── Connection Style Picker ──────────────────────────────── -->
+<div id="conn-style-picker"
+     class="ctx-menu hidden" style="z-index:110;min-width:170px;padding:6px 8px">
+  <p class="text-[9px] text-white/25 font-bold tracking-widest uppercase px-1 mb-1">Gaya Garis</p>
+  <div class="grid grid-cols-2 gap-1">
+    <button data-style="curved"        class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">〜 Kurva</button>
+    <button data-style="straight"      class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">— Lurus</button>
+    <button data-style="dashed"        class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">- - Putus</button>
+    <button data-style="arrow"         class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">→ Panah</button>
+    <button data-style="bidirectional" class="conn-style-btn col-span-2 px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">↔ Dua Arah</button>
+  </div>
+</div>
+
+<!-- ── Shortcut Cheatsheet Modal ─────────────────────────────── -->
+<div id="shortcut-modal"
+     class="modal-overlay hidden" style="z-index:350">
+  <div class="modal-box w-96 p-5 max-h-[80vh] overflow-y-auto wcf-scrollbar">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-bold text-white/80">⌨ Shortcut Keyboard</h3>
+      <button id="shortcut-modal-close" class="text-white/30 hover:text-white/70 transition text-lg leading-none">✕</button>
+    </div>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+      <div class="text-white/25 col-span-2 font-bold uppercase tracking-widest text-[9px] mt-1">Canvas</div>
+      <span class="text-white/50">Dbl-klik canvas</span><span class="text-white/30">Node baru</span>
+      <span class="text-white/50">Ctrl + A</span><span class="text-white/30">Pilih semua node</span>
+      <span class="text-white/50">Shift + klik node</span><span class="text-white/30">Tambah/hapus dari seleksi</span>
+      <span class="text-white/50">Shift + drag canvas</span><span class="text-white/30">Seleksi kotak (box select)</span>
+      <span class="text-white/50">Ctrl + C</span><span class="text-white/30">Salin node terpilih</span>
+      <span class="text-white/50">Ctrl + V</span><span class="text-white/30">Tempel node</span>
+      <span class="text-white/50">Delete / Backspace</span><span class="text-white/30">Hapus node terpilih</span>
+      <span class="text-white/50">Arrow keys</span><span class="text-white/30">Geser node (+ Shift = cepat)</span>
+      <span class="text-white/50">Scroll</span><span class="text-white/30">Zoom in / out</span>
+      <span class="text-white/50">Middle-click drag</span><span class="text-white/30">Pan canvas</span>
+      <div class="text-white/25 col-span-2 font-bold uppercase tracking-widest text-[9px] mt-3">File & Edit</div>
+      <span class="text-white/50">Ctrl + S</span><span class="text-white/30">Simpan</span>
+      <span class="text-white/50">Ctrl + Z</span><span class="text-white/30">Undo</span>
+      <span class="text-white/50">Ctrl + Y</span><span class="text-white/30">Redo</span>
+      <span class="text-white/50">Ctrl + F</span><span class="text-white/30">Cari node di file ini</span>
+      <span class="text-white/50">Ctrl + Shift + F</span><span class="text-white/30">Cari global (semua file)</span>
+      <span class="text-white/50">Ctrl + G</span><span class="text-white/30">Group node yang dipilih</span>
+      <span class="text-white/50">Ctrl + Shift + G</span><span class="text-white/30">Ungroup</span>
+      <span class="text-white/50">Ctrl + Shift + 0</span><span class="text-white/30">Fit semua node di viewport</span>
+      <span class="text-white/50">F5</span><span class="text-white/30">Mode presentasi (ESC keluar)</span>
+      <div class="text-white/25 col-span-2 font-bold uppercase tracking-widest text-[9px] mt-3">Navigasi</div>
+      <span class="text-white/50">Escape</span><span class="text-white/30">Batalkan / tutup panel</span>
+      <span class="text-white/50">Dbl-klik node</span><span class="text-white/30">Edit teks</span>
+      <span class="text-white/50">Drag ke port</span><span class="text-white/30">Buat koneksi</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── WCF Modal ─────────────────────────────────────────────── -->
+<div id="wcf-modal"
+     class="modal-overlay hidden" style="z-index:300">
+  <div class="modal-box w-80 p-6">
+    <p id="wcf-modal-msg" class="text-sm text-white/80 mb-4 whitespace-pre-line leading-relaxed"></p>
+    <input id="wcf-modal-input" type="text"
+           class="w-full px-3 py-2 rounded-lg bg-white/[0.06] border border-white/[0.1]
+                  text-sm text-white placeholder-white/25 outline-none
+                  focus:border-purple-500/60 transition mb-4 hidden">
+    <div class="flex gap-2 justify-end">
+      <button id="wcf-modal-cancel"
+              class="px-4 py-2 rounded-lg text-xs text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition">Batal</button>
+      <button id="wcf-modal-ok"
+              class="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-500 hover:bg-purple-600 text-white transition">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Notification Panel ────────────────────────────────────── -->
+<div id="notif-panel" class="hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <span style="font-size:11px;font-weight:700;color:var(--text-2);">🔔 Notifikasi</span>
+    <button id="notif-clear" style="font-size:10px;color:var(--text-3);cursor:pointer;padding:2px 8px;border-radius:6px;background:var(--bg-input);border:none;transition:background .15s;"
+            onmouseover="this.style.background='var(--bg-glass-light)'" onmouseout="this.style.background='var(--bg-input)'">
+      Hapus semua
+    </button>
+  </div>
+  <div id="notif-list" style="overflow-y:auto;flex:1;"></div>
+  <div id="notif-empty" style="padding:24px;text-align:center;color:var(--text-4);font-size:11px;">
+    Belum ada notifikasi
+  </div>
+</div>
+
+<!-- ── Comment Side Panel ─────────────────────────────────────── -->
+<div id="comment-panel" class="wcf-side-panel hidden">
+  <div class="wcf-side-panel-header">
+    <span class="wcf-side-panel-title">💬 Komentar — <span id="comment-node-name" style="color:#a78bfa;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;"></span></span>
+    <span class="wcf-side-panel-close" id="comment-panel-close">✕</span>
+  </div>
+  <div id="comment-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
+  <div id="comment-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-4);font-size:11px;">Belum ada komentar</div>
+  <div style="padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;">
+    <textarea id="comment-input"
+              placeholder="Tulis komentar…"
+              style="width:100%;padding:8px 10px;border-radius:8px;background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-1);font-size:12px;line-height:1.5;resize:none;outline:none;font-family:inherit;height:62px;transition:border-color .15s;"
+              onfocus="this.style.borderColor='var(--accent-border)'" onblur="this.style.borderColor='var(--border-md)'"></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+      <button id="comment-submit"
+              style="padding:6px 16px;border-radius:8px;background:#7c6dfa;color:#fff;font-size:11px;font-weight:600;border:none;cursor:pointer;transition:background .15s;"
+              onmouseover="this.style.background='#6b5ce7'" onmouseout="this.style.background='#7c6dfa'">
+        Kirim
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── History Side Panel ─────────────────────────────────────── -->
+<div id="history-panel" class="wcf-side-panel hidden">
+  <div class="wcf-side-panel-header">
+    <span class="wcf-side-panel-title">📜 Riwayat — <span id="history-node-name" style="color:#34d399;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;"></span></span>
+    <span class="wcf-side-panel-close" id="history-panel-close">✕</span>
+  </div>
+  <div id="history-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
+  <div id="history-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-4);font-size:11px;">Belum ada riwayat</div>
+</div>
+
+<!-- ── Offline banner ────────────────────────────────────────── -->
+<div id="offline-banner"
+     class="hidden fixed top-10 left-1/2 -translate-x-1/2 z-[500]
+            flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold
+            bg-yellow-500/90 text-yellow-950 shadow-xl backdrop-blur-sm
+            border border-yellow-400/60 select-none pointer-events-none">
+  <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+  Koneksi realtime terputus — mencoba reconnect…<span class="ws-code"></span>
+</div>
+
+<!-- ── Template Modal ─────────────────────────────────────────── -->
+<div id="template-modal" class="hidden">
+  <div id="template-modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h3 style="font-size:14px;font-weight:700;color:var(--text-1)">📋 Pilih Template</h3>
+      <button id="template-modal-close"
+              style="color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:6px;border:none;background:none;transition:color .15s;"
+              onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-3)'">✕</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-4);margin-bottom:0">
+      Pilih layout yang ingin dibuat di canvas. Node dan koneksi akan otomatis terbuat.
+    </p>
+    <div id="template-grid"></div>
+  </div>
+</div>
+
+<!-- ── Global Search Panel ───────────────────────────────────── -->
+<div id="global-search-panel" class="hidden">
+  <div id="gs-box">
+    <div id="gs-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;opacity:.4">🔍</span>
+        <input id="gs-input" type="text" placeholder="Cari di semua file dan grup…" autocomplete="off" spellcheck="false">
+        <button id="gs-close"
+                style="color:var(--text-3);font-size:16px;cursor:pointer;border:none;background:none;flex-shrink:0;padding:2px 6px;border-radius:5px;transition:color .15s;"
+                onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-3)'">✕</button>
+      </div>
+      <div id="gs-meta"></div>
+    </div>
+    <div id="gs-loading">
+      <span style="opacity:.4">Mencari…</span>
+    </div>
+    <div id="gs-results"></div>
+  </div>
+</div>
+
+<!-- ── Hidden file input for node image upload ────────────────── -->
+<input type="file" id="node-img-input" accept="image/*"
+       style="display:none" aria-hidden="true">
+
+<!-- ── Flash toast (gaya & posisi penuh dari #flash-toast di style.css) ── -->
+<div id="flash-toast" class="hidden"></div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+<script type="module">
+import { state, refs, ui, hist, selectedNodes, pushUndo, snapshotData,
+         $c, $cv, $svg, $el, $id }                           from './js/state.js';
+import { applyTransform, toCanvas, fitToNodes }               from './js/canvas/transform.js';
+import { renderLines, addConnection, hideConnCtx, syncColors } from './js/canvas/connection.js';
+import { createNode, applyData, deleteNode, attachImageToNode } from './js/canvas/node.js';
+import { selectNode, clearSelection, selectAll, updateSelectionUI,
+         copyNodes, pasteNodes, deleteSelectedNodes,
+         moveSelected }                                        from './js/canvas/selection.js';
+import { flash }                                               from './js/ui/flash.js';
+import { initTheme }                                           from './js/ui/theme.js';
+import { initMinimap, updateMinimap }                          from './js/ui/minimap.js';
+import { initCtxMenu, hideCtxMenu }                            from './js/ui/ctx-menu.js';
+import { wcfPrompt, wcfConfirm }                               from './js/ui/modal.js';
+import { undo, redo, zoomBy, zoomReset }                       from './js/ui/toolbar.js';
+import { exportJSON, exportPNG, exportSVG, exportMarkdown, exportPDF } from './js/features/export.js';
+import { initFindReplace, openFindReplace, closeFindReplace }   from './js/features/find-replace.js';
+import { togglePresentation, presentationKey, isPresentation } from './js/features/presentation.js';
+import { initTemplates, openTemplateModal, renderTemplatePicker } from './js/features/templates.js';
+import { initGlobalSearch, openGlobalSearch }                   from './js/features/global-search.js';
+import { createGroup, ungroupSelected }                         from './js/canvas/groups.js';
+import { initAlignBar }                                          from './js/features/align.js';
+import { initCmdPalette, open as openCmdPalette }               from './js/features/cmd-palette.js';
+import { initKanban, openKanban }                               from './js/features/kanban.js';
+import { initFrames, toggleFrameDrawMode, handleFrameMouseDown, handleFrameMouseMove, handleFrameMouseUp, isFrameDrawMode } from './js/features/frames.js';
+import {
+  apiMe, apiGroupGetInfo, apiGroupGetWorkspace, apiGroupSaveWorkspace,
+  apiGroupLoad, apiGroupSave, apiGroupDelete, apiGroupRename,
+  apiGetComments, apiPostComment, apiGetNodeHistory,
+  apiGetMyGroups, apiListGroupMindmaps, apiGetGroupActivity,
+  apiGetGroupPublicShare, apiEnableGroupPublicShare, apiDisableGroupPublicShare,
+} from './js/api.js';
+
+// ── URL params ───────────────────────────────────────────────
+const params  = new URLSearchParams(location.search);
+const GROUP_ID = Number(params.get('id'));
+if (!GROUP_ID) { alert('ID grup tidak valid'); location.replace('/'); }
+
+let grpWorkspaceTree = null;  // { id:'root', type:'folder', children:[] }
+let currentFile      = null;  // { id, name }
+let grpFilter        = '';
+let dragSrcId        = null;
+let groupSaveQueue   = Promise.resolve();
+let groupRole        = 'viewer';
+
+// ── Auth check ───────────────────────────────────────────────
+async function checkAuth() {
+  const r = await apiMe().catch(() => null);
+  if (!r?.ok) { location.replace('/login.html'); return false; }
+  state.currentUser = r.user;
+  document.getElementById('user-display').textContent = r.user.username;
+  return true;
+}
+
+// ── Group workspace helpers ──────────────────────────────────
+function genId() { return 'grp_' + Date.now().toString(36) + Math.random().toString(36).slice(2,5); }
+
+function findNode(root, id) {
+  if (root.id === id) return root;
+  for (const c of (root.children || [])) { const f = findNode(c, id); if (f) return f; }
+  return null;
+}
+function findParent(root, targetId, parent = null) {
+  if (root.id === targetId) return parent;
+  for (const c of (root.children || [])) { const f = findParent(c, targetId, root); if (f !== undefined) return f; }
+  return undefined;
+}
+function removeNode(root, targetId) {
+  const ch = root.children;
+  if (!ch) return false;
+  const idx = ch.findIndex(c => c.id === targetId);
+  if (idx !== -1) { ch.splice(idx, 1); return true; }
+  return ch.some(c => removeNode(c, targetId));
+}
+function collectFileIds(node) {
+  if (node.type === 'file') return [node.id];
+  return (node.children || []).flatMap(collectFileIds);
+}
+function isDescendant(ancestor, targetId) {
+  if (!ancestor.children) return false;
+  return ancestor.children.some(c => c.id === targetId || isDescendant(c, targetId));
+}
+// Returns array of ancestor names from root → parent (excluding root name)
+function findPath(root, targetId, path = []) {
+  if (root.id === targetId) return path;
+  for (const c of (root.children || [])) {
+    const r = findPath(c, targetId, [...path, root.name]);
+    if (r !== null) return r;
+  }
+  return null;
+}
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+// ── Save workspace tree ──────────────────────────────────────
+async function saveWorkspaceTree() {
+  try {
+    await apiGroupSaveWorkspace(GROUP_ID, grpWorkspaceTree);
+    wsSend({ type: 'tree_update', tree: grpWorkspaceTree });
+  } catch { /* background save */ }
+}
+
+// ── LocalStorage key per grup ────────────────────────────────
+const LS_LAST_FILE = `wcf_grp_${GROUP_ID}_lastFile`;
+const LS_STARRED   = `wcf_starred_${GROUP_ID}`;
+const LS_RECENT    = `wcf_recent_${GROUP_ID}`;
+
+function persistLastFile(fileId) {
+  try { localStorage.setItem(LS_LAST_FILE, fileId); } catch {}
+}
+function getLastFile() {
+  try { return localStorage.getItem(LS_LAST_FILE); } catch { return null; }
+}
+
+// ── Starred helpers ───────────────────────────────────────────
+function getStarred() {
+  try { return new Set(JSON.parse(localStorage.getItem(LS_STARRED) || '[]')); } catch { return new Set(); }
+}
+function setStarredStore(s) {
+  try { localStorage.setItem(LS_STARRED, JSON.stringify([...s])); } catch {}
+}
+function toggleStar(fileId) {
+  const s = getStarred();
+  s.has(fileId) ? s.delete(fileId) : s.add(fileId);
+  setStarredStore(s);
+  return s.has(fileId);
+}
+function isStarred(fileId) { return getStarred().has(fileId); }
+
+// ── Recently opened helpers ───────────────────────────────────
+function getRecent() {
+  try { return JSON.parse(localStorage.getItem(LS_RECENT) || '[]'); } catch { return []; }
+}
+function addRecent(fileNode) {
+  let r = getRecent().filter(x => x.id !== fileNode.id);
+  r.unshift({ id: fileNode.id, name: fileNode.name });
+  if (r.length > 10) r = r.slice(0, 10);
+  try { localStorage.setItem(LS_RECENT, JSON.stringify(r)); } catch {}
+}
+function updateRecentName(fileId, newName) {
+  const r = getRecent().map(x => x.id === fileId ? { ...x, name: newName } : x);
+  try { localStorage.setItem(LS_RECENT, JSON.stringify(r)); } catch {}
+}
+
+// ── Save current file to DB ──────────────────────────────────
+function saveCurrentFile(silent = false) {
+  if (!currentFile) return Promise.resolve(false);
+  const fileId = currentFile.id;
+  const serialized = JSON.stringify(snapshotData());
+  const payload = JSON.parse(serialized);
+  const operation = async () => {
+    try {
+      const r = await apiGroupSave(GROUP_ID, payload, fileId);
+      if (r?.ok) {
+        const stateUnchanged = currentFile?.id === fileId
+          && JSON.stringify(snapshotData()) === serialized;
+        if (currentFile?.id === fileId) refs.dirty = !stateUnchanged;
+        const cnt = Object.keys(payload.nodes || {}).length;
+        if (!silent) flash(`✓ Tersimpan (${cnt} node)`, true);
+        return true;
+      }
+      refs.dirty = true;
+      if (!silent) flash('Gagal menyimpan: ' + (r?.error || 'akses ditolak'), false);
+      return false;
+    } catch (err) {
+      refs.dirty = true;
+      if (!silent) flash(err.message || 'Gagal menyimpan workspace grup', false);
+      return false;
+    }
+  };
+  groupSaveQueue = groupSaveQueue.catch(() => {}).then(operation);
+  return groupSaveQueue;
+}
+
+async function persistGroupNow(message = 'Perubahan tersimpan') {
+  if (!currentFile) return false;
+  if (groupRole === 'viewer') {
+    undo();
+    refs.dirty = false;
+    flash('Akses baca saja: Anda tidak dapat menghapus node', false);
+    return false;
+  }
+  refs.dirty = true;
+  updateNodeCount(currentFile.id, Object.keys(state.nodes).length);
+  renderSidebar();
+  const saved = await saveCurrentFile(true);
+  if (!saved || refs.dirty) {
+    undo();
+    refs.dirty = false;
+    updateNodeCount(currentFile.id, Object.keys(state.nodes).length);
+    renderSidebar();
+    broadcastCanvas();
+    flash('Node dihapus lokal, tetapi gagal disimpan ke workspace grup', false);
+    return false;
+  }
+  broadcastCanvas();
+  flash(message, true);
+  return true;
+}
+
+document.addEventListener('wcf:persist-now', event => {
+  void persistGroupNow(event.detail?.message || 'Perubahan tersimpan');
+});
+
+// ── Load file into canvas ────────────────────────────────────
+async function loadFile(fileNode) {
+  if (refs.dirty && currentFile) await saveCurrentFile(true);
+  currentFile = fileNode;
+  state.currentProject = fileNode.id;
+  persistLastFile(fileNode.id);
+  addRecent(fileNode);
+  // Beritahu WS: pindah ke file ini
+  wsSend({ type: 'join', fileId: fileNode.id });
+  for (const [u] of remoteCursors) removeCursor(u);
+  document.getElementById('canvas-empty')?.style.setProperty('display','none');
+  // Breadcrumb
+  const pathSegs = (findPath(grpWorkspaceTree, fileNode.id) || []).filter(s => s !== 'root');
+  const breadcrumb = pathSegs.length ? pathSegs.join(' / ') + ' / ' : '';
+  document.getElementById('grp-status').textContent = `📁 ${breadcrumb}📄 ${fileNode.name}`;
+  refs.initialized = false;
+  // ── Selalu bersihkan history saat ganti file ───────────────
+  hist.undo.length = 0;
+  hist.redo.length = 0;
+  try {
+    const r = await apiGroupLoad(GROUP_ID, fileNode.id);
+    if (r?.ok && r.data && typeof r.data.nodes === 'object') {
+      applyData(r.data);
+      // Auto-fit ke posisi node setelah buka file
+      if (Object.keys(r.data.nodes).length > 0) {
+        requestAnimationFrame(() => fitToNodes());
+      }
+    } else {
+      applyData({ nodes: {}, connections: [], nextId: 1 });
+    }
+  } catch {
+    applyData({ nodes: {}, connections: [], nextId: 1 });
+  }
+  refs.dirty = false;
+  refs.initialized = true;
+  updateNodeCount(fileNode.id, Object.keys(state.nodes).length);
+  renderSidebar();
+  flash(`✓ "${fileNode.name}" dibuka`, true);
+}
+
+// ── Render sidebar tree ──────────────────────────────────────
+function renderSidebar() {
+  const list = document.getElementById('project-list');
+  if (!list || !grpWorkspaceTree) return;
+  const scrollTop = list.scrollTop;
+  list.innerHTML = '';
+  renderChildren(grpWorkspaceTree.children || [], list, 1, grpFilter.toLowerCase());
+  list.scrollTop = scrollTop;
+  renderStarredSection();
+  renderRecentSection();
+}
+
+// ── Starred section ───────────────────────────────────────────
+let _starredExpanded = true;
+function renderStarredSection() {
+  const section = document.getElementById('sidebar-starred');
+  const listEl  = document.getElementById('starred-list');
+  if (!section || !listEl) return;
+  const starred = getStarred();
+  if (!starred.size) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  listEl.innerHTML = '';
+  for (const id of starred) {
+    const node = findNode(grpWorkspaceTree, id);
+    if (!node || node.type !== 'file') continue;
+    listEl.appendChild(buildShortcutItem(node, '⭐'));
+  }
+  document.getElementById('starred-arrow').textContent = _starredExpanded ? '▾' : '▸';
+  listEl.style.display = _starredExpanded ? '' : 'none';
+}
+
+// ── Recently opened section ───────────────────────────────────
+let _recentExpanded = true;
+function renderRecentSection() {
+  const section = document.getElementById('sidebar-recent');
+  const listEl  = document.getElementById('recent-list');
+  if (!section || !listEl) return;
+  const recent = getRecent();
+  if (!recent.length) { section.classList.add('hidden'); return; }
+  section.classList.remove('hidden');
+  listEl.innerHTML = '';
+  for (const item of recent) {
+    const node = findNode(grpWorkspaceTree, item.id) || { id: item.id, name: item.name, type: 'file' };
+    listEl.appendChild(buildShortcutItem(node, '🕐'));
+  }
+  document.getElementById('recent-arrow').textContent = _recentExpanded ? '▾' : '▸';
+  listEl.style.display = _recentExpanded ? '' : 'none';
+}
+
+// ── Shortcut item (starred / recent) ─────────────────────────
+function buildShortcutItem(node, icon) {
+  const isActive = currentFile?.id === node.id;
+  const el = document.createElement('div');
+  el.className = [
+    'flex items-center gap-1.5 py-[4px] pl-3 pr-2 cursor-pointer text-[11.5px]',
+    'transition-colors select-none overflow-hidden whitespace-nowrap rounded-sm',
+    isActive
+      ? 'bg-cyan-500/[0.12] text-white/80'
+      : 'text-white/35 hover:bg-white/[0.04] hover:text-white/65',
+  ].join(' ');
+  el.innerHTML = `<span class="flex-shrink-0 text-xs">${icon}</span><span class="flex-1 overflow-hidden text-ellipsis min-w-0">${escHtml(node.name)}</span>`;
+  el.addEventListener('click', () => loadFile(node));
+  return el;
+}
+
+function matchesFilter(node, filter) {
+  if (!filter) return true;
+  if (node.name.toLowerCase().includes(filter)) return true;
+  if (node.type === 'folder') return (node.children || []).some(c => matchesFilter(c, filter));
+  return false;
+}
+
+function renderChildren(children, container, depth, filter) {
+  for (const node of children) {
+    if (filter && !matchesFilter(node, filter)) continue;
+    container.appendChild(buildItem(node, depth, filter));
+    if (node.type === 'folder' && (node.expanded || filter) && node.children?.length)
+      renderChildren(node.children, container, depth + 1, filter);
+  }
+}
+
+function buildItem(node, depth, filter = '') {
+  const isFile   = node.type === 'file';
+  const isActive = isFile && currentFile?.id === node.id;
+  const el = document.createElement('div');
+  el.className = [
+    'grp-tree-item group flex items-center gap-1 py-[5px] pr-2 cursor-pointer text-[12.5px]',
+    'transition-colors select-none overflow-hidden whitespace-nowrap rounded-sm',
+    isActive ? 'grp-file-active' : 'grp-file-inactive',
+  ].join(' ');
+  el.dataset.id   = node.id;
+  el.dataset.type = node.type;
+  el.style.paddingLeft = (10 + depth * 14) + 'px';
+
+  const displayName = filter
+    ? escHtml(node.name).replace(new RegExp(`(${escHtml(filter)})`, 'gi'), '<mark class="bg-yellow-400/30 rounded px-0.5">$1</mark>')
+    : escHtml(node.name);
+
+  const mnuCls = 'flex-shrink-0 opacity-0 group-hover:opacity-100 text-[11px] px-1 py-0.5 rounded text-white/25 hover:bg-white/10 hover:text-white/70 transition-all';
+
+  const nodeCount = isFile && grpNodeCounts[node.id] != null
+    ? `<span style="font-size:9px;color:var(--text-4);margin-right:2px;flex-shrink:0;">${grpNodeCounts[node.id]}</span>` : '';
+
+  if (!isFile) {
+    el.innerHTML = `
+      <span class="flex-shrink-0 w-3.5 text-center text-[9px] text-white/20">${node.expanded ? '▾' : '▸'}</span>
+      <span class="flex-shrink-0 text-xs">${node.expanded ? '📂' : '📁'}</span>
+      <span class="flex-1 overflow-hidden text-ellipsis font-medium min-w-0">${displayName}</span>
+      <span class="${mnuCls}" title="Opsi">···</span>`;
+    el.addEventListener('click', e => {
+      if (e.target.title === 'Opsi') return;
+      node.expanded = !node.expanded;
+      renderSidebar();
+      saveWorkspaceTree();
+    });
+  } else {
+  const fileViewers = [...remoteUsers.entries()]
+    .filter(([, u]) => u.fileId === node.id).slice(0, 3);
+  const viewerDots = fileViewers.map(([uname, info]) =>
+    `<span title="${escHtml(uname)}" style="display:inline-flex;align-items:center;justify-content:center;width:13px;height:13px;border-radius:50%;background:${info.color};color:#fff;font-size:7px;font-weight:700;border:1px solid rgba(0,0,0,.3);flex-shrink:0;">${escHtml(uname[0].toUpperCase())}</span>`
+  ).join('');
+
+    el.innerHTML = `
+      <span class="flex-shrink-0 w-3.5"></span>
+      <span class="flex-shrink-0 text-xs">${isActive ? '⚡' : '📄'}</span>
+      <span class="flex-1 overflow-hidden text-ellipsis font-medium min-w-0">${displayName}</span>
+      ${nodeCount}
+      ${isStarred(node.id) ? '<span class="flex-shrink-0 text-[10px] text-yellow-400/60" title="Berbintang">⭐</span>' : ''}
+      <span class="flex items-center gap-0.5 flex-shrink-0">${viewerDots}</span>
+      <span class="${mnuCls}" title="Opsi">···</span>`;
+    el.addEventListener('click', e => {
+      if (e.target.title === 'Opsi') return;
+      loadFile(node);
+    });
+    // Dblclick → inline rename
+    el.querySelector('.flex-1')?.addEventListener('dblclick', e => {
+      e.stopPropagation();
+      startInlineRename(el, node);
+    });
+  }
+
+  el.querySelector('[title="Opsi"]')?.addEventListener('click', e => {
+    e.stopPropagation();
+    showCtxTreeMenu(e.clientX, e.clientY, node, depth);
+  });
+  el.addEventListener('contextmenu', e => {
+    e.preventDefault();
+    showCtxTreeMenu(e.clientX, e.clientY, node, depth);
+  });
+
+  // ── Drag & Drop ──────────────────────────────────────────────
+  el.setAttribute('draggable', 'true');
+  el.addEventListener('dragstart', e => {
+    dragSrcId = node.id;
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', node.id);
+    setTimeout(() => el.classList.add('wcf-dragging'), 0);
+  });
+  el.addEventListener('dragend', () => {
+    el.classList.remove('wcf-dragging');
+    document.querySelectorAll('.wcf-drag-over,.wcf-drag-insert').forEach(x => {
+      x.classList.remove('wcf-drag-over', 'wcf-drag-insert');
+    });
+    dragSrcId = null;
+  });
+  el.addEventListener('dragover', e => {
+    if (!dragSrcId || dragSrcId === node.id) return;
+    const src = findNode(grpWorkspaceTree, dragSrcId);
+    if (src?.type === 'folder' && isDescendant(src, node.id)) return;
+    e.preventDefault(); e.dataTransfer.dropEffect = 'move';
+    document.querySelectorAll('.wcf-drag-over,.wcf-drag-insert').forEach(x => {
+      x.classList.remove('wcf-drag-over', 'wcf-drag-insert');
+    });
+    el.classList.add('wcf-drag-over');
+    if (node.type !== 'folder') el.classList.add('wcf-drag-insert');
+  });
+  el.addEventListener('dragleave', e => {
+    if (el.contains(e.relatedTarget)) return;
+    el.classList.remove('wcf-drag-over', 'wcf-drag-insert');
+  });
+  el.addEventListener('drop', async e => {
+    e.preventDefault();
+    el.classList.remove('wcf-drag-over', 'wcf-drag-insert');
+    if (!dragSrcId || dragSrcId === node.id) return;
+    const srcNode = findNode(grpWorkspaceTree, dragSrcId);
+    if (!srcNode) return;
+    if (srcNode.type === 'folder' && isDescendant(srcNode, node.id)) return;
+    removeNode(grpWorkspaceTree, dragSrcId);
+    if (node.type === 'folder') {
+      (node.children = node.children || []).push(srcNode);
+      node.expanded = true;
+    } else {
+      const parent = findParent(grpWorkspaceTree, node.id);
+      const arr    = parent?.children ?? grpWorkspaceTree.children;
+      const idx    = arr.findIndex(c => c.id === node.id);
+      arr.splice(idx + 1, 0, srcNode);
+    }
+    await saveWorkspaceTree();
+    renderSidebar();
+    flash('✓ Dipindahkan', true);
+  });
+
+  return el;
+}
+
+// ── Inline rename ────────────────────────────────────────────
+function startInlineRename(el, node) {
+  const nameEl = el.querySelector('.flex-1');
+  if (!nameEl) return;
+  const before = node.name;
+  const inp = document.createElement('input');
+  inp.className = 'grp-rename-input';
+  inp.value = before;
+  nameEl.replaceWith(inp);
+  inp.focus(); inp.select();
+
+  const finish = async (commit) => {
+    const newName = inp.value.trim();
+    inp.replaceWith(nameEl);
+    if (!commit || !newName || newName === before) { nameEl.textContent = before; return; }
+    // If file: rename on DB too
+    if (node.type === 'file') {
+      const r = await apiGroupRename(GROUP_ID, node.id, newName);
+      if (!r?.ok) { flash('⚠ ' + (r?.error || 'Gagal ubah nama'), false); nameEl.textContent = before; return; }
+      if (currentFile?.id === node.id) {
+        currentFile.name = newName;
+        document.getElementById('grp-status').textContent = `📄 ${newName}`;
+      }
+      updateRecentName(node.id, newName);
+    }
+    node.name = newName;
+    await saveWorkspaceTree();
+    renderSidebar();
+  };
+
+  inp.addEventListener('blur', () => finish(true), { once: true });
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); inp.blur(); }
+    if (e.key === 'Escape') { finish(false); }
+  });
+}
+
+// ── Sidebar context menu ─────────────────────────────────────
+let ctxNode = null, ctxDepth = 0;
+const $ctx = () => document.getElementById('proj-ctx');
+
+function showCtxTreeMenu(x, y, node, depth) {
+  ctxNode  = node; ctxDepth = depth;
+  const isFolder = node.type === 'folder';
+  const isFile   = !isFolder;
+  const S = id => { const el = document.getElementById(id); if (el) el.style.display = ''; };
+  const H = id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; };
+  isFolder ? S('grp-ctx-add-file') : H('grp-ctx-add-file');
+  isFolder ? S('grp-ctx-add-folder') : H('grp-ctx-add-folder');
+  isFolder ? S('grp-ctx-sep') : H('grp-ctx-sep');
+  // File-only items
+  isFile ? S('grp-ctx-file-sep2') : H('grp-ctx-file-sep2');
+  isFile ? S('grp-ctx-duplicate')  : H('grp-ctx-duplicate');
+  isFile ? S('grp-ctx-star')       : H('grp-ctx-star');
+  isFile ? S('grp-ctx-move')       : H('grp-ctx-move');
+  isFile ? S('grp-ctx-pubshare')   : H('grp-ctx-pubshare');
+  if (isFile) {
+    const starEl = document.getElementById('grp-ctx-star');
+    if (starEl) starEl.textContent = isStarred(node.id) ? '☆ Hapus Bintang' : '⭐ Tandai Bintang';
+  }
+  const menu = $ctx();
+  menu.style.left = Math.min(x, innerWidth  - 210) + 'px';
+  menu.style.top  = Math.min(y, innerHeight - 220) + 'px';
+  menu.classList.remove('hidden');
+}
+function hideCtxTreeMenu() { $ctx()?.classList.add('hidden'); ctxNode = null; }
+
+document.addEventListener('click', e => {
+  if (!$ctx()?.contains(e.target)) hideCtxTreeMenu();
+});
+
+document.getElementById('grp-ctx-add-file')?.addEventListener('click', async () => {
+  const folder = ctxNode; hideCtxTreeMenu();
+  if (!folder) return;
+  const name = await wcfPrompt('Nama file baru:');
+  if (!name?.trim()) return;
+  const id = genId();
+  (folder.children = folder.children || []).push({ id, name: name.trim(), type: 'file' });
+  folder.expanded = true;
+  await saveWorkspaceTree();
+  renderSidebar();
+  await loadFile({ id, name: name.trim() });
+});
+
+document.getElementById('grp-ctx-add-folder')?.addEventListener('click', async () => {
+  const folder = ctxNode; hideCtxTreeMenu();
+  if (!folder) return;
+  const name = await wcfPrompt('Nama folder baru:');
+  if (!name?.trim()) return;
+  (folder.children = folder.children || []).push({ id: genId(), name: name.trim(), type: 'folder', expanded: true, children: [] });
+  folder.expanded = true;
+  await saveWorkspaceTree(); renderSidebar();
+});
+
+document.getElementById('grp-ctx-rename')?.addEventListener('click', async () => {
+  const node = ctxNode; hideCtxTreeMenu();
+  if (!node) return;
+  const newName = await wcfPrompt('Nama baru:', node.name);
+  if (!newName?.trim() || newName.trim() === node.name) return;
+  if (node.type === 'file') {
+    const r = await apiGroupRename(GROUP_ID, node.id, newName.trim());
+    if (!r?.ok) { flash('⚠ ' + (r?.error || 'Gagal ubah nama'), false); return; }
+    if (currentFile?.id === node.id) {
+      currentFile.name = newName.trim();
+      document.getElementById('grp-status').textContent = `📄 ${newName.trim()}`;
+    }
+    updateRecentName(node.id, newName.trim());
+  }
+  node.name = newName.trim();
+  await saveWorkspaceTree(); renderSidebar();
+  flash('✓ Diubah namanya', true);
+});
+
+document.getElementById('grp-ctx-delete')?.addEventListener('click', async () => {
+  const node = ctxNode; hideCtxTreeMenu();
+  if (!node) return;
+  const label  = node.type === 'folder' ? 'folder' : 'file';
+  const hasKids = node.type === 'folder' && node.children?.length;
+  if (!await wcfConfirm(`Hapus ${label} "${node.name}"?${hasKids ? '\nSemua isi dihapus.' : ''}`)) return;
+  const ids = collectFileIds(node);
+  for (const id of ids) await apiGroupDelete(GROUP_ID, id).catch(() => {});
+  if (currentFile && ids.includes(currentFile.id)) {
+    currentFile = null;
+    state.currentProject = null;
+    document.getElementById('grp-status').textContent = 'Belum ada file dibuka';
+    document.getElementById('canvas-empty').style.display = '';
+    applyData({ nodes: {}, connections: [], nextId: 1 });
+  }
+  removeNode(grpWorkspaceTree, node.id);
+  // Clean up starred + recent for deleted file IDs
+  const s = getStarred();
+  ids.forEach(id => s.delete(id));
+  setStarredStore(s);
+  const newRecent = getRecent().filter(x => !ids.includes(x.id));
+  try { localStorage.setItem(LS_RECENT, JSON.stringify(newRecent)); } catch {}
+  await saveWorkspaceTree(); renderSidebar();
+  flash('✓ Dihapus', true);
+});
+
+// ── Duplicate file ───────────────────────────────────────────
+document.getElementById('grp-ctx-duplicate')?.addEventListener('click', async () => {
+  const node = ctxNode; hideCtxTreeMenu();
+  if (!node || node.type !== 'file') return;
+  const defaultName = node.name.replace(/(\.[^.]+)?$/, ' (salinan)$1') || node.name + ' (salinan)';
+  const newName = await wcfPrompt('Nama salinan:', defaultName);
+  if (!newName?.trim()) return;
+  const r = await apiGroupLoad(GROUP_ID, node.id);
+  const data = (r?.ok && r.data) ? r.data : { nodes: {}, connections: [], nextId: 1 };
+  const newId = genId();
+  const sr = await apiGroupSave(GROUP_ID, data, newId);
+  if (!sr?.ok) { flash('⚠ Gagal menyalin file', false); return; }
+  // Insert right after original in parent
+  const parent = findParent(grpWorkspaceTree, node.id);
+  const arr = parent ? (parent.children || []) : (grpWorkspaceTree.children || []);
+  const idx = arr.findIndex(c => c.id === node.id);
+  arr.splice(idx + 1, 0, { id: newId, name: newName.trim(), type: 'file' });
+  await saveWorkspaceTree();
+  renderSidebar();
+  flash(`✓ "${newName.trim()}" dibuat`, true);
+});
+
+// ── Star / unstar file ────────────────────────────────────────
+document.getElementById('grp-ctx-star')?.addEventListener('click', () => {
+  const node = ctxNode; hideCtxTreeMenu();
+  if (!node || node.type !== 'file') return;
+  const nowStarred = toggleStar(node.id);
+  renderSidebar();
+  flash(nowStarred ? `⭐ "${node.name}" ditandai bintang` : `☆ Bintang dihapus`, true);
+});
+
+// ── Move file to another group ────────────────────────────────
+let _moveFileNode = null;
+document.getElementById('grp-ctx-move')?.addEventListener('click', async () => {
+  const node = ctxNode; hideCtxTreeMenu();
+  if (!node || node.type !== 'file') return;
+  _moveFileNode = node;
+  const r = await apiGetMyGroups();
+  if (!r?.ok) { flash('⚠ Gagal memuat daftar grup', false); return; }
+  const others = (r.groups || []).filter(g => String(g.id) !== String(GROUP_ID));
+  if (!others.length) { flash('Tidak ada grup lain yang bisa dituju', false); return; }
+  const sel = document.getElementById('move-group-select');
+  sel.innerHTML = '<option value="">Pilih grup tujuan…</option>'
+    + others.map(g => `<option value="${g.id}">${escHtml(g.name)}</option>`).join('');
+  document.getElementById('move-modal-filename').textContent = `File: ${node.name}`;
+  document.getElementById('move-group-modal').classList.remove('hidden');
+});
+
+document.getElementById('move-group-cancel')?.addEventListener('click', () => {
+  document.getElementById('move-group-modal').classList.add('hidden');
+  _moveFileNode = null;
+});
+
+// ── Public Share (group) ─────────────────────────────────────
+let _pubShareNode = null;
+const grpPubModal  = document.getElementById('grp-pubshare-modal');
+const grpPubToggle = document.getElementById('grp-pub-toggle');
+const grpPubStatus = document.getElementById('grp-pub-status');
+const grpPubLinkRow= document.getElementById('grp-pub-link-row');
+const grpPubUrl    = document.getElementById('grp-pub-url');
+const grpPubCopy   = document.getElementById('grp-pub-copy');
+const grpPubOpen   = document.getElementById('grp-pub-open');
+
+function setGrpPubShareUI(url) {
+  const active = !!url;
+  grpPubToggle.checked     = active;
+  grpPubStatus.textContent = active ? 'Aktif' : 'Nonaktif';
+  grpPubStatus.style.color = active ? 'rgba(167,243,208,0.8)' : '';
+  if (active) {
+    grpPubLinkRow.style.display = 'flex';
+    grpPubUrl.value             = url;
+    grpPubOpen.href             = url;
+  } else {
+    grpPubLinkRow.style.display = 'none';
+    grpPubUrl.value             = '';
+  }
+}
+
+document.getElementById('grp-ctx-pubshare')?.addEventListener('click', async () => {
+  const node = ctxNode; hideCtxTreeMenu();
+  if (!node || node.type !== 'file') return;
+  _pubShareNode = node;
+  document.getElementById('grp-pubshare-filename').textContent = `📄 ${node.name}`;
+  setGrpPubShareUI(null);
+  grpPubModal.classList.remove('hidden');
+  try {
+    const r = await apiGetGroupPublicShare(GROUP_ID, node.id);
+    if (r.ok) setGrpPubShareUI(r.url);
+  } catch {}
+});
+
+document.getElementById('grp-pubshare-close')?.addEventListener('click', () => {
+  grpPubModal.classList.add('hidden'); _pubShareNode = null;
+});
+grpPubModal?.addEventListener('click', e => {
+  if (e.target === grpPubModal) { grpPubModal.classList.add('hidden'); _pubShareNode = null; }
+});
+
+grpPubToggle?.addEventListener('change', async () => {
+  if (!_pubShareNode) return;
+  grpPubToggle.disabled = true;
+  try {
+    if (grpPubToggle.checked) {
+      const r = await apiEnableGroupPublicShare(GROUP_ID, _pubShareNode.id, _pubShareNode.name);
+      if (r.ok) setGrpPubShareUI(r.url);
+      else { grpPubToggle.checked = false; flash(r.error || 'Gagal mengaktifkan', false); }
+    } else {
+      const r = await apiDisableGroupPublicShare(GROUP_ID, _pubShareNode.id);
+      if (r.ok) setGrpPubShareUI(null);
+      else { grpPubToggle.checked = true; flash(r.error || 'Gagal menonaktifkan', false); }
+    }
+  } catch (e) { flash(e.message, false); }
+  grpPubToggle.disabled = false;
+});
+
+grpPubCopy?.addEventListener('click', () => {
+  navigator.clipboard.writeText(grpPubUrl.value).then(() => {
+    grpPubCopy.textContent = '✓ Disalin';
+    setTimeout(() => { grpPubCopy.textContent = 'Salin'; }, 2000);
+  });
+});
+
+document.getElementById('move-group-confirm')?.addEventListener('click', async () => {
+  const targetGroupId = document.getElementById('move-group-select').value;
+  if (!targetGroupId) { flash('Pilih grup tujuan terlebih dahulu', false); return; }
+  const node = _moveFileNode;
+  if (!node) return;
+  document.getElementById('move-group-modal').classList.add('hidden');
+  _moveFileNode = null;
+  try {
+    // Load data from source
+    const dr = await apiGroupLoad(GROUP_ID, node.id);
+    const data = (dr?.ok && dr.data) ? dr.data : { nodes: {}, connections: [], nextId: 1 };
+    // Save to target group
+    await apiGroupSave(targetGroupId, data, node.id);
+    // Add file to target group workspace tree
+    const twr = await apiGroupGetWorkspace(targetGroupId);
+    const targetTree = (twr?.ok && twr.tree)
+      ? twr.tree
+      : { id: 'root', name: 'root', type: 'folder', children: [] };
+    (targetTree.children = targetTree.children || []).push({ id: node.id, name: node.name, type: 'file' });
+    await apiGroupSaveWorkspace(targetGroupId, targetTree);
+    // Delete from source group
+    await apiGroupDelete(GROUP_ID, node.id);
+    // Close canvas if it was the open file
+    if (currentFile?.id === node.id) {
+      currentFile = null;
+      state.currentProject = null;
+      document.getElementById('grp-status').textContent = 'Belum ada file dibuka';
+      document.getElementById('canvas-empty').style.display = '';
+      applyData({ nodes: {}, connections: [], nextId: 1 });
+    }
+    removeNode(grpWorkspaceTree, node.id);
+    await saveWorkspaceTree();
+    renderSidebar();
+    flash(`✓ "${node.name}" dipindahkan ke grup lain`, true);
+  } catch (err) {
+    flash('⚠ Gagal memindahkan: ' + err.message, false);
+  }
+});
+
+// ── Starred / recent section collapse toggle ──────────────────
+document.getElementById('starred-header')?.addEventListener('click', () => {
+  _starredExpanded = !_starredExpanded;
+  renderStarredSection();
+});
+document.getElementById('recent-header')?.addEventListener('click', () => {
+  _recentExpanded = !_recentExpanded;
+  renderRecentSection();
+});
+
+// ── Toolbar buttons ──────────────────────────────────────────
+document.getElementById('btn-new-file')?.addEventListener('click', async () => {
+  const name = await wcfPrompt('Nama file baru:');
+  if (!name?.trim()) return;
+  const id = genId();
+  (grpWorkspaceTree.children = grpWorkspaceTree.children || []).push({ id, name: name.trim(), type: 'file' });
+  await saveWorkspaceTree(); renderSidebar();
+  await loadFile({ id, name: name.trim() });
+});
+
+document.getElementById('btn-new-folder')?.addEventListener('click', async () => {
+  const name = await wcfPrompt('Nama folder baru:');
+  if (!name?.trim()) return;
+  (grpWorkspaceTree.children = grpWorkspaceTree.children || []).push(
+    { id: genId(), name: name.trim(), type: 'folder', expanded: true, children: [] }
+  );
+  await saveWorkspaceTree(); renderSidebar();
+});
+
+document.getElementById('btn-save')?.addEventListener('click', () => saveCurrentFile());
+document.getElementById('btn-load')?.addEventListener('click', async () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  const r = await apiGroupLoad(GROUP_ID, currentFile.id);
+  if (r?.ok && r.data) { applyData(r.data); refs.dirty = false; flash('✓ Dimuat', true); }
+  else flash('⚠ Gagal memuat', false);
+});
+document.getElementById('btn-clear')?.addEventListener('click', async () => {
+  if (!currentFile) return;
+  if (!await wcfConfirm('Hapus semua isi canvas ini?', 'Hapus')) return;
+  pushUndo();
+  applyData({
+    nodes: {}, connections: [], nextId: 1, groups: {},
+    stickies: {}, nextStickyId: 1, frames: {}, nextFrameId: 1,
+  });
+  refs.dirty = true;
+  flash('🗑 Canvas dikosongkan', true);
+});
+function grpUndo() {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  if (!hist.undo.length) { flash('Tidak ada yang bisa di-undo', false); return; }
+  const othersHere = [...remoteUsers.values()].some(u => u.fileId === currentFile?.id);
+  if (othersHere) flash('⚠ Ada anggota lain di file ini — undo bisa konflik', false);
+  undo();
+  broadcastCanvas();
+}
+function grpRedo() {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  if (!hist.redo.length) { flash('Tidak ada yang bisa di-redo', false); return; }
+  const othersHere = [...remoteUsers.values()].some(u => u.fileId === currentFile?.id);
+  if (othersHere) flash('⚠ Ada anggota lain di file ini — redo bisa konflik', false);
+  redo();
+  broadcastCanvas();
+}
+document.getElementById('btn-undo')?.addEventListener('click', grpUndo);
+document.getElementById('btn-redo')?.addEventListener('click', grpRedo);
+
+// ── Keyboard shortcuts Ctrl+Z / Ctrl+Y ───────────────────────
+window.addEventListener('keydown', e => {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (!ctrl) return;
+  // Jangan tangkap saat sedang edit teks
+  const tag = document.activeElement?.tagName;
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.contentEditable === 'true') return;
+  if (e.key === 'z' && !e.shiftKey) { e.preventDefault(); grpUndo(); }
+  if (e.key === 'y' || (e.key === 'z' && e.shiftKey)) { e.preventDefault(); grpRedo(); }
+}, { capture: true });
+document.getElementById('btn-export-json')?.addEventListener('click', () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  exportJSON();
+});
+document.getElementById('btn-export-png')?.addEventListener('click', () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  exportPNG();
+});
+document.getElementById('btn-export-svg')?.addEventListener('click', () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  exportSVG();
+});
+document.getElementById('btn-export-md')?.addEventListener('click', () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  exportMarkdown();
+});
+document.getElementById('btn-export-pdf')?.addEventListener('click', () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  exportPDF();
+});
+
+// ── Snapshot versi file ───────────────────────────────────────
+const LS_SNAP_PREFIX = `wcf_snaps_${GROUP_ID}_`;
+const MAX_SNAPS = 5;
+
+function getSnaps(fileId) {
+  try { return JSON.parse(localStorage.getItem(LS_SNAP_PREFIX + fileId) || '[]'); } catch { return []; }
+}
+function saveSnap(fileId, label) {
+  const data = JSON.stringify(snapshotData());
+  const snap = { ts: Date.now(), label: label || new Date().toLocaleTimeString(), data };
+  let snaps = getSnaps(fileId);
+  snaps.unshift(snap);
+  if (snaps.length > MAX_SNAPS) snaps = snaps.slice(0, MAX_SNAPS);
+  try { localStorage.setItem(LS_SNAP_PREFIX + fileId, JSON.stringify(snaps)); } catch { flash('⚠ Snapshot terlalu besar', false); }
+}
+function renderSnapPanel() {
+  if (!currentFile) return;
+  const snaps = getSnaps(currentFile.id);
+  const list  = document.getElementById('snap-list');
+  const empty = document.getElementById('snap-empty');
+  if (!list) return;
+  // Clear existing rows (keep #snap-empty)
+  list.querySelectorAll('.snap-row').forEach(r => r.remove());
+  if (!snaps.length) {
+    if (empty) empty.style.display = 'block';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  for (const [i, snap] of snaps.entries()) {
+    const row = document.createElement('div');
+    row.className = 'snap-row';
+    const d = new Date(snap.ts);
+    const timeStr = d.toLocaleDateString('id') + ' ' + d.toLocaleTimeString('id', { hour:'2-digit', minute:'2-digit' });
+    row.innerHTML = `
+      <span class="snap-label">${snap.label}</span>
+      <span class="snap-time">${timeStr}</span>
+      <button class="snap-restore">Pulihkan</button>`;
+    row.querySelector('.snap-restore')?.addEventListener('click', async e => {
+      e.stopPropagation();
+      const ok = await wcfConfirm(`Pulihkan snapshot "${snap.label}"? Canvas saat ini akan diganti.`);
+      if (!ok) return;
+      pushUndo();
+      const d2 = JSON.parse(snap.data);
+      applyData(d2);
+      refs.dirty = true;
+      broadcastCanvas();
+      flash(`✓ Dipulihkan: ${snap.label}`, true);
+      document.getElementById('snap-panel')?.classList.add('hidden');
+    });
+    list.appendChild(row);
+  }
+}
+
+document.getElementById('btn-snapshot')?.addEventListener('click', () => {
+  if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+  const panel = document.getElementById('snap-panel');
+  panel?.classList.toggle('hidden');
+  if (!panel?.classList.contains('hidden')) renderSnapPanel();
+});
+document.getElementById('snap-panel-close')?.addEventListener('click', () => {
+  document.getElementById('snap-panel')?.classList.add('hidden');
+});
+document.getElementById('snap-save-btn')?.addEventListener('click', async () => {
+  if (!currentFile) return;
+  const label = await wcfPrompt('Nama snapshot:', new Date().toLocaleString('id'));
+  if (!label?.trim()) return;
+  saveSnap(currentFile.id, label.trim());
+  renderSnapPanel();
+  flash('✓ Snapshot disimpan', true);
+});
+document.getElementById('btn-zoom-in')?.addEventListener('click', () => { zoomBy(0.05); repositionAllCursors(); });
+document.getElementById('btn-zoom-out')?.addEventListener('click', () => { zoomBy(-0.05); repositionAllCursors(); });
+document.getElementById('btn-zoom-reset')?.addEventListener('click', () => { zoomReset(); repositionAllCursors(); });
+document.getElementById('btn-zoom-fit')?.addEventListener('click', () => zoomToFit());
+document.getElementById('btn-auto-layout')?.addEventListener('click', () => {
+  import('./js/features/auto-layout.js').then(m => {
+    m.applyAutoLayout();
+    flash('✓ Auto-layout diterapkan', true);
+  });
+});
+
+// ── Dropdown menus (canvas-tools / export / more) ─────────────
+function _initDropdown(triggerId, menuId) {
+  const btn  = document.getElementById(triggerId);
+  const menu = document.getElementById(menuId);
+  if (!btn || !menu) return;
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    // Close other dropdowns
+    ['canvas-tools-menu','export-menu','more-menu'].forEach(id => {
+      if (id !== menuId) document.getElementById(id)?.style.setProperty('display','none');
+    });
+    menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+  });
+}
+_initDropdown('btn-canvas-tools-trigger', 'canvas-tools-menu');
+_initDropdown('btn-export-trigger',        'export-menu');
+_initDropdown('btn-more-trigger',          'more-menu');
+document.addEventListener('click', () => {
+  ['canvas-tools-menu','export-menu','more-menu'].forEach(id => {
+    document.getElementById(id)?.style.setProperty('display','none');
+  });
+});
+
+// Snap to grid
+{
+  let snapGrid = false, snapSize = 20;
+  const snapBtn = document.getElementById('btn-snap-grid');
+  if (snapBtn) {
+    snapBtn.addEventListener('click', () => {
+      snapGrid = !snapGrid;
+      snapBtn.style.color      = snapGrid ? 'var(--accent)' : '';
+      snapBtn.style.background = snapGrid ? 'var(--accent-muted)' : '';
+      flash(snapGrid ? '⊞ Snap grid aktif' : '⊞ Snap grid nonaktif', true);
+    });
+    // Expose for drag handler (group.html uses its own drag, so just expose via closure)
+    window._wcfSnapGrid = () => snapGrid;
+    window._wcfSnapSize = () => snapSize;
+  }
+}
+
+// Canvas background
+{
+  const bgPatterns = ['', 'bg-dots', 'bg-grid', 'bg-lines', 'bg-none'];
+  let bgIdx = 0;
+  const bgBtn = document.getElementById('btn-canvas-bg');
+  const $c2 = document.getElementById('container');
+  if (bgBtn && $c2) {
+    bgBtn.addEventListener('click', () => {
+      if (bgIdx === 0) bgIdx = 1;
+      $c2.classList.remove(...bgPatterns.filter(p => p));
+      bgIdx = (bgIdx + 1) % bgPatterns.length;
+      const p = bgPatterns[bgIdx];
+      if (p) $c2.classList.add(p);
+      flash('⬡ BG: ' + ['Dots','Dots lg','Grid','Garis','Kosong'][bgIdx], true);
+    });
+  }
+}
+
+// Canvas coordinates HUD
+{
+  const _co = document.getElementById('canvas-coords');
+  if (_co) {
+    $c.addEventListener('mousemove', e => {
+      const p = toCanvas(e.clientX, e.clientY);
+      _co.style.display = 'block';
+      _co.textContent = `X: ${Math.round(p.x)}  Y: ${Math.round(p.y)}`;
+    });
+    $c.addEventListener('mouseleave', () => { _co.style.display = 'none'; });
+  }
+}
+
+// Sticky Note
+document.getElementById('btn-sticky')?.addEventListener('click', () => {
+  import('./js/features/sticky.js').then(({ createSticky }) => {
+    const container = document.getElementById('container');
+    const rect = container.getBoundingClientRect();
+    // toCanvas equivalent using current zoom/pan
+    const z = state.zoom || 1, px = state.pan?.x || 0, py = state.pan?.y || 0;
+    const cx = (rect.width  / 2 - px) / z;
+    const cy = (rect.height / 2 - py) / z;
+    createSticky(cx, cy);
+    flash('🗒 Sticky note ditambahkan', true);
+  });
+});
+
+// Frame / Kanban / Cmd
+document.getElementById('btn-frame')?.addEventListener('click', () => toggleFrameDrawMode());
+document.getElementById('btn-kanban')?.addEventListener('click', () => openKanban());
+document.getElementById('btn-cmd')?.addEventListener('click', () => openCmdPalette());
+
+// ── Dashboard Aktivitas ───────────────────────────────────────
+const activityPanel = document.getElementById('activity-panel');
+const activityList  = document.getElementById('activity-list');
+const activityEmpty = document.getElementById('activity-empty');
+
+const ACTION_LABEL = {
+  'edit':   '✏️ Edit teks',
+  'create': '➕ Buat node',
+  'delete': '🗑 Hapus node',
+};
+
+function timeAgo(dateStr) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const s = Math.round(diff / 1000);
+  if (s < 60)  return `${s}d lalu`;
+  const m = Math.round(s / 60);
+  if (m < 60)  return `${m}m lalu`;
+  const h = Math.round(m / 60);
+  if (h < 24)  return `${h}j lalu`;
+  return `${Math.round(h / 24)}h lalu`;
+}
+
+async function loadActivityPanel() {
+  activityList.querySelectorAll('.act-row').forEach(r => r.remove());
+  activityEmpty.style.display = 'block';
+  activityEmpty.textContent   = 'Memuat…';
+  try {
+    const r = await apiGetGroupActivity(GROUP_ID, 80);
+    if (!r?.ok || !r.activity?.length) {
+      activityEmpty.textContent = 'Belum ada aktivitas.';
+      return;
+    }
+    activityEmpty.style.display = 'none';
+    // Group by file_id to get friendly names from workspace tree
+    const fileNames = {};
+    (grpWorkspaceTree?.children || []).forEach(c => { fileNames[c.id] = c.name; });
+
+    for (const item of r.activity) {
+      const row = document.createElement('div');
+      row.className = 'act-row';
+      row.style.cssText = `padding:8px 14px;border-bottom:1px solid var(--border);font-size:.75rem;
+        color:var(--text-primary);line-height:1.5;`;
+      const label   = ACTION_LABEL[item.action] || `• ${item.action}`;
+      const file    = fileNames[item.file_id] || item.file_id;
+      const changed = item.new_text ? `<span style="color:var(--text-tertiary)">"${item.new_text.slice(0,40)}"</span>` : '';
+      row.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:8px">
+          <span style="color:var(--accent-primary);font-weight:600">${item.username}</span>
+          <span style="color:var(--text-tertiary);white-space:nowrap">${timeAgo(item.created_at)}</span>
+        </div>
+        <div>${label} di <em style="color:var(--text-secondary)">${file}</em></div>
+        ${changed ? `<div style="font-size:.7rem;margin-top:2px;color:var(--text-tertiary)">${changed}</div>` : ''}
+      `;
+      activityList.appendChild(row);
+    }
+  } catch {
+    activityEmpty.textContent = '⚠ Gagal memuat aktivitas.';
+    activityEmpty.style.display = 'block';
+  }
+}
+
+document.getElementById('btn-activity')?.addEventListener('click', () => {
+  const open = activityPanel.style.display === 'flex';
+  activityPanel.style.display = open ? 'none' : 'flex';
+  if (!open) loadActivityPanel();
+});
+document.getElementById('activity-close')?.addEventListener('click', () => {
+  activityPanel.style.display = 'none';
+});
+document.getElementById('activity-refresh')?.addEventListener('click', () => loadActivityPanel());
+
+// ── Mobile sidebar toggle ─────────────────────────────────────
+(function() {
+  const sidebar = document.getElementById('sidebar');
+  const toggle  = document.getElementById('btn-sidebar-toggle');
+  if (!sidebar || !toggle) return;
+  // Overlay backdrop (tap di luar sidebar untuk tutup)
+  const backdrop = document.createElement('div');
+  backdrop.style.cssText = 'display:none;position:fixed;inset:0;z-index:199;background:rgba(0,0,0,.4);';
+  document.body.appendChild(backdrop);
+  toggle.addEventListener('click', () => {
+    const open = sidebar.classList.toggle('mobile-open');
+    backdrop.style.display = open ? 'block' : 'none';
+  });
+  backdrop.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-open');
+    backdrop.style.display = 'none';
+  });
+})();
+
+// ── Zoom to fit all nodes ─────────────────────────────────────
+function zoomToFit() {
+  const nodes = Object.values(state.nodes);
+  if (!nodes.length) { flash('Canvas kosong', false); return; }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const n of nodes) {
+    const el = $el(n.id);
+    const w  = el ? el.offsetWidth  : (n.width || 160);
+    const h  = el ? el.offsetHeight : 50;
+    if (n.x          < minX) minX = n.x;
+    if (n.y          < minY) minY = n.y;
+    if (n.x + w      > maxX) maxX = n.x + w;
+    if (n.y + h      > maxY) maxY = n.y + h;
+  }
+  const PAD  = 64;
+  const cntW = $c.offsetWidth;
+  const cntH = $c.offsetHeight;
+  const bW   = (maxX - minX) + PAD * 2;
+  const bH   = (maxY - minY) + PAD * 2;
+  const newZ = Math.min(cntW / bW, cntH / bH, 2);
+  state.zoom  = Math.max(0.15, newZ);
+  state.pan.x = (cntW / 2) - ((minX + maxX) / 2) * state.zoom;
+  state.pan.y = (cntH / 2) - ((minY + maxY) / 2) * state.zoom;
+  applyTransform(); updateMinimap(); repositionAllCursors();
+}
+
+// ── Search ───────────────────────────────────────────────────
+document.getElementById('grp-search')?.addEventListener('input', e => {
+  grpFilter = e.target.value;
+  renderSidebar();
+});
+
+// ── WebSocket — Realtime ─────────────────────────────────────
+let ws              = null;
+let myWsColor       = '#7c6dfa';
+let wsReady         = false;
+const remoteCursors = new Map(); // username → { el, x, y, color }
+const remoteUsers   = new Map(); // username → { color, fileId }
+const nodeLocks     = new Map(); // nodeId  → { username, color }
+const grpNodeCounts = {};        // fileId  → number
+
+let lastCursorSend  = 0;
+let lastDragSend    = 0;
+let offlineBanner   = null;
+let wsRetryTimer    = null;
+let wsConnecting    = false;
+
+// ── Helpers ───────────────────────────────────────────────────
+function wsSend(data) {
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify(data));
+}
+
+function setOffline(v, code) {
+  offlineBanner = offlineBanner || document.getElementById('offline-banner');
+  if (!offlineBanner) return;
+  offlineBanner.classList.toggle('hidden', !v);
+  const span = offlineBanner.querySelector('.ws-code');
+  if (span) span.textContent = (v && code) ? ` [${code}]` : '';
+}
+
+// ── Connect ───────────────────────────────────────────────────
+function connectWS() {
+  // Cegah koneksi ganda
+  if (ws && (ws.readyState === 0 || ws.readyState === 1)) return;
+  if (wsConnecting) return;
+  clearTimeout(wsRetryTimer);
+  wsConnecting = true;
+
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${proto}//${location.host}/ws?groupId=${GROUP_ID}`);
+
+  // ── 1. Koneksi terbuka → kirim auth ──────────────────────
+  ws.addEventListener('open', () => {
+    wsConnecting = false;
+    const token = localStorage.getItem('wcf_token') || '';
+    console.log('[WS] open, mengirim auth…');
+    wsSend({ type: 'auth', token });
+    // wsReady & setOffline(false) ditunggu sampai server kirim 'init'
+  });
+
+  // ── 2. Pesan masuk → dispatch ke handler ─────────────────
+  ws.addEventListener('message', e => {
+    let msg; try { msg = JSON.parse(e.data); } catch { return; }
+    handleWsMsg(msg);
+  });
+
+  // ── 3. Koneksi putus → bersihkan state, schedule retry ───
+  ws.addEventListener('close', e => {
+    wsConnecting = false;
+    wsReady      = false;
+    setOffline(true, e.code || '');
+    for (const [u] of remoteCursors) removeCursor(u);
+    clearAllLockOverlays();
+    remoteUsers.clear();
+    renderOnlineUsers();
+    console.warn('[WS] disconnected — code:', e.code, '|', e.reason || '(no reason)');
+
+    // 4003 = bukan member, tidak ada gunanya reconnect
+    if (e.code === 4003) {
+      flash('❌ Bukan anggota grup ini', false);
+      return;
+    }
+    // Semua kode lain (termasuk 4001) → coba lagi 3 detik
+    wsRetryTimer = setTimeout(connectWS, 3000);
+  });
+
+  // ── 4. Error jaringan → close event yang urus retry ──────
+  ws.addEventListener('error', () => { wsConnecting = false; });
+}
+
+// ── Message handler ───────────────────────────────────────────
+function handleWsMsg(msg) {
+  switch (msg.type) {
+
+    // Server konfirmasi auth berhasil → baru tandai online
+    case 'init': {
+      const wasOffline = !wsReady;
+      wsReady = true;
+      setOffline(false);
+      myWsColor = msg.color;
+      msg.users.forEach(u => remoteUsers.set(u.username, { color: u.color, fileId: u.fileId }));
+      if (msg.locks) {
+        for (const [nid, info] of Object.entries(msg.locks)) {
+          nodeLocks.set(nid, info);
+          applyLockOverlay(nid, info.username, info.color);
+        }
+      }
+      // Beritahu server file yang sedang terbuka
+      if (currentFile) wsSend({ type: 'join', fileId: currentFile.id });
+      renderOnlineUsers();
+      // Kalau sebelumnya offline & ada file terbuka → reload dari server
+      // agar sinkron dengan perubahan yang terjadi saat kita offline
+      if (wasOffline && currentFile && !refs.dirty) {
+        apiGroupLoad(GROUP_ID, currentFile.id).then(r => {
+          if (r?.ok && r.data && typeof r.data.nodes === 'object') {
+            applyData(r.data);
+            for (const [nid, info] of nodeLocks) applyLockOverlay(nid, info.username, info.color);
+            updateMinimap();
+            flash('✓ Kembali online — canvas disinkronkan', true);
+          } else {
+            flash('✓ Kembali online', true);
+          }
+        }).catch(() => flash('✓ Kembali online', true));
+      } else if (wasOffline) {
+        flash('✓ Kembali online', true);
+      }
+      break;
+    }
+
+    case 'user_join':
+      remoteUsers.set(msg.username, { color: msg.color, fileId: msg.fileId });
+      renderOnlineUsers();
+      flash(`👤 ${msg.username} bergabung`, true);
+      addNotification('user', `${msg.username} bergabung ke workspace`, msg.color);
+      break;
+
+    case 'user_leave':
+      remoteUsers.delete(msg.username);
+      removeCursor(msg.username);
+      renderOnlineUsers();
+      // Hapus lock milik user yang pergi
+      for (const [nid, info] of nodeLocks) {
+        if (info.username === msg.username) { nodeLocks.delete(nid); removeLockOverlay(nid); }
+      }
+      flash(`👤 ${msg.username} keluar`, false);
+      addNotification('user', `${msg.username} meninggalkan workspace`, '#888');
+      break;
+
+    case 'user_file':
+      if (remoteUsers.has(msg.username)) remoteUsers.get(msg.username).fileId = msg.fileId;
+      renderOnlineUsers();
+      if (msg.fileId !== currentFile?.id) removeCursor(msg.username);
+      break;
+
+    case 'cursor':
+      if (msg.fileId === currentFile?.id) updateRemoteCursor(msg.username, msg.color, msg.x, msg.y);
+      else removeCursor(msg.username);
+      break;
+
+    // Delta: live node position saat user lain drag
+    case 'node_pos': {
+      if (msg.fileId !== currentFile?.id) break;
+      const n = state.nodes[msg.id]; if (!n) break;
+      n.x = msg.x; n.y = msg.y;
+      const el = $el(msg.id);
+      if (el) {
+        el.style.left = msg.x + 'px'; el.style.top = msg.y + 'px';
+        // Glow berwarna sementara
+        el.style.boxShadow = `0 0 0 2px ${msg.color}, 0 0 12px ${msg.color}55`;
+        clearTimeout(el._glowTimer);
+        el._glowTimer = setTimeout(() => { el.style.boxShadow = ''; }, 800);
+      }
+      renderLines(); updateMinimap();
+      break;
+    }
+
+    // Node lock — orang lain sedang edit text node ini
+    case 'node_lock':
+      if (msg.fileId !== currentFile?.id) break;
+      nodeLocks.set(String(msg.nodeId), { username: msg.username, color: msg.color });
+      applyLockOverlay(msg.nodeId, msg.username, msg.color);
+      break;
+
+    case 'node_unlock':
+      nodeLocks.delete(String(msg.nodeId));
+      removeLockOverlay(msg.nodeId);
+      break;
+
+    // Real-time text typing dari user lain
+    case 'node_text': {
+      if (msg.fileId !== currentFile?.id) break;
+      const n = state.nodes[msg.nodeId]; if (!n) break;
+      n.text = msg.text;
+      const nodeEl = $el(msg.nodeId);
+      const textEl = nodeEl?.querySelector('[contenteditable="true"]');
+      if (textEl && document.activeElement !== textEl) {
+        textEl.textContent = msg.text;
+      }
+      break;
+    }
+
+    // Sidebar tree update dari user lain
+    case 'tree_update':
+      grpWorkspaceTree = msg.tree;
+      renderSidebar();
+      break;
+
+    case 'canvas_patch': {
+      if (msg.fileId !== currentFile?.id) break;
+      // Skip kalau user sedang aktif edit (drag, resize, connect, atau ketik)
+      const editing = document.activeElement?.contentEditable === 'true';
+      if (ui.dragging || ui.resizing || ui.connecting || editing) break;
+      const oldCount = Object.keys(state.nodes).length;
+      applyData(msg.patch);
+      // applyData rebuild DOM → restore lock overlays yang masih aktif
+      for (const [nid, info] of nodeLocks) {
+        applyLockOverlay(nid, info.username, info.color);
+      }
+      const newCount = Object.keys(msg.patch.nodes || {}).length;
+      updateNodeCount(currentFile.id, newCount);
+      refs.dirty = false;
+      updateMinimap();
+      renderSidebar();
+      // Notifikasi perubahan canvas
+      const diff = newCount - oldCount;
+      if (diff !== 0) {
+        const action = diff > 0 ? `menambah ${diff} node` : `menghapus ${Math.abs(diff)} node`;
+        addNotification('canvas', `${msg.username} ${action} di "${currentFile?.name || 'file ini'}"`, msg.color);
+      } else if (oldCount > 0) {
+        addNotification('canvas', `${msg.username} mengubah canvas di "${currentFile?.name || 'file ini'}"`, msg.color);
+      }
+      break;
+    }
+
+    // Typing indicator — user lain sedang mengetik di dalam node
+    case 'node_typing': {
+      if (msg.fileId !== currentFile?.id) break;
+      showTypingIndicator(msg.nodeId, msg.username, msg.color);
+      break;
+    }
+
+    // Komentar baru ditambahkan
+    case 'comment_added': {
+      addNotification('comment', `${msg.username} menambah komentar di "${currentFile?.name || ''}"`, '#a78bfa');
+      // Kalau panel komentar sedang terbuka untuk node ini, reload
+      if (commentPanelNodeId === msg.nodeId && msg.fileId === currentFile?.id) {
+        appendCommentToPanel(msg.comment);
+      }
+      // Update badge komentar di node
+      refreshCommentBadge(msg.nodeId);
+      break;
+    }
+  }
+}
+
+// ── Node lock overlay ─────────────────────────────────────────
+function applyLockOverlay(nodeId, username, color) {
+  const el = $el(nodeId); if (!el) return;
+  let badge = el.querySelector('.wcf-lock-badge');
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'wcf-lock-badge';
+    badge.style.cssText = [
+      'position:absolute;top:-8px;right:-6px;z-index:20;',
+      'padding:1px 5px;border-radius:99px;font-size:9px;font-weight:700;',
+      'color:#fff;white-space:nowrap;pointer-events:none;',
+      'box-shadow:0 1px 4px rgba(0,0,0,.4);',
+    ].join('');
+    el.style.position = 'relative';
+    el.appendChild(badge);
+  }
+  badge.style.background = color;
+  badge.textContent = `✏ ${username}`;
+  el.style.boxShadow = `0 0 0 2px ${color}`;
+  // Enforce: non-interaktif saat dikunci user lain
+  const textEl = el.querySelector('[contenteditable]');
+  if (textEl) { textEl.style.pointerEvents = 'none'; textEl.style.cursor = 'not-allowed'; }
+}
+function removeLockOverlay(nodeId) {
+  const el = $el(nodeId); if (!el) return;
+  el.querySelector('.wcf-lock-badge')?.remove();
+  el.style.boxShadow = '';
+  const textEl = el.querySelector('[contenteditable]');
+  if (textEl) { textEl.style.pointerEvents = ''; textEl.style.cursor = ''; }
+}
+function clearAllLockOverlays() {
+  document.querySelectorAll('.wcf-lock-badge').forEach(b => b.remove());
+  nodeLocks.clear();
+}
+
+// ── Remote cursor rendering ───────────────────────────────────
+const MINIMAP_SCALE_X = 180 / 6000;
+const MINIMAP_SCALE_Y = 130 / 6000;
+
+function updateRemoteCursor(username, color, cx, cy) {
+  if (!remoteCursors.has(username)) {
+    const el = document.createElement('div');
+    // Smooth transition 80ms untuk gerakan cursor
+    el.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none;z-index:999;display:flex;align-items:flex-end;gap:3px;will-change:transform;transition:transform 80ms linear;';
+    el.innerHTML = `
+      <svg width="14" height="18" viewBox="0 0 14 18" fill="none"
+           style="flex-shrink:0;filter:drop-shadow(0 1px 3px rgba(0,0,0,.5))">
+        <path d="M2 2L12 7L7 9L5 15L2 2Z" fill="${color}" stroke="#fff" stroke-width="1"/>
+      </svg>
+      <span style="background:${color};color:#fff;font-size:10px;font-weight:700;
+                   padding:1px 6px;border-radius:99px;white-space:nowrap;font-family:sans-serif;
+                   box-shadow:0 1px 4px rgba(0,0,0,.4);max-width:80px;overflow:hidden;text-overflow:ellipsis;"
+      >${escHtml(username)}</span>`;
+    document.getElementById('container').appendChild(el);
+    remoteCursors.set(username, { el, color, x: cx, y: cy });
+  }
+  const cur = remoteCursors.get(username);
+  cur.x = cx; cur.y = cy;
+  positionCursor(cur);
+  updateMinimapCursors();
+}
+function positionCursor(cur) {
+  cur.el.style.transform = `translate(${cur.x * state.zoom + state.pan.x}px,${cur.y * state.zoom + state.pan.y}px)`;
+}
+function repositionAllCursors() {
+  for (const cur of remoteCursors.values()) positionCursor(cur);
+  updateMinimapCursors();
+}
+function removeCursor(username) {
+  const cur = remoteCursors.get(username);
+  if (cur) { cur.el.remove(); remoteCursors.delete(username); }
+  updateMinimapCursors();
+}
+
+// ── Minimap cursor overlay ────────────────────────────────────
+function updateMinimapCursors() {
+  const overlay = document.getElementById('minimap-cursors');
+  if (!overlay) return;
+  const ctx = overlay.getContext('2d');
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  for (const [username, cur] of remoteCursors) {
+    const mx = cur.x * MINIMAP_SCALE_X;
+    const my = cur.y * MINIMAP_SCALE_Y;
+    ctx.beginPath();
+    ctx.arc(mx, my, 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = cur.color || '#7c6dfa';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 0.8;
+    ctx.stroke();
+    // Inisial nama
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 5px sans-serif';
+    ctx.fillText(username[0].toUpperCase(), mx + 4, my - 2);
+  }
+}
+
+// ── Online users avatar strip ─────────────────────────────────
+// Cari nama file dari workspace tree berdasarkan ID
+function fileNameById(id) {
+  if (!id || !grpWorkspaceTree) return null;
+  const node = findNode(grpWorkspaceTree, id);
+  return node?.name || null;
+}
+
+function renderOnlineUsers() {
+  const strip = document.getElementById('online-strip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  const me = state.currentUser?.username || '?';
+  const myFile = currentFile ? (currentFile.name || fileNameById(currentFile.id) || '…') : null;
+  const myLabel = myFile ? `${me} (kamu) · ${myFile}` : `${me} (kamu)`;
+  strip.appendChild(makeAvatar(me, myWsColor, myLabel, true));
+  for (const [uname, info] of remoteUsers) {
+    const fname = info.fileId ? (fileNameById(info.fileId) || info.fileId) : '—';
+    const inSameFile = info.fileId && info.fileId === currentFile?.id;
+    strip.appendChild(makeAvatar(uname, info.color, `${uname} · ${fname}`, false, inSameFile));
+  }
+  const badge = document.getElementById('grp-member-badge');
+  if (badge) {
+    const total = remoteUsers.size + 1;
+    badge.textContent = `${total} online`;
+    badge.classList.toggle('hidden', total < 2);
+  }
+  // Update who's-in-file dots di sidebar
+  renderSidebar();
+}
+function makeAvatar(username, color, title, isSelf, inSameFile = false) {
+  const el = document.createElement('span');
+  el.title = title;
+  // Ring: putih tebal = diri sendiri, hijau = user di file yang sama, tipis = file lain
+  const border = isSelf
+    ? '2px solid var(--text-2)'
+    : inSameFile
+      ? '2px solid #4ade80'
+      : '2px solid var(--border-md)';
+  el.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:${color};color:#fff;font-size:10px;font-weight:700;${border};cursor:default;flex-shrink:0;`;
+  el.textContent = username[0].toUpperCase();
+  return el;
+}
+
+// ── Node count tracking ───────────────────────────────────────
+function updateNodeCount(fileId, count) {
+  if (fileId == null) return;
+  grpNodeCounts[fileId] = count;
+}
+
+// ── Broadcast helpers ─────────────────────────────────────────
+// Debounce 150ms — cegah double-fire dari interval + event handler
+let _broadcastTimer = null;
+function broadcastCanvas() {
+  if (!currentFile || !wsReady) return;
+  clearTimeout(_broadcastTimer);
+  _broadcastTimer = setTimeout(() => {
+    wsSend({ type: 'canvas_patch', patch: snapshotData() });
+  }, 150);
+}
+
+// ── Interval terpadu (1s tick) ───────────────────────────────
+// tick ganjil  (1s): broadcast WS kalau dirty
+// tick genap   (2s): auto-save ke DB kalau dirty
+let _tick = 0;
+setInterval(async () => {
+  _tick++;
+  if (!refs.initialized || !refs.dirty || !currentFile) return;
+  if (wsReady) broadcastCanvas();
+  if (_tick % 2 === 0) await saveCurrentFile(true);
+}, 1000);
+
+// ── Ctrl+S ───────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveCurrentFile(); }
+}, true);
+
+// ── Canvas events (pan, zoom, drag, connect, select) ─────────
+function initCanvasEvents() {
+  // ── Box-selection state ──────────────────────────────────────
+  let boxSel = null;  // null | { startX, startY } in container-relative px
+  const $selBox = document.getElementById('wcf-select-box');
+
+  function boxSelStart(cx, cy) {
+    const r = $c.getBoundingClientRect();
+    boxSel = { startX: cx - r.left, startY: cy - r.top };
+    if ($selBox) {
+      $selBox.style.display = '';
+      $selBox.style.left   = boxSel.startX + 'px';
+      $selBox.style.top    = boxSel.startY + 'px';
+      $selBox.style.width  = '0';
+      $selBox.style.height = '0';
+    }
+  }
+  function boxSelMove(cx, cy) {
+    if (!boxSel || !$selBox) return;
+    const r = $c.getBoundingClientRect();
+    const ex = cx - r.left, ey = cy - r.top;
+    const x  = Math.min(boxSel.startX, ex);
+    const y  = Math.min(boxSel.startY, ey);
+    const w  = Math.abs(ex - boxSel.startX);
+    const h  = Math.abs(ey - boxSel.startY);
+    $selBox.style.left   = x + 'px';
+    $selBox.style.top    = y + 'px';
+    $selBox.style.width  = w + 'px';
+    $selBox.style.height = h + 'px';
+  }
+  function boxSelEnd(cx, cy, additive = false) {
+    if (!boxSel) return;
+    const r  = $c.getBoundingClientRect();
+    const ex = cx - r.left, ey = cy - r.top;
+    const sx = Math.min(boxSel.startX, ex), sy = Math.min(boxSel.startY, ey);
+    const ex2 = Math.max(boxSel.startX, ex), ey2 = Math.max(boxSel.startY, ey);
+    // Convert container rect to canvas coords
+    const c1 = { x: (sx  - state.pan.x) / state.zoom, y: (sy  - state.pan.y) / state.zoom };
+    const c2 = { x: (ex2 - state.pan.x) / state.zoom, y: (ey2 - state.pan.y) / state.zoom };
+    if (!additive) selectedNodes.clear();
+    if (ex2 - sx > 4 && ey2 - sy > 4) {
+      for (const id in state.nodes) {
+        const n  = state.nodes[id];
+        const el = $el(id);
+        const nw = el ? el.offsetWidth  : (n.width || 140);
+        const nh = el ? el.offsetHeight : 40;
+        if (n.x + nw > c1.x && n.x < c2.x && n.y + nh > c1.y && n.y < c2.y) {
+          selectedNodes.add(id);
+        }
+      }
+    }
+    updateSelectionUI();
+    boxSel = null;
+    if ($selBox) $selBox.style.display = 'none';
+  }
+
+  $c.addEventListener('mousedown', e => {
+    // Frame draw mode takes priority
+    if (e.button === 0 && isFrameDrawMode() && (e.target === $c || e.target === $cv || e.target?.id === 'frame-layer')) {
+      const p = toCanvas(e.clientX, e.clientY);
+      handleFrameMouseDown(e, p.x, p.y);
+      e.preventDefault(); return;
+    }
+    // Shift + left drag on empty canvas → box selection
+    if (e.button === 0 && e.shiftKey && (e.target === $c || e.target === $cv)) {
+      e.preventDefault();
+      boxSelStart(e.clientX, e.clientY);
+      return;
+    }
+    // Middle mouse or plain left drag on empty canvas → pan
+    if (e.button === 1 || (e.button === 0 && (e.target === $c || e.target === $cv))) {
+      ui.panning = true;
+      ui.panAnchor = { x: e.clientX - state.pan.x, y: e.clientY - state.pan.y };
+      $c.style.cursor = 'grabbing';
+      $cv?.classList.add('is-panning');
+      e.preventDefault();
+    }
+  });
+  window.addEventListener('mousemove', e => {
+    // Frame draw preview
+    if (isFrameDrawMode()) { handleFrameMouseMove(e, toCanvas(e.clientX, e.clientY)); }
+    // Box selection
+    if (boxSel) { boxSelMove(e.clientX, e.clientY); return; }
+
+    if (ui.panning) {
+      state.pan.x = e.clientX - ui.panAnchor.x;
+      state.pan.y = e.clientY - ui.panAnchor.y;
+      applyTransform(); updateMinimap();
+      repositionAllCursors();
+    }
+    if (ui.connecting) {
+      const p = toCanvas(e.clientX, e.clientY);
+      ui.connecting.curX = p.x; ui.connecting.curY = p.y;
+      renderLines(p.x, p.y);
+    }
+    if (ui.dragging) {
+      const { nodeId, offX, offY } = ui.dragging;
+      const n = state.nodes[nodeId]; if (!n) return;
+      const p = toCanvas(e.clientX, e.clientY);
+      const newX = p.x - offX, newY = p.y - offY;
+      if (selectedNodes.size > 1 && selectedNodes.has(nodeId)) {
+        const dx = newX - n.x, dy = newY - n.y;
+        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) moveSelected(dx, dy);
+      } else if (!n.pinned) {
+        const el = $el(nodeId);
+        // Lock width before position change to prevent shrink-to-fit collapse
+        if (el && !el.style.width) { const w = el.offsetWidth; el.style.width = w + 'px'; n.width = w; }
+        n.x = newX; n.y = newY;
+        if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
+      }
+      renderLines(); updateMinimap(); ui.suppressClick = true;
+      // Live drag position broadcast (throttle 50ms)
+      if (wsReady && currentFile) {
+        const now = Date.now();
+        if (now - lastDragSend >= 50) {
+          lastDragSend = now;
+          wsSend({ type: 'node_pos', id: nodeId, x: n.x, y: n.y });
+        }
+      }
+    }
+    if (ui.resizing) {
+      const { nodeId, startW, startX } = ui.resizing;
+      const n = state.nodes[nodeId]; const el = $el(nodeId);
+      if (!n || !el) return;
+      const newW = Math.max(80, Math.min(600, startW + (e.clientX - startX)));
+      n.width = newW; el.style.width = newW + 'px';
+      renderLines(); updateMinimap();
+    }
+    // Kirim posisi cursor ke anggota lain (throttle 50ms)
+    if (currentFile && wsReady) {
+      const now = Date.now();
+      if (now - lastCursorSend >= 50) {
+        lastCursorSend = now;
+        const p = toCanvas(e.clientX, e.clientY);
+        wsSend({ type: 'cursor', x: p.x, y: p.y });
+      }
+    }
+  });
+  window.addEventListener('mouseup', e => {
+    // Finish frame draw
+    if (isFrameDrawMode()) { handleFrameMouseUp(e, toCanvas(e.clientX, e.clientY)); }
+    // Finish box selection
+    if (boxSel) { boxSelEnd(e.clientX, e.clientY, e.shiftKey); return; }
+
+    if (ui.panning)  { ui.panning = false; $c.style.cursor = ''; $cv?.classList.remove('is-panning'); }
+    if (ui.dragging) {
+      if (ui.dragging.beforeSnap) {
+        hist.undo.push(ui.dragging.beforeSnap);
+        if (hist.undo.length > hist.MAX) hist.undo.shift();
+        hist.redo = [];
+      }
+      refs.dirty = true; ui.dragging = null; renderLines(); updateMinimap();
+      broadcastCanvas();
+    }
+    if (ui.resizing) {
+      if (ui.resizing.beforeSnap) {
+        hist.undo.push(ui.resizing.beforeSnap);
+        if (hist.undo.length > hist.MAX) hist.undo.shift();
+        hist.redo = [];
+      }
+      refs.dirty = true; ui.resizing = null; broadcastCanvas();
+    }
+    if (ui.connecting) {
+      const target = document.elementFromPoint(e.clientX, e.clientY);
+      const nodeEl = target?.closest?.('.node');
+      if (nodeEl && nodeEl.dataset.id && nodeEl.dataset.id !== ui.connecting.fromId) {
+        addConnection(ui.connecting.fromId, nodeEl.dataset.id); syncColors();
+        broadcastCanvas();
+      }
+      ui.connecting = null; renderLines(); updateMinimap();
+    }
+  });
+  $c.addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 0.05 : -0.05;
+    const r = $c.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    const bx = (mx - state.pan.x) / state.zoom, by = (my - state.pan.y) / state.zoom;
+    state.zoom = Math.min(3, Math.max(0.15, state.zoom + delta));
+    state.pan.x = mx - bx * state.zoom; state.pan.y = my - by * state.zoom;
+    applyTransform();
+    const zl = $id('zoom-label'); if (zl) zl.textContent = Math.round(state.zoom * 100) + '%';
+    updateMinimap();
+    repositionAllCursors();
+  }, { passive: false });
+
+  // ── Pinch zoom (touch) ────────────────────────────────────────
+  {
+    let _t = {}, _pd = null, _pz = null, _pm = null, _pt = null;
+    $c.addEventListener('touchstart', e => {
+      e.preventDefault();
+      for (const t of e.changedTouches) _t[t.identifier] = { x: t.clientX, y: t.clientY };
+      const ids = Object.keys(_t);
+      if (ids.length === 2) {
+        const a = _t[ids[0]], b = _t[ids[1]];
+        _pd = Math.hypot(b.x - a.x, b.y - a.y);
+        _pz = state.zoom; _pm = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        _pt = null;
+      } else if (ids.length === 1) {
+        _pt = { id: ids[0], x: _t[ids[0]].x, y: _t[ids[0]].y, px: state.pan.x, py: state.pan.y };
+      }
+    }, { passive: false });
+    $c.addEventListener('touchmove', e => {
+      e.preventDefault();
+      for (const t of e.changedTouches) _t[t.identifier] = { x: t.clientX, y: t.clientY };
+      const ids = Object.keys(_t);
+      if (ids.length === 2 && _pd !== null) {
+        const a = _t[ids[0]], b = _t[ids[1]];
+        const dist = Math.hypot(b.x - a.x, b.y - a.y);
+        const nz = Math.min(3, Math.max(0.1, _pz * dist / _pd));
+        const bx = toCanvas(_pm.x, _pm.y);
+        state.zoom = nz; state.pan.x = _pm.x - bx.x * nz; state.pan.y = _pm.y - bx.y * nz;
+        applyTransform(); repositionAllCursors();
+        const zl = $id('zoom-label'); if (zl) zl.textContent = Math.round(nz * 100) + '%';
+      } else if (ids.length === 1 && _pt) {
+        const t = _t[_pt.id];
+        if (t) { state.pan.x = _pt.px + (t.x - _pt.x); state.pan.y = _pt.py + (t.y - _pt.y); applyTransform(); repositionAllCursors(); }
+      }
+    }, { passive: false });
+    $c.addEventListener('touchend', e => {
+      for (const t of e.changedTouches) delete _t[t.identifier];
+      if (Object.keys(_t).length < 2) { _pd = null; _pm = null; }
+      if (Object.keys(_t).length === 0) _pt = null;
+    }, { passive: false });
+  }
+
+  $c.addEventListener('dblclick', e => {
+    if (e.target !== $c && e.target !== $cv) return;
+    if (!currentFile) { flash('Pilih file terlebih dahulu', false); return; }
+    const p = toCanvas(e.clientX, e.clientY);
+    if (e.shiftKey) {
+      import('./js/features/sticky.js').then(({ createSticky }) => createSticky(p.x, p.y));
+      return;
+    }
+    createNode(p.x, p.y, 'Node baru'); updateMinimap();
+    refs.dirty = true;
+    updateNodeCount(currentFile.id, Object.keys(state.nodes).length);
+    renderSidebar();
+    broadcastCanvas();
+  });
+  $c.addEventListener('click', e => {
+    if (e.target !== $c && e.target !== $cv) return;
+    clearSelection(); hideCtxMenu(); hideConnCtx();
+  });
+  $c.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+// ── Node lock: listen focus/blur pada contenteditable ─────────
+function initNodeLock() {
+  // Gunakan event delegation di container
+  const cvs = document.getElementById('canvas');
+  cvs.addEventListener('focusin', e => {
+    const nodeEl = e.target.closest?.('[data-id]');
+    if (!nodeEl || !currentFile || !wsReady) return;
+    if (e.target.contentEditable === 'true') {
+      wsSend({ type: 'node_lock', nodeId: nodeEl.dataset.id });
+    }
+  });
+  cvs.addEventListener('focusout', e => {
+    const nodeEl = e.target.closest?.('[data-id]');
+    if (!nodeEl || !currentFile || !wsReady) return;
+    if (e.target.contentEditable === 'true') {
+      wsSend({ type: 'node_unlock', nodeId: nodeEl.dataset.id });
+      setTimeout(() => broadcastCanvas(), 100);
+    }
+  });
+  // Real-time text sync saat mengetik (debounce 200ms)
+  cvs.addEventListener('input', e => {
+    const nodeEl = e.target.closest?.('[data-id]');
+    if (!nodeEl || !currentFile || !wsReady) return;
+    if (e.target.contentEditable === 'true') {
+      // Typing indicator — throttle 500ms
+      if (!nodeEl._typingThrottle) {
+        wsSend({ type: 'node_typing', nodeId: nodeEl.dataset.id });
+        nodeEl._typingThrottle = setTimeout(() => { nodeEl._typingThrottle = null; }, 500);
+      }
+      clearTimeout(nodeEl._textTimer);
+      nodeEl._textTimer = setTimeout(() => {
+        wsSend({ type: 'node_text', nodeId: nodeEl.dataset.id, text: e.target.textContent });
+      }, 200);
+    }
+  });
+}
+
+// ── Rerender hook (group label rename, etc.) ─────────────────
+document.addEventListener('wcf:rerender', () => renderLines());
+
+// ── Keyboard ─────────────────────────────────────────────────
+function initKeyboard() {
+  document.addEventListener('keydown', e => {
+    const tag = document.activeElement?.tagName;
+    const editing = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.contentEditable === 'true';
+    const ctrl = e.ctrlKey || e.metaKey;
+    if (!editing) {
+      if (ctrl && e.key === 'a') { e.preventDefault(); selectAll(); }
+      // Group / Ungroup (Figma-style)
+      if (ctrl && !e.shiftKey && e.key === 'g') {
+        e.preventDefault(); createGroup(); renderLines(); refs.dirty = true; broadcastCanvas();
+      }
+      if (ctrl && e.shiftKey && e.key === 'G') {
+        e.preventDefault(); ungroupSelected(); renderLines(); refs.dirty = true; broadcastCanvas();
+      }
+      if (ctrl && e.key === 'c') { e.preventDefault(); copyNodes(); }
+      if (ctrl && e.key === 'v') {
+        e.preventDefault();
+        pasteNodes().then(pasted => {
+          if (!pasted) return;
+          refs.dirty = true;
+          if (currentFile) updateNodeCount(currentFile.id, Object.keys(state.nodes).length);
+          renderSidebar();
+          broadcastCanvas();
+        });
+      }
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedNodes.size) {
+        e.preventDefault(); deleteSelectedNodes();
+        refs.dirty = true;
+        if (currentFile) updateNodeCount(currentFile.id, Object.keys(state.nodes).length);
+        renderSidebar();
+        broadcastCanvas();
+      }
+      const d = e.shiftKey ? 20 : 5;
+      if (e.key === 'ArrowUp')    { e.preventDefault(); moveSelected(0,-d); renderLines(); updateMinimap(); refs.dirty=true; }
+      if (e.key === 'ArrowDown')  { e.preventDefault(); moveSelected(0, d); renderLines(); updateMinimap(); refs.dirty=true; }
+      if (e.key === 'ArrowLeft')  { e.preventDefault(); moveSelected(-d,0); renderLines(); updateMinimap(); refs.dirty=true; }
+      if (e.key === 'ArrowRight') { e.preventDefault(); moveSelected( d,0); renderLines(); updateMinimap(); refs.dirty=true; }
+      if (ctrl && e.key === 'f') { e.preventDefault(); window._wcfOpenSearch?.(); }
+      if (ctrl && e.shiftKey && e.key === 'F') { e.preventDefault(); openGlobalSearch(); }
+      if (ctrl && e.shiftKey && e.key === '0') { e.preventDefault(); zoomToFit(); }
+      if (e.key === 'F5' || (ctrl && e.key === 'p')) { e.preventDefault(); togglePresentation(); }
+      if (ctrl && e.key === 'h') { e.preventDefault(); openFindReplace(); }
+      if (e.key === 'Escape') {
+        clearSelection(); hideCtxMenu(); hideConnCtx(); closeFindReplace();
+        if (ui.connecting) { ui.connecting = null; renderLines(); }
+        document.getElementById('canvas-search-bar')?.classList.add('hidden');
+        document.getElementById('global-search-panel')?.classList.add('hidden');
+      }
+    }
+    // Presentation mode: delegate arrow keys even when editing is off
+    if (presentationKey(e)) return;
+  });
+}
+
+// ── Theme toggle ─────────────────────────────────────────────
+function initThemeToggle() {
+  const btn = document.getElementById('btn-theme-toggle');
+  if (!btn) return;
+  const html = document.documentElement;
+  const LS   = 'wcf_theme';
+  const apply = (dark) => {
+    html.classList.toggle('dark', dark);
+    btn.textContent = dark ? '🌙' : '☀️';
+    try { localStorage.setItem(LS, dark ? 'dark' : 'light'); } catch {}
+    // Re-render minimap after theme change
+    updateMinimap();
+  };
+  // Init from localStorage (initTheme sudah set class, tinggal update icon)
+  apply(html.classList.contains('dark'));
+  btn.addEventListener('click', () => apply(!html.classList.contains('dark')));
+}
+
+// ── Shortcut cheatsheet ───────────────────────────────────────
+function initShortcutCheatsheet() {
+  const modal = document.getElementById('shortcut-modal');
+  const close = document.getElementById('shortcut-modal-close');
+  document.getElementById('btn-shortcuts')?.addEventListener('click', () => modal?.classList.remove('hidden'));
+  close?.addEventListener('click', () => modal?.classList.add('hidden'));
+  modal?.addEventListener('click', e => { if (e.target === modal) modal.classList.add('hidden'); });
+}
+
+// ── Canvas search (Ctrl+F) ────────────────────────────────────
+let searchMatches   = [];
+let searchMatchIdx  = 0;
+
+function initSearch() {
+  const bar     = document.getElementById('canvas-search-bar');
+  const input   = document.getElementById('canvas-search-input');
+  const count   = document.getElementById('canvas-search-count');
+  const btnPrev = document.getElementById('canvas-search-prev');
+  const btnNext = document.getElementById('canvas-search-next');
+  const btnClose = document.getElementById('canvas-search-close');
+
+  function openSearch() {
+    bar?.classList.remove('hidden');
+    input?.focus();
+  }
+  function closeSearch() {
+    bar?.classList.add('hidden');
+    clearSearchHighlight();
+    if (input) input.value = '';
+    searchMatches = [];
+  }
+  function clearSearchHighlight() {
+    document.querySelectorAll('.wcf-search-match').forEach(el => {
+      el.classList.remove('wcf-search-match', 'wcf-search-match-active');
+      el.style.outline = '';
+    });
+  }
+  function doSearch(q) {
+    clearSearchHighlight();
+    searchMatches = [];
+    if (!q.trim()) { if (count) count.textContent = ''; return; }
+    const lower = q.toLowerCase();
+    for (const [id, n] of Object.entries(state.nodes)) {
+      if ((n.text || '').toLowerCase().includes(lower)) {
+        const el = $el(id);
+        if (el) {
+          el.classList.add('wcf-search-match');
+          el.style.outline = '2px solid #facc15';
+          searchMatches.push(id);
+        }
+      }
+    }
+    searchMatchIdx = 0;
+    if (count) count.textContent = searchMatches.length ? `${searchMatchIdx + 1}/${searchMatches.length}` : '0';
+    scrollToMatch();
+  }
+  function scrollToMatch() {
+    document.querySelectorAll('.wcf-search-match-active').forEach(el => {
+      el.classList.remove('wcf-search-match-active'); el.style.outline = '2px solid #facc15';
+    });
+    if (!searchMatches.length) return;
+    const id = searchMatches[searchMatchIdx];
+    const el = $el(id); const n = state.nodes[id];
+    if (!el || !n) return;
+    el.classList.add('wcf-search-match-active');
+    el.style.outline = '2px solid #f97316';
+    // Pan canvas ke node ini
+    const cEl = document.getElementById('container');
+    state.pan.x = -(n.x * state.zoom) + cEl.offsetWidth  / 2;
+    state.pan.y = -(n.y * state.zoom) + cEl.offsetHeight / 2;
+    import('./js/canvas/transform.js').then(({ applyTransform }) => applyTransform());
+    if (count) count.textContent = `${searchMatchIdx + 1}/${searchMatches.length}`;
+  }
+
+  btnClose?.addEventListener('click', closeSearch);
+  btnNext?.addEventListener('click', () => {
+    if (!searchMatches.length) return;
+    searchMatchIdx = (searchMatchIdx + 1) % searchMatches.length;
+    scrollToMatch();
+  });
+  btnPrev?.addEventListener('click', () => {
+    if (!searchMatches.length) return;
+    searchMatchIdx = (searchMatchIdx - 1 + searchMatches.length) % searchMatches.length;
+    scrollToMatch();
+  });
+  let searchTimer = null;
+  input?.addEventListener('input', e => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => doSearch(e.target.value), 200);
+  });
+  input?.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      if (e.shiftKey) btnPrev?.click(); else btnNext?.click();
+      e.preventDefault();
+    }
+    if (e.key === 'Escape') closeSearch();
+  });
+
+  // Expose openSearch untuk keyboard shortcut
+  window._wcfOpenSearch = openSearch;
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── TYPING INDICATOR ─────────────────────────────────────────
+
+function showTypingIndicator(nodeId, username, color) {
+  const el = document.getElementById('node-' + nodeId);
+  if (!el) return;
+  let tip = el.querySelector('.wcf-typing-indicator');
+  if (!tip) {
+    tip = document.createElement('div');
+    tip.className = 'wcf-typing-indicator';
+    el.appendChild(tip);
+  }
+  tip.style.color    = color;
+  tip.style.background = color + '22';
+  tip.style.border   = `1px solid ${color}44`;
+  tip.innerHTML = `
+    <span class="wcf-typing-dot" style="background:${color}"></span>
+    <span class="wcf-typing-dot" style="background:${color}"></span>
+    <span class="wcf-typing-dot" style="background:${color}"></span>
+    <span style="font-size:9px;margin-left:2px;">${escHtml(username)} mengetik…</span>
+  `;
+  clearTimeout(el._typingClearTimer);
+  el._typingClearTimer = setTimeout(() => {
+    el.querySelector('.wcf-typing-indicator')?.remove();
+  }, 2500);
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── NOTIFICATION SYSTEM ───────────────────────────────────────
+
+const notifications = [];   // { id, type, text, time, color, read }
+let   unreadNotifs  = 0;
+let   _notifId      = 0;
+
+function addNotification(type, text, color = '#7c6dfa') {
+  const notif = { id: ++_notifId, type, text, time: new Date(), color, read: false };
+  notifications.unshift(notif);
+  if (notifications.length > 40) notifications.pop();
+  unreadNotifs++;
+  renderNotificationBadge();
+  renderNotificationList();
+}
+
+function renderNotificationBadge() {
+  const badge = document.getElementById('notif-badge');
+  if (!badge) return;
+  if (unreadNotifs > 0) {
+    badge.textContent = unreadNotifs > 9 ? '9+' : String(unreadNotifs);
+    badge.classList.remove('hidden');
+  } else {
+    badge.classList.add('hidden');
+  }
+}
+
+function renderNotificationList() {
+  const list  = document.getElementById('notif-list');
+  const empty = document.getElementById('notif-empty');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!notifications.length) {
+    if (empty) empty.style.display = 'flex';
+    return;
+  }
+  if (empty) empty.style.display = 'none';
+  notifications.forEach(n => {
+    const el = document.createElement('div');
+    el.style.cssText = `padding:9px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:flex-start;cursor:default;${n.read ? 'opacity:.5;' : ''}`;
+    const icon = n.type === 'comment' ? '💬' : n.type === 'canvas' ? '🎨' : '👤';
+    const timeStr = formatRelTime(n.time);
+    el.innerHTML = `
+      <span style="font-size:13px;flex-shrink:0;margin-top:1px;">${icon}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:11px;color:var(--text-2);line-height:1.4;">${escHtml(n.text)}</div>
+        <div style="font-size:9px;color:var(--text-4);margin-top:2px;">${timeStr}</div>
+      </div>
+      <span style="width:7px;height:7px;border-radius:50%;background:${n.read ? 'transparent' : n.color};flex-shrink:0;margin-top:4px;"></span>
+    `;
+    list.appendChild(el);
+  });
+}
+
+function formatRelTime(date) {
+  const s = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (s < 60)  return 'baru saja';
+  if (s < 3600) return Math.floor(s / 60) + ' menit lalu';
+  return Math.floor(s / 3600) + ' jam lalu';
+}
+
+function initNotificationPanel() {
+  const btn   = document.getElementById('btn-notifications');
+  const panel = document.getElementById('notif-panel');
+  const clear = document.getElementById('notif-clear');
+
+  btn?.addEventListener('click', e => {
+    e.stopPropagation();
+    panel?.classList.toggle('hidden');
+    if (!panel?.classList.contains('hidden')) {
+      // Mark all read
+      notifications.forEach(n => n.read = true);
+      unreadNotifs = 0;
+      renderNotificationBadge();
+      renderNotificationList();
+    }
+  });
+
+  clear?.addEventListener('click', e => {
+    e.stopPropagation();
+    notifications.length = 0;
+    unreadNotifs = 0;
+    renderNotificationBadge();
+    renderNotificationList();
+  });
+
+  document.addEventListener('click', e => {
+    if (!panel?.contains(e.target) && e.target !== btn) {
+      panel?.classList.add('hidden');
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── COMMENT PANEL ─────────────────────────────────────────────
+
+let commentPanelNodeId  = null;
+let commentPanelFileId  = null;
+const commentCounts     = {};   // nodeId → count
+
+async function openCommentPanel(nodeId) {
+  if (!currentFile) return;
+  commentPanelNodeId = nodeId;
+  commentPanelFileId = currentFile.id;
+  const nodeText = state.nodes[nodeId]?.text || nodeId;
+
+  const panel     = document.getElementById('comment-panel');
+  const nodeName  = document.getElementById('comment-node-name');
+  const list      = document.getElementById('comment-list');
+  const empty     = document.getElementById('comment-empty');
+  const input     = document.getElementById('comment-input');
+
+  // Close history panel if open
+  document.getElementById('history-panel')?.classList.add('hidden');
+
+  if (nodeName) nodeName.textContent = nodeText;
+  if (input) input.value = '';
+  if (list) list.innerHTML = '';
+  if (empty) empty.style.display = 'none';
+  panel?.classList.remove('hidden');
+
+  try {
+    const r = await apiGetComments(GROUP_ID, currentFile.id, nodeId);
+    if (r?.ok) {
+      if (!r.comments.length) {
+        if (empty) empty.style.display = 'flex';
+      } else {
+        r.comments.forEach(c => appendCommentToPanel(c));
+        // Scroll to bottom
+        if (list) list.scrollTop = list.scrollHeight;
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+function appendCommentToPanel(comment) {
+  const list  = document.getElementById('comment-list');
+  const empty = document.getElementById('comment-empty');
+  if (!list) return;
+  if (empty) empty.style.display = 'none';
+  const el = document.createElement('div');
+  el.className = 'wcf-comment-item';
+  const dateStr = comment.created_at ? new Date(comment.created_at).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+  el.innerHTML = `
+    <div class="wcf-comment-author">${escHtml(comment.username)}</div>
+    <div class="wcf-comment-text">${escHtml(comment.content)}</div>
+    <div class="wcf-comment-time">${dateStr}</div>
+  `;
+  list.appendChild(el);
+}
+
+async function refreshCommentBadge(nodeId) {
+  try {
+    if (!currentFile) return;
+    const r = await apiGetComments(GROUP_ID, currentFile.id, nodeId);
+    if (r?.ok) updateCommentBadge(nodeId, r.comments.length);
+  } catch { /* ignore */ }
+}
+
+function updateCommentBadge(nodeId, count) {
+  commentCounts[nodeId] = count;
+  const nodeEl = document.getElementById('node-' + nodeId);
+  if (!nodeEl) return;
+  let badge = nodeEl.querySelector('.wcf-comment-badge');
+  if (count > 0) {
+    if (!badge) {
+      badge = document.createElement('div');
+      badge.className = 'wcf-comment-badge';
+      nodeEl.style.position = 'relative';
+      nodeEl.appendChild(badge);
+    }
+    badge.textContent = count > 9 ? '9+' : String(count);
+  } else {
+    badge?.remove();
+  }
+}
+
+function initCommentPanel() {
+  document.getElementById('comment-panel-close')?.addEventListener('click', () => {
+    document.getElementById('comment-panel')?.classList.add('hidden');
+    commentPanelNodeId = null;
+  });
+
+  document.getElementById('comment-submit')?.addEventListener('click', submitComment);
+  document.getElementById('comment-input')?.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault(); submitComment();
+    }
+  });
+
+  document.getElementById('ctx-comment')?.addEventListener('click', () => {
+    const id = ui.ctxTarget; hideCtxMenu();
+    if (!id) return;
+    openCommentPanel(id);
+  });
+}
+
+async function submitComment() {
+  const input   = document.getElementById('comment-input');
+  const content = input?.value.trim();
+  if (!content || !commentPanelNodeId || !currentFile) return;
+  input.value = '';
+  try {
+    const r = await apiPostComment(GROUP_ID, commentPanelFileId, commentPanelNodeId, content);
+    if (r?.ok) {
+      appendCommentToPanel(r.comment);
+      const list = document.getElementById('comment-list');
+      if (list) list.scrollTop = list.scrollHeight;
+      const cnt = (commentCounts[commentPanelNodeId] || 0) + 1;
+      updateCommentBadge(commentPanelNodeId, cnt);
+    } else {
+      flash('⚠ ' + (r?.error || 'Gagal kirim komentar'), false);
+    }
+  } catch { flash('⚠ Gagal kirim komentar', false); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// ── HISTORY PANEL ─────────────────────────────────────────────
+
+async function openHistoryPanel(nodeId) {
+  if (!currentFile) return;
+  const nodeText = state.nodes[nodeId]?.text || nodeId;
+
+  const panel    = document.getElementById('history-panel');
+  const nodeName = document.getElementById('history-node-name');
+  const list     = document.getElementById('history-list');
+  const empty    = document.getElementById('history-empty');
+
+  // Close comment panel if open
+  document.getElementById('comment-panel')?.classList.add('hidden');
+
+  if (nodeName) nodeName.textContent = nodeText;
+  if (list) list.innerHTML = '';
+  if (empty) empty.style.display = 'none';
+  panel?.classList.remove('hidden');
+
+  try {
+    const r = await apiGetNodeHistory(GROUP_ID, currentFile.id, nodeId);
+    if (r?.ok) {
+      if (!r.history.length) {
+        if (empty) empty.style.display = 'flex';
+      } else {
+        r.history.forEach(h => appendHistoryItem(list, h));
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+function appendHistoryItem(container, h) {
+  const el = document.createElement('div');
+  el.className = 'wcf-history-item';
+  const iconMap  = { create: '➕', update: '✏️', delete: '🗑' };
+  const colorMap = { create: '#4ade80', update: '#60a5fa', delete: '#f87171' };
+  const bgMap    = { create: '#4ade8022', update: '#60a5fa22', delete: '#f8717122' };
+  const icon  = iconMap[h.action]  || '•';
+  const color = colorMap[h.action] || '#888';
+  const bg    = bgMap[h.action]    || '#88888822';
+  const dateStr = h.created_at ? new Date(h.created_at).toLocaleString('id-ID', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
+
+  let desc = '';
+  if (h.action === 'create')      desc = `Dibuat dengan teks: "${escHtml((h.new_text || '').slice(0, 60))}"`;
+  else if (h.action === 'delete') desc = `Dihapus (teks: "${escHtml((h.old_text || '').slice(0, 60))}")`;
+  else if (h.action === 'update') desc = `"${escHtml((h.old_text || '').slice(0, 30))}" → "${escHtml((h.new_text || '').slice(0, 30))}"`;
+
+  el.innerHTML = `
+    <div class="wcf-history-icon" style="background:${bg};">${icon}</div>
+    <div class="wcf-history-body">
+      <div class="wcf-history-who" style="color:${color};">${escHtml(h.username)}</div>
+      <div class="wcf-history-desc">${desc}</div>
+      <div class="wcf-history-time">${dateStr}</div>
+    </div>
+  `;
+  container.appendChild(el);
+}
+
+function initHistoryPanel() {
+  document.getElementById('history-panel-close')?.addEventListener('click', () => {
+    document.getElementById('history-panel')?.classList.add('hidden');
+  });
+
+  document.getElementById('ctx-history')?.addEventListener('click', () => {
+    const id = ui.ctxTarget; hideCtxMenu();
+    if (!id) return;
+    openHistoryPanel(id);
+  });
+}
+
+// ── Template UI ───────────────────────────────────────────────
+function initTemplateUI() {
+  renderTemplatePicker();
+  initTemplates();
+  document.getElementById('btn-template')?.addEventListener('click', () => openTemplateModal());
+}
+
+// ── Presentation UI ───────────────────────────────────────────
+function initPresentationUI() {
+  document.getElementById('btn-presentation')?.addEventListener('click', () => togglePresentation());
+}
+
+// ── Image UI ─────────────────────────────────────────────────
+function initImageUI() {
+  // Ctx menu → buka file picker
+  document.getElementById('ctx-image')?.addEventListener('click', () => {
+    const id = ui.ctxTarget;
+    hideCtxMenu();
+    if (!id) return;
+    const inp = document.getElementById('node-img-input');
+    if (!inp) return;
+    inp._targetNodeId = id;
+    inp.value = '';
+    inp.click();
+  });
+
+  // File picker → baca & attach
+  document.getElementById('node-img-input')?.addEventListener('change', e => {
+    const file = e.target.files?.[0];
+    const id   = e.target._targetNodeId;
+    if (!file || !id) return;
+    const reader = new FileReader();
+    reader.onload = ev => attachImageToNode(id, ev.target.result);
+    reader.readAsDataURL(file);
+  });
+
+  // Paste image on canvas (no node selected → create node)
+  document.addEventListener('paste', e => {
+    // Jangan proses saat sedang edit teks
+    if (document.activeElement?.contentEditable === 'true') return;
+    const items = [...(e.clipboardData?.items || [])];
+    const imgItem = items.find(it => it.type.startsWith('image/'));
+    if (!imgItem) return;
+    e.preventDefault();
+    const file = imgItem.getAsFile();
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      // Jika ada node terpilih, attach ke sana; kalau tidak, ke ctxTarget atau buat baru
+      const sel = [...selectedNodes];
+      if (sel.length === 1) {
+        attachImageToNode(sel[0], ev.target.result);
+      } else if (ui.ctxTarget) {
+        attachImageToNode(ui.ctxTarget, ev.target.result);
+      } else {
+        // Buat node baru di tengah canvas dengan gambar
+        import('./js/canvas/node.js').then(({ createNode, attachImageToNode: atn }) => {
+          // Posisi tengah viewport
+          const cont = document.getElementById('container');
+          const vw   = (cont?.offsetWidth  || window.innerWidth)  / 2;
+          const vh   = (cont?.offsetHeight || window.innerHeight) / 2;
+          const cx   = (vw - state.pan.x) / state.zoom;
+          const cy   = (vh - state.pan.y) / state.zoom;
+          const nid  = createNode(cx - 60, cy - 30, '');
+          setTimeout(() => atn(nid, ev.target.result), 50);
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+// ── Open file from global search result ──────────────────────
+function openFileFromSearch(groupId, fileId, nodeId) {
+  if (groupId !== GROUP_ID) {
+    // Buka group lain di tab baru
+    window.open(`/group.html?id=${groupId}`, '_blank');
+    return;
+  }
+  // Cari node di workspace tree
+  const node = findNode(grpWorkspaceTree, fileId);
+  if (node && node.type === 'file') {
+    openFile(node);
+    // Scroll ke nodeId setelah file terbuka
+    if (nodeId) {
+      setTimeout(() => {
+        const el = document.getElementById('node-' + nodeId);
+        if (el && state.nodes[nodeId]) {
+          const n = state.nodes[nodeId];
+          const cont = document.getElementById('container');
+          const vw = (cont?.offsetWidth  || window.innerWidth)  / 2;
+          const vh = (cont?.offsetHeight || window.innerHeight) / 2;
+          state.pan.x = vw - (n.x + 60) * state.zoom;
+          state.pan.y = vh - (n.y + 20) * state.zoom;
+          const { applyTransform } = window.__wcfTransform || {};
+          import('./js/canvas/transform.js').then(m => { m.applyTransform(); });
+          el.classList.add('wcf-search-match-active');
+          setTimeout(() => el.classList.remove('wcf-search-match-active'), 2500);
+        }
+      }, 400);
+    }
+  }
+}
+
+// ── Boot ─────────────────────────────────────────────────────
+async function init() {
+  if (!await checkAuth()) return;
+
+  // Load group info
+  try {
+    const gi = await apiGroupGetInfo(GROUP_ID);
+    if (!gi?.ok) { alert('Grup tidak ditemukan atau akses ditolak'); location.replace('/'); return; }
+    groupRole = gi.group.role || 'viewer';
+    document.getElementById('grp-name-label').textContent = `👥 ${gi.group.name}`;
+    document.title = `WCF — ${gi.group.name}`;
+    const badge = document.getElementById('grp-member-badge');
+    badge.textContent = `${gi.group.member_count} anggota`;
+    badge.classList.remove('hidden');
+  } catch (err) {
+    flash('⚠ Gagal memuat info grup: ' + err.message, false);
+  }
+
+  // Init canvas & UI
+  initTheme();
+  initThemeToggle();
+  initCanvasEvents();
+  initCtxMenu();
+  initKeyboard();
+  initNodeLock();
+  initSearch();
+  initShortcutCheatsheet();
+  initMinimap();
+  initNotificationPanel();
+  initCommentPanel();
+  initHistoryPanel();
+  initTemplateUI();
+  initImageUI();
+  initGlobalSearch(openFileFromSearch);
+  initPresentationUI();
+  initFindReplace();
+  initAlignBar();
+  initCmdPalette();
+  initKanban();
+  initFrames();
+
+  // Load workspace tree
+  try {
+    const r = await apiGroupGetWorkspace(GROUP_ID);
+    if (r?.ok && r.tree && typeof r.tree === 'object') {
+      grpWorkspaceTree = r.tree;
+      // Pastikan root punya children array
+      if (!Array.isArray(grpWorkspaceTree.children)) grpWorkspaceTree.children = [];
+    } else {
+      grpWorkspaceTree = { id: 'root', name: 'root', type: 'folder', children: [] };
+      // Jangan langsung save — coba recovery dulu
+    }
+  } catch {
+    grpWorkspaceTree = { id: 'root', name: 'root', type: 'folder', children: [] };
+  }
+
+  // ── Auto-recovery: jika tree kosong, rebuild dari group_mindmaps ──
+  // PENTING: jangan pernah saveWorkspaceTree() dengan tree kosong kecuali kita
+  // tahu pasti tidak ada file — itulah yang menyebabkan data sidebar hilang dulu.
+  if (!grpWorkspaceTree.children.length) {
+    try {
+      const mList = await apiListGroupMindmaps(GROUP_ID);
+      if (mList?.ok && mList.mindmaps?.length) {
+        flash(`⚠ Tree kosong — memulihkan ${mList.mindmaps.length} file…`, false);
+        grpWorkspaceTree.children = mList.mindmaps.map((m, i) => ({
+          id:   m.name,            // m.name = file ID (grp_xxxx)
+          name: `File ${i + 1}`,  // nama tampilan placeholder
+          type: 'file',
+        }));
+        // Coba ambil nama asli dari konten tiap file (pakai node pertama sebagai hint)
+        await Promise.allSettled(grpWorkspaceTree.children.map(async (node) => {
+          try {
+            const r2 = await apiGroupLoad(GROUP_ID, node.id);
+            if (r2?.ok && r2.data?.nodes) {
+              const firstNode = Object.values(r2.data.nodes)[0];
+              if (firstNode?.text) node.name = firstNode.text.slice(0, 30);
+            }
+          } catch { /* pakai nama placeholder */ }
+        }));
+        await saveWorkspaceTree(); // save hanya setelah berhasil rebuild
+        flash(`✓ ${mList.mindmaps.length} file dipulihkan — silakan rename jika perlu`, true);
+      }
+      // Jika benar-benar tidak ada file di DB, JANGAN save tree kosong —
+      // tree akan tersave saat user buat file baru pertama kali.
+    } catch {
+      // Jika recovery gagal, JANGAN save empty tree — biarkan data DB tetap utuh
+      console.warn('[WCF] recovery workspace tree gagal — tree in-memory kosong sesi ini');
+    }
+  }
+
+  renderSidebar();
+  applyTransform();
+  const zl = $id('zoom-label'); if (zl) zl.textContent = '100%';
+  refs.initialized = true;
+
+  // Hubungkan WebSocket realtime
+  connectWS();
+  renderOnlineUsers();
+
+  // Restore file terakhir yang dibuka
+  const lastFileId = getLastFile();
+  if (lastFileId) {
+    const lastNode = findNode(grpWorkspaceTree, lastFileId);
+    if (lastNode?.type === 'file') {
+      await loadFile(lastNode);
+    } else {
+      flash('👥 Workspace Grup siap!', true);
+    }
+  } else {
+    flash('👥 Workspace Grup siap!', true);
+  }
+}
+
+init();
+
+</script>
+
+<!-- ── Mermaid Import Modal ───────────────────────────────────── -->
+<div id="grp-mermaid-import-modal"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+            backdrop-filter:blur(8px);z-index:350;
+            align-items:center;justify-content:center">
+  <div style="background:var(--bg-surface);border:1px solid var(--border-md);
+              border-radius:18px;box-shadow:var(--shadow-menu);
+              width:520px;max-width:95vw;max-height:90vh;
+              display:flex;flex-direction:column;overflow:hidden">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;padding:16px 20px 14px;
+                border-bottom:1px solid var(--border);flex-shrink:0">
+      <span style="flex:1;font-size:13px;font-weight:700;color:#a78bfa">⬇ Import dari Mermaid</span>
+      <button id="btn-grp-mmd-close"
+              style="background:none;border:none;color:var(--text-4);font-size:17px;
+                     cursor:pointer;line-height:1;padding:2px">✕</button>
+    </div>
+
+    <!-- Body -->
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+      <p style="font-size:11px;color:var(--text-3);line-height:1.6">
+        Tempel teks <code style="color:#c4b5fd;background:rgba(139,92,246,.1);padding:1px 5px;border-radius:4px">flowchart</code>
+        atau <code style="color:#c4b5fd;background:rgba(139,92,246,.1);padding:1px 5px;border-radius:4px">graph</code> Mermaid,
+        atau unggah file <code style="color:#c4b5fd;background:rgba(139,92,246,.1);padding:1px 5px;border-radius:4px">.mmd</code>.
+        Node canvas aktif akan <span style="color:#fca5a5">digantikan</span>.
+      </p>
+
+      <!-- File -->
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="btn-grp-mmd-file"
+                style="padding:5px 12px;border-radius:8px;border:1px solid var(--border);
+                       background:var(--bg-input);color:var(--text-3);font-size:11px;
+                       font-family:inherit;cursor:pointer">
+          📂 Pilih file .mmd
+        </button>
+        <span id="grp-mmd-filename" style="font-size:11px;color:var(--text-4);font-style:italic">
+          Belum ada file dipilih
+        </span>
+      </div>
+
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:10px;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase">atau tempel teks</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
+      <!-- Textarea -->
+      <textarea id="grp-mmd-textarea" rows="12"
+                placeholder="flowchart TB&#10;    A([&quot;Start&quot;]) --> B[&quot;Proses&quot;]&#10;    B --> C{&quot;Kondisi?&quot;}&#10;    C -- Ya --> D[&quot;Hasil A&quot;]&#10;    C -- Tidak --> E[&quot;Hasil B&quot;]"
+                style="width:100%;padding:10px 12px;background:var(--bg-input);
+                       border:1px solid var(--border);border-radius:10px;
+                       color:var(--text-1);font-family:monospace;font-size:11px;
+                       line-height:1.6;resize:none;outline:none;min-height:200px;
+                       box-sizing:border-box;transition:border-color .15s"
+                onfocus="this.style.borderColor='rgba(139,92,246,.5)'"
+                onblur="this.style.borderColor='var(--border)'"></textarea>
+
+      <!-- Preview -->
+      <div id="grp-mmd-preview" style="display:none;flex-wrap:wrap;gap:6px;font-size:10px;align-items:center">
+        <span style="color:var(--text-4)">Terdeteksi:</span>
+        <span id="grp-mmd-prev-nodes" style="padding:2px 8px;border-radius:99px;background:rgba(139,92,246,.12);color:#c4b5fd;border:1px solid rgba(139,92,246,.25)"></span>
+        <span id="grp-mmd-prev-edges" style="padding:2px 8px;border-radius:99px;background:rgba(6,182,212,.12);color:#67e8f9;border:1px solid rgba(6,182,212,.25)"></span>
+        <span id="grp-mmd-prev-dir"   style="padding:2px 8px;border-radius:99px;background:var(--bg-glass-light);color:var(--text-3);border:1px solid var(--border)"></span>
+      </div>
+
+      <p id="grp-mmd-error" style="font-size:11px;color:#f87171;display:none"></p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);
+                display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+      <button id="btn-grp-mmd-cancel"
+              style="padding:6px 16px;border-radius:9px;border:1px solid var(--border);
+                     background:var(--bg-input);color:var(--text-3);font-size:12px;
+                     font-family:inherit;cursor:pointer">
+        Batal
+      </button>
+      <button id="btn-grp-mmd-import"
+              style="padding:6px 18px;border-radius:9px;
+                     border:1px solid rgba(139,92,246,.4);
+                     background:rgba(139,92,246,.25);color:#ddd6fe;
+                     font-size:12px;font-weight:600;font-family:inherit;cursor:pointer">
+        ⬇ Import ke Canvas
+      </button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { parseMermaidToWCF, importMermaidText } from '/js/features/mermaid-import.js';
+
+const modal    = document.getElementById('grp-mermaid-import-modal');
+const textarea = document.getElementById('grp-mmd-textarea');
+const fileBtn  = document.getElementById('btn-grp-mmd-file');
+const fileLbl  = document.getElementById('grp-mmd-filename');
+const prevBox  = document.getElementById('grp-mmd-preview');
+const prevN    = document.getElementById('grp-mmd-prev-nodes');
+const prevE    = document.getElementById('grp-mmd-prev-edges');
+const prevD    = document.getElementById('grp-mmd-prev-dir');
+const errEl    = document.getElementById('grp-mmd-error');
+
+function openModal() {
+  textarea.value = '';
+  fileLbl.textContent = 'Belum ada file dipilih';
+  errEl.style.display = 'none';
+  prevBox.style.display = 'none';
+  modal.style.display = 'flex';
+  setTimeout(() => textarea.focus(), 80);
+}
+function closeModal() { modal.style.display = 'none'; }
+
+document.getElementById('btn-import-mermaid')?.addEventListener('click', openModal);
+document.getElementById('btn-import-json')?.addEventListener('click', () => {
+  import('./js/features/import.js').then(({ openImportDialog }) => openImportDialog());
+});
+document.getElementById('btn-grp-mmd-close')?.addEventListener('click', closeModal);
+document.getElementById('btn-grp-mmd-cancel')?.addEventListener('click', closeModal);
+modal?.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+
+fileBtn?.addEventListener('click', () => {
+  const inp = Object.assign(document.createElement('input'), { type:'file', accept:'.mmd,.txt,.md' });
+  inp.onchange = async (e) => {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    fileLbl.textContent = f.name;
+    textarea.value = await f.text();
+    updatePreview();
+  };
+  inp.click();
+});
+
+function updatePreview() {
+  const text = textarea.value.trim();
+  errEl.style.display = 'none';
+  if (!text) { prevBox.style.display = 'none'; return; }
+  try {
+    const data = parseMermaidToWCF(text);
+    if (!data) { prevBox.style.display = 'none'; return; }
+    const dirLine  = text.split('\n').find(l => /^(flowchart|graph)\s/i.test(l.trim())) || '';
+    const dirMatch = dirLine.match(/\s+(TB|TD|LR|BT|RL)/i);
+    prevN.textContent = `${Object.keys(data.nodes).length} node`;
+    prevE.textContent = `${data.connections.length} koneksi`;
+    prevD.textContent = `arah: ${dirMatch?.[1]?.toUpperCase() || 'TB'}`;
+    prevBox.style.display = 'flex';
+  } catch { prevBox.style.display = 'none'; }
+}
+textarea?.addEventListener('input', updatePreview);
+
+document.getElementById('btn-grp-mmd-import')?.addEventListener('click', () => {
+  const text = textarea.value.trim();
+  if (!text) { errEl.textContent = 'Tempel kode Mermaid terlebih dahulu'; errEl.style.display = 'block'; return; }
+  try {
+    importMermaidText(text);
+    closeModal();
+  } catch(err) {
+    errEl.textContent = 'Gagal parse: ' + err.message;
+    errEl.style.display = 'block';
+  }
+});
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && modal?.style.display === 'flex') closeModal();
+});
+</script>
+
+<!-- ── Alignment bar ──────────────────────────────────────── -->
+<div id="align-bar" class="align-bar hidden">
+  <span class="align-bar-label">Rata:</span>
+  <button class="align-btn" data-align="left"     title="Rata Kiri">⬦←</button>
+  <button class="align-btn" data-align="center-h" title="Tengah Horizontal">⬦↔</button>
+  <button class="align-btn" data-align="right"    title="Rata Kanan">→⬦</button>
+  <div class="align-bar-sep"></div>
+  <button class="align-btn" data-align="top"      title="Rata Atas">⬦↑</button>
+  <button class="align-btn" data-align="middle-v" title="Tengah Vertikal">⬦↕</button>
+  <button class="align-btn" data-align="bottom"   title="Rata Bawah">↓⬦</button>
+  <div class="align-bar-sep"></div>
+  <button class="align-btn" data-align="dist-h"   title="Distribusi Horizontal">⇔</button>
+  <button class="align-btn" data-align="dist-v"   title="Distribusi Vertikal">⇕</button>
+</div>
+
+<!-- ── Command Palette ───────────────────────────────────── -->
+<div id="cmd-palette" class="hidden">
+  <div class="cp-box">
+    <div class="cp-input-wrap">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="cp-input" placeholder="Cari node atau perintah…" autocomplete="off" spellcheck="false" />
+      <span style="font-size:10px;color:rgba(255,255,255,0.2);font-family:monospace">ESC</span>
+    </div>
+    <div id="cp-list"></div>
+  </div>
+</div>
+
+<!-- ── Kanban overlay ────────────────────────────────────── -->
+<div id="kanban-overlay" class="hidden" style="position:fixed;inset:0;z-index:200"></div>
+
+</body>
+</html>

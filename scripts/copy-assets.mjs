@@ -100,4 +100,14 @@ await copyDir(path.join(root, "modules/ssh/preload"), path.join(root, "out/modul
 await copyDir(path.join(root, "modules/ssh/renderer"), path.join(root, "out/modules/ssh/renderer"));
 await copyDir(path.join(root, "modules/ssh/adapter"), path.join(root, "out/modules/ssh/adapter"));
 
-console.log("[copy-assets] hub preload, cliproxy backend/preload, net module, ssh module → out/");
+// Mindmap module (CJS host + sandboxed preload + adapter). Renderer is emitted
+// directly to out/modules/mindmap/renderer by Vite.
+await copyFile(
+  path.join(root, "modules/mindmap/package.json"),
+  path.join(root, "out/modules/mindmap/package.json")
+);
+await copyDir(path.join(root, "modules/mindmap/main"), path.join(root, "out/modules/mindmap/main"));
+await copyDir(path.join(root, "modules/mindmap/preload"), path.join(root, "out/modules/mindmap/preload"));
+await copyDir(path.join(root, "modules/mindmap/adapter"), path.join(root, "out/modules/mindmap/adapter"));
+
+console.log("[copy-assets] hub preload, cliproxy, net, ssh, mindmap runtime → out/");
