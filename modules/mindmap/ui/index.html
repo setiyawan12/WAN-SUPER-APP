@@ -572,84 +572,102 @@
   <!-- ── Share Modal ───────────────────────────────────────────── -->
   <div id="share-modal"
        class="modal-overlay hidden" style="z-index:300">
-    <div class="modal-box w-[420px] max-h-[85vh]
-                flex flex-col overflow-hidden">
-      <div class="flex items-center px-5 py-4 border-b border-white/[0.08] shrink-0">
-        <h2 class="flex-1 text-sm font-bold text-cyan-400/80">🔗 Bagikan File</h2>
-        <button id="btn-share-close" class="text-white/30 hover:text-white/70 text-lg leading-none transition">✕</button>
+    <div class="modal-box share-dialog flex flex-col overflow-hidden">
+      <div class="share-dialog-header">
+        <div class="share-dialog-title">
+          <span class="share-dialog-icon" aria-hidden="true">↗</span>
+          <div>
+            <h2>Bagikan File</h2>
+            <p>Atur siapa yang dapat membuka dan mengedit mindmap ini.</p>
+          </div>
+        </div>
+        <button id="btn-share-close" class="share-close-button" aria-label="Tutup">×</button>
       </div>
-      <p id="share-file-name" class="px-5 pt-3 text-[11px] text-white/40 shrink-0"></p>
+      <p id="share-file-name" class="share-file-name"></p>
 
       <!-- Share Publik -->
-      <div class="px-5 py-3 border-b border-white/[0.06] shrink-0">
-        <div class="flex items-center justify-between mb-2">
-          <p class="text-[10px] font-bold text-white/25 uppercase tracking-widest">🌐 Link Publik</p>
-          <label class="flex items-center gap-2 cursor-pointer select-none">
-            <span id="pub-share-status" class="text-[11px] text-white/40">Nonaktif</span>
-            <div class="relative">
+      <section class="share-section shrink-0">
+        <div class="share-section-heading">
+          <div>
+            <h3>Link publik</h3>
+            <p>Siapa pun yang memiliki link dapat melihat file tanpa login.</p>
+          </div>
+          <label class="share-toggle-label">
+            <span id="pub-share-status">Nonaktif</span>
+            <span class="share-toggle-control">
               <input type="checkbox" id="pub-share-toggle" class="sr-only peer">
-              <div class="w-9 h-5 rounded-full border border-white/10 bg-white/5
-                          peer-checked:bg-purple-600/70 peer-checked:border-purple-500/50 transition-all"></div>
-              <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/30
-                          peer-checked:translate-x-4 peer-checked:bg-white transition-all"></div>
-            </div>
+              <span class="share-toggle-track"></span>
+              <span class="share-toggle-thumb"></span>
+            </span>
           </label>
         </div>
-        <div id="pub-share-link-row" style="display:none" class="flex gap-2 items-center">
+        <div id="pub-share-link-row" style="display:none" class="share-public-link-row">
           <input id="pub-share-url" readonly
-                 class="flex-1 modal-input text-[11px] text-white/60 cursor-pointer select-all"
+                 class="modal-input cursor-pointer select-all"
                  placeholder="Generating link...">
           <button id="btn-pub-share-copy"
-                  class="px-3 py-1.5 rounded text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30
-                         text-purple-300 border border-purple-500/30 transition whitespace-nowrap">
+                  class="share-action-button is-primary">
             Salin
           </button>
           <a id="btn-pub-share-open" href="#" target="_blank"
-             class="px-3 py-1.5 rounded text-xs font-semibold bg-white/5 hover:bg-white/10
-                    text-white/50 border border-white/10 transition whitespace-nowrap">
+             class="share-action-button">
             Buka
           </a>
         </div>
-        <p id="pub-share-note" class="text-[10px] text-white/20 mt-1.5">Siapapun dengan link bisa melihat file ini tanpa login.</p>
-      </div>
+      </section>
 
       <!-- Form tambah share -->
-      <div class="px-5 py-3 border-b border-white/[0.06] shrink-0 space-y-2">
-        <p class="text-[10px] font-bold text-white/25 uppercase tracking-widest">Tambah Akses</p>
-        <div class="flex gap-2 items-center">
+      <section class="share-section shrink-0">
+        <div class="share-section-heading">
+          <div>
+            <h3>Tambah akses</h3>
+            <p>Pilih pengguna atau grup, lalu tentukan izinnya.</p>
+          </div>
+        </div>
+        <div class="share-access-grid">
+          <label class="share-field">
+            <span>Target</span>
           <select id="share-target-type"
-                  class="modal-input text-xs
-                         outline-none focus:border-cyan-500/50 transition shrink-0">
+                    class="modal-input">
             <option value="user">👤 User</option>
             <option value="group">👥 Grup</option>
           </select>
+          </label>
+          <label class="share-field share-target-field">
+            <span>Penerima</span>
           <select id="share-target-select"
-                  class="flex-1 modal-input text-xs
-                         outline-none focus:border-cyan-500/50 transition">
+                    class="modal-input">
             <option value="">— pilih —</option>
           </select>
+          </label>
+          <label class="share-field">
+            <span>Izin</span>
           <select id="share-permission"
-                  class="modal-input text-xs
-                         outline-none focus:border-cyan-500/50 transition shrink-0">
+                    class="modal-input">
             <option value="read">Baca</option>
             <option value="write">Edit</option>
           </select>
+          </label>
           <button id="btn-share-add"
-                  class="px-3 py-1.5 rounded text-xs font-semibold bg-cyan-500/20 hover:bg-cyan-500/30
-                         text-cyan-300 border border-cyan-500/30 transition whitespace-nowrap">
+                  class="share-action-button is-primary share-add-button">
             Bagikan
           </button>
         </div>
-        <p id="share-error" class="text-[11px] text-red-400 hidden"></p>
-      </div>
+        <p id="share-error" class="share-error hidden"></p>
+      </section>
 
       <!-- List share yang sudah ada -->
-      <div class="flex-1 overflow-y-auto wcf-scrollbar px-5 py-3">
-        <p class="text-[10px] font-bold text-white/25 uppercase tracking-widest mb-2">Akses Saat Ini</p>
-        <div id="share-current-list">
-          <p class="text-xs text-white/20 text-center py-4">Memuat...</p>
+      <section class="share-section share-current-section flex-1 overflow-y-auto wcf-scrollbar">
+        <div class="share-section-heading">
+          <div>
+            <h3>Akses saat ini</h3>
+            <p>Pengguna dan grup yang sudah memiliki akses.</p>
+          </div>
         </div>
-      </div>
+        <div id="share-current-list">
+          <p class="share-empty-state">Memuat...</p>
+        </div>
+      </section>
     </div>
   </div>
 
@@ -1809,7 +1827,7 @@
       pubStatus.textContent    = active ? 'Aktif' : 'Nonaktif';
       pubStatus.style.color    = active ? 'rgba(167,243,208,0.8)' : '';
       if (active) {
-        pubLinkRow.style.display = 'flex';
+        pubLinkRow.style.display = 'grid';
         pubUrlInput.value        = url;
         pubOpenBtn.href          = url;
       } else {
@@ -1879,16 +1897,18 @@
         }
         shareCurrentList.innerHTML = '';
         shares.forEach(s => {
-          const target = s.group_name ? `👥 ${s.group_name}` : `👤 ${s.shared_with_name}`;
-          const perm   = s.permission === 'write' ? '✏ Edit' : '👁 Baca';
+          const targetName = s.group_name || s.shared_with_name || 'Tanpa nama';
+          const targetType = s.group_name ? 'Grup' : 'User';
+          const perm = s.permission === 'write' ? 'Edit' : 'Baca';
           const row    = document.createElement('div');
-          row.className = 'flex items-center gap-2 px-3 py-2 rounded bg-white/[0.03] border border-white/[0.05] mb-1';
+          row.className = 'share-current-row';
           row.innerHTML = `
-            <span class="flex-1 text-xs text-white/60">${target}</span>
-            <span class="text-[9px] text-white/30 px-1.5 py-0.5 rounded bg-white/[0.05]">${perm}</span>
-            <button class="text-red-400/50 hover:text-red-400 text-xs transition" data-share-id="${s.id}">✕</button>`;
+            <span class="share-current-avatar" aria-hidden="true">${s.group_name ? 'G' : 'U'}</span>
+            <span class="share-current-name"><strong>${esc(targetName)}</strong><small>${targetType}</small></span>
+            <span class="share-permission-badge">${perm}</span>
+            <button class="share-revoke-button" data-share-id="${esc(s.id)}" aria-label="Cabut akses">×</button>`;
           row.querySelector('[data-share-id]')?.addEventListener('click', async e => {
-            const sid = Number(e.target.dataset.shareId);
+            const sid = e.currentTarget.dataset.shareId;
             const res = await apiUnshareFile(sid);
             if (res.ok) {
               await refreshShareList();
@@ -1909,7 +1929,7 @@
     document.getElementById('btn-share-add')?.addEventListener('click', async () => {
       shareError.classList.add('hidden');
       const type       = shareTargetType.value;
-      const targetId   = Number(shareTargetSel.value);
+      const targetId   = shareTargetSel.value;
       const permission = sharePermSel.value;
       if (!targetId) { shareError.textContent = 'Pilih target terlebih dahulu'; shareError.classList.remove('hidden'); return; }
       const targetUserId  = type === 'user'  ? targetId : null;
