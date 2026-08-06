@@ -25,32 +25,6 @@ env:
   NODE_VERSION: "22"
 
 jobs:
-  # ── Firebase Hosting (Mindmap web app) ───────────────────────────────────────
-  deploy-hosting:
-    name: Firebase Hosting
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --ignore-scripts
-
-      - name: Build Mindmap web app
-        run: npm run build:mindmap-hosting
-
-      - name: Deploy Firebase Hosting
-        uses: FirebaseExtended/action-hosting-deploy@v0
-        with:
-          repoToken: ${{ secrets.GITHUB_TOKEN }}
-          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_WAN_SSH }}
-          projectId: wan-ssh
-          channelId: live
-
   # ── macOS (DMG + ZIP, signed + notarized) ────────────────────────────────────
   build-mac:
     name: macOS (arm64)
@@ -281,7 +255,7 @@ jobs:
   # ── Finalize GitHub Release notes ────────────────────────────────────────────
   finalize-release:
     name: Finalize release
-    needs: [deploy-hosting, build-mac, build-win, build-linux]
+    needs: [build-mac, build-win, build-linux]
     if: always() && startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
