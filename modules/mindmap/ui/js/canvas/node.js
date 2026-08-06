@@ -363,11 +363,18 @@ function _createEditToolbar(id, ta) {
 // ── Edit text — textarea overlay approach ────────────────────
 // Using a real <textarea> gives accurate cursor control, native undo/redo,
 // reliable selection APIs (selectionStart/End), and proper line-break handling.
-export function beginEdit(id, spanEl) {
+export function beginEdit(id, spanEl, options = {}) {
   const span = spanEl || $el(id)?.querySelector('.node-text');
   if (!span) return;
   const n = state.nodes[id];
   if (!n) return;
+  if (!options.skipCollaborationGuard) {
+    const event = new CustomEvent('wcf:before-node-edit', {
+      cancelable: true,
+      detail: { nodeId: String(id), span },
+    });
+    if (!document.dispatchEvent(event)) return;
+  }
   // Bail if already editing this node
   if (span.querySelector('.node-edit-textarea')) return;
 

@@ -130,6 +130,7 @@ export async function switchProject(id) {
   }
   refs.dirty = false;
   renderSidebar();
+  document.dispatchEvent(new CustomEvent('wcf:project-changed', { detail: { projectId: id } }));
 }
 
 // ── Paste file ───────────────────────────────────────────────
@@ -215,4 +216,5 @@ export async function loadCurrentProject() {
   // Tandai init selesai — auto-save boleh jalan mulai sekarang
   refs.initialized = true;
   refs.dirty       = false; // reset dirty setelah load
+  document.dispatchEvent(new CustomEvent('wcf:project-changed', { detail: { projectId } }));
 }

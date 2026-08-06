@@ -25,7 +25,7 @@ import { openImportDialog } from './features/import.js';
 import './features/mermaid-import.js';
 import { smartPaste, looksLikeTree }        from './features/smart-paste.js';
 import { initFindReplace, openFindReplace, closeFindReplace } from './features/find-replace.js';
-import { apiMe }                     from './api.js';
+import { apiGroupGetInfo, apiMe }    from './api.js';
 import { ensureAuthenticated }       from './auth-gate.js';
 import { firebaseServices }          from './firebase/client.js';
 import { reloadMindmap, setWorkspaceContext, workspaceContext } from './data/repository.js';
@@ -37,6 +37,12 @@ import { initKanban, openKanban } from './features/kanban.js';
 import { initFrames, toggleFrameDrawMode,
          handleFrameMouseDown, handleFrameMouseMove,
          handleFrameMouseUp, isFrameDrawMode } from './features/frames.js';
+import { renderMd } from './features/markdown.js';
+import { createGroupRealtime } from './collaboration/realtime.js';
+
+let collaboration = null;
+const remoteCursors = new Map();
+const remoteLocks = new Map();
 
 // ── Canvas events ─────────────────────────────────────────────
 function initCanvasEvents() {
@@ -110,6 +116,7 @@ function initCanvasEvents() {
         if (el) { el.style.left = n.x + 'px'; el.style.top = n.y + 'px'; }
       }
       renderLines(); updateMinimap();
+      collaboration?.sendNodePosition(nodeId, n.x, n.y);
       ui.suppressClick = true;
     }
 
@@ -285,6 +292,320 @@ function initCanvasEvents() {
   });
 
   $c.addEventListener('contextmenu', e => e.preventDefault());
+}
+
+function initCollaborationUi() {
+  const online = document.createElement('div');
+  online.id = 'collaboration-online';
+  online.style.cssText = 'display:none;align-items:center;gap:3px;margin-right:4px;';
+  document.getElementById('cloud-state')?.before(online);
+
+  const status = document.createElement('span');
+  status.id = 'collaboration-status';
+  status.style.cssText = 'font-size:9px;color:var(--text-4);margin-right:5px;white-space:nowrap;';
+  online.after(status);
+
+  const renderPresence = users => {
+    online.innerHTML = '';
+    online.style.display = users.length ? 'flex' : 'none';
+    for (const user of users.slice(0, 6)) {
+      const avatar = document.createElement('span');
+      avatar.title = `${user.username || 'WAN User'}${user.fileId === state.currentProject ? ' · file ini' : ''}`;
+      avatar.textContent = String(user.username || '?').slice(0, 1).toUpperCase();
+      avatar.style.cssText = `display:inline-flex;align-items:center;justify-content:center;width:21px;height:21px;border-radius:50%;background:${user.color || '#7c6dfa'};color:#fff;font-size:9px;font-weight:700;border:2px solid ${user.fileId === state.currentProject ? '#4ade80' : 'var(--border-md)'};`;
+      online.appendChild(avatar);
+    }
+    status.textContent = users.length ? `${users.length + 1} online` : 'Realtime aktif';
+  };
+
+  const positionCursor = cursor => {
+    cursor.el.style.transform = `translate(${cursor.x * state.zoom + state.pan.x}px,${cursor.y * state.zoom + state.pan.y}px)`;
+  };
+
+  const updateCursor = (sessionId, value) => {
+    if (!value) {
+      remoteCursors.get(sessionId)?.el.remove();
+      remoteCursors.delete(sessionId);
+      return;
+    }
+    let cursor = remoteCursors.get(sessionId);
+    if (!cursor) {
+      const el = document.createElement('div');
+      el.style.cssText = 'position:absolute;top:0;left:0;z-index:999;pointer-events:none;display:flex;align-items:flex-end;gap:3px;transition:transform 80ms linear;will-change:transform;';
+      const pointer = document.createElement('span');
+      pointer.textContent = '◆';
+      pointer.style.cssText = `font-size:13px;color:${value.color || '#7c6dfa'};filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));`;
+      const label = document.createElement('span');
+      label.textContent = value.username || 'WAN User';
+      label.style.cssText = `max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:1px 6px;border-radius:99px;background:${value.color || '#7c6dfa'};color:#fff;font-size:9px;font-weight:700;`;
+      el.append(pointer, label);
+      $c.appendChild(el);
+      cursor = { el, x: 0, y: 0 };
+      remoteCursors.set(sessionId, cursor);
+    }
+    cursor.x = Number(value.x || 0);
+    cursor.y = Number(value.y || 0);
+    positionCursor(cursor);
+  };
+
+  const applyLock = (nodeKey, value) => {
+    const previous = remoteLocks.get(nodeKey);
+    if (previous?.nodeId && (!value || previous.nodeId !== value.nodeId)) {
+      const oldEl = $el(previous.nodeId);
+      oldEl?.classList.remove('is-collab-locked');
+      oldEl?.querySelector('.collab-lock-badge')?.remove();
+    }
+    if (!value?.nodeId) {
+      remoteLocks.delete(nodeKey);
+      return;
+    }
+    remoteLocks.set(nodeKey, value);
+    const el = $el(value.nodeId);
+    if (!el) return;
+    el.classList.add('is-collab-locked');
+    let badge = el.querySelector('.collab-lock-badge');
+    if (!badge) {
+      badge = document.createElement('span');
+      badge.className = 'collab-lock-badge';
+      badge.style.cssText = 'position:absolute;top:-9px;right:-7px;z-index:20;padding:1px 5px;border-radius:99px;color:#fff;font-size:9px;font-weight:700;pointer-events:none;white-space:nowrap;';
+      el.appendChild(badge);
+    }
+    badge.style.background = value.color || '#7c6dfa';
+    badge.textContent = `${value.username || 'User'} mengedit`;
+  };
+
+  document.addEventListener('wcf:canvas-transform', () => {
+    for (const cursor of remoteCursors.values()) positionCursor(cursor);
+  });
+
+  $c.addEventListener('mousemove', event => {
+    if (!collaboration) return;
+    const point = toCanvas(event.clientX, event.clientY);
+    collaboration.sendCursor(point.x, point.y);
+  });
+
+  $c.addEventListener('dblclick', event => {
+    const text = event.target.closest?.('.node-text');
+    const nodeId = text?.closest?.('.node')?.dataset.id;
+    if (!nodeId || !collaboration) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const locked = [...remoteLocks.values()].some(value => value.nodeId === nodeId);
+    if (locked) {
+      flash('Node sedang diedit pengguna lain', false);
+      return;
+    }
+    void collaboration.lockNode(nodeId).then(acquired => {
+      if (!acquired) {
+        flash('Node baru saja dikunci pengguna lain', false);
+        return;
+      }
+      beginEdit(nodeId, text, { skipCollaborationGuard: true });
+    }).catch(error => {
+      console.warn('[WCF] lock node:', error);
+      flash('Gagal mengunci node untuk diedit', false);
+    });
+  }, { capture: true });
+
+  document.addEventListener('keydown', event => {
+    if (!collaboration || !['F2', 'Enter'].includes(event.key) || selectedNodes.size !== 1) return;
+    const tag = document.activeElement?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.contentEditable === 'true') return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (!collaboration.canWrite) {
+      flash('Workspace ini hanya dapat dibaca', false);
+      return;
+    }
+    const [nodeId] = [...selectedNodes];
+    const locked = [...remoteLocks.values()].some(value => value.nodeId === nodeId);
+    if (locked) {
+      flash('Node sedang diedit pengguna lain', false);
+      return;
+    }
+    void collaboration.lockNode(nodeId).then(acquired => {
+      if (acquired) beginEdit(nodeId, null, { skipCollaborationGuard: true });
+      else flash('Node baru saja dikunci pengguna lain', false);
+    });
+  }, { capture: true });
+
+  document.addEventListener('wcf:before-node-edit', event => {
+    if (!collaboration) return;
+    event.preventDefault();
+    const nodeId = event.detail?.nodeId;
+    if (!nodeId) return;
+    if (!collaboration.canWrite) {
+      flash('Workspace ini hanya dapat dibaca', false);
+      return;
+    }
+    const locked = [...remoteLocks.values()].some(value => value.nodeId === nodeId);
+    if (locked) {
+      flash('Node sedang diedit pengguna lain', false);
+      return;
+    }
+    void collaboration.lockNode(nodeId).then(acquired => {
+      if (acquired) beginEdit(nodeId, event.detail?.span, { skipCollaborationGuard: true });
+      else flash('Node baru saja dikunci pengguna lain', false);
+    });
+  });
+
+  $c.addEventListener('focusin', event => {
+    const nodeId = event.target.closest?.('.node')?.dataset.id;
+    if (nodeId && event.target.classList.contains('node-edit-textarea')) void collaboration?.lockNode(nodeId);
+  });
+  $c.addEventListener('focusout', event => {
+    const nodeId = event.target.closest?.('.node')?.dataset.id;
+    if (nodeId && event.target.classList.contains('node-edit-textarea')) void collaboration?.unlockNode(nodeId);
+  });
+  $c.addEventListener('input', event => {
+    const nodeId = event.target.closest?.('.node')?.dataset.id;
+    if (!nodeId || !event.target.classList.contains('node-edit-textarea')) return;
+    collaboration?.sendTyping(nodeId);
+    collaboration?.sendNodeText(nodeId, event.target.value);
+  });
+
+  return {
+    renderPresence,
+    updateCursor,
+    applyLock,
+    setStatus(connected) {
+      status.textContent = connected ? 'Realtime aktif' : 'Realtime offline';
+      status.style.color = connected ? 'var(--green)' : '#f87171';
+    },
+    removeSession(sessionId) {
+      updateCursor(sessionId, null);
+      for (const [key, value] of remoteLocks) {
+        if (value.sessionId === sessionId) applyLock(key, null);
+      }
+    },
+  };
+}
+
+function canApplyRemoteCanvas() {
+  return refs.initialized && !refs.dirty && !ui.dragging && !ui.resizing && !ui.connecting
+    && !document.querySelector('.node-edit-textarea:focus');
+}
+
+function enableGroupReadOnlyMode() {
+  document.body.classList.add('wcf-group-read-only');
+  const blockedButtons = [
+    'btn-save', 'btn-clear', 'btn-undo', 'btn-redo', 'btn-auto-layout', 'btn-cmd',
+    'btn-sticky', 'btn-frame', 'btn-import-json', 'btn-import-mermaid', 'btn-snap-grid',
+  ];
+  for (const id of blockedButtons) {
+    const button = $id(id);
+    if (!button) continue;
+    button.disabled = true;
+    button.title = 'Workspace hanya dapat dibaca';
+  }
+  const blockPointerMutation = event => {
+    const target = event.target;
+    const node = target.closest?.('.node');
+    const mutatingNodeControl = node && (
+      event.type === 'dblclick'
+      || target.closest?.('.conn-dot')
+      || target.closest?.('.node-resize-handle')
+      || (event.type === 'mousedown' && event.button === 0)
+    );
+    if (!mutatingNodeControl) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    if (event.type === 'dblclick') flash('Workspace ini hanya dapat dibaca', false);
+  };
+  $c.addEventListener('mousedown', blockPointerMutation, { capture: true });
+  $c.addEventListener('dblclick', blockPointerMutation, { capture: true });
+  document.addEventListener('keydown', event => {
+    const tag = document.activeElement?.tagName;
+    const editing = tag === 'INPUT' || tag === 'TEXTAREA' || document.activeElement?.contentEditable === 'true';
+    if (editing) return;
+    const ctrl = event.ctrlKey || event.metaKey;
+    const mutation = ['Delete', 'Backspace', 'F2', 'Enter'].includes(event.key)
+      || ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)
+      || (ctrl && ['v', 'd', 'g', 'z', 'y', 's'].includes(event.key.toLowerCase()));
+    if (!mutation) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    flash('Workspace ini hanya dapat dibaca', false);
+  }, { capture: true });
+}
+
+async function startGroupCollaboration(context) {
+  const uiBindings = initCollaborationUi();
+  const groupInfo = await apiGroupGetInfo(context.groupId);
+  if (!groupInfo?.ok) throw new Error(groupInfo?.error || 'Akses grup tidak tersedia.');
+  const canWrite = ['owner', 'editor', 'admin'].includes(groupInfo.group?.role);
+  if (!canWrite) {
+    window.wcfViewMode = true;
+    enableGroupReadOnlyMode();
+  }
+  collaboration = await createGroupRealtime({
+    groupId: context.groupId,
+    username: state.currentUser?.username,
+    canWrite,
+    onStatus: connected => uiBindings.setStatus(connected),
+    onPresence: users => uiBindings.renderPresence(users),
+    onCursor: (sessionId, value) => uiBindings.updateCursor(sessionId, value),
+    onSessionLeft: sessionId => uiBindings.removeSession(sessionId),
+    onLock: (nodeKey, value) => uiBindings.applyLock(nodeKey, value),
+    onTyping: (payload, actor) => {
+      const el = $el(payload.nodeId);
+      if (!el) return;
+      let badge = el.querySelector('.collab-typing-badge');
+      if (!badge) {
+        badge = document.createElement('span');
+        badge.className = 'collab-typing-badge';
+        badge.style.cssText = 'position:absolute;bottom:-18px;left:0;padding:1px 5px;border-radius:99px;color:#fff;font-size:8px;font-weight:700;pointer-events:none;white-space:nowrap;';
+        el.appendChild(badge);
+      }
+      badge.style.background = actor.color;
+      badge.textContent = `${actor.username} mengetik...`;
+      clearTimeout(el._collabTypingTimer);
+      el._collabTypingTimer = setTimeout(() => badge.remove(), 1600);
+    },
+    onNodePosition: payload => {
+      const node = state.nodes[payload.nodeId];
+      const el = $el(payload.nodeId);
+      if (!node || !el || ui.dragging?.nodeId === payload.nodeId) return;
+      node.x = Number(payload.x);
+      node.y = Number(payload.y);
+      el.style.left = `${node.x}px`;
+      el.style.top = `${node.y}px`;
+      renderLines();
+      updateMinimap();
+    },
+    onNodeText: payload => {
+      const node = state.nodes[payload.nodeId];
+      const el = $el(payload.nodeId);
+      if (!node || !el || el.querySelector('.node-edit-textarea:focus')) return;
+      node.text = String(payload.text || '');
+      const text = el.querySelector('.node-text');
+      if (text) text.innerHTML = renderMd(node.text);
+      renderLines();
+    },
+    onCanvas: canvas => {
+      if (!canApplyRemoteCanvas()) return false;
+      applyData(canvas);
+      refs.dirty = false;
+      updateMinimap();
+      for (const [key, value] of remoteLocks) uiBindings.applyLock(key, value);
+      return true;
+    },
+    onWorkspace: tree => {
+      if (!tree || JSON.stringify(tree) === JSON.stringify(refs.workspaceTree)) return;
+      refs.workspaceTree = tree;
+      renderSidebar();
+    },
+    onError: error => console.warn('[WCF] realtime collaboration:', error),
+  });
+  await collaboration.setProject(state.currentProject);
+  document.addEventListener('wcf:project-changed', event => {
+    remoteCursors.forEach(cursor => cursor.el.remove());
+    remoteCursors.clear();
+    remoteLocks.forEach((value, key) => uiBindings.applyLock(key, null));
+    void collaboration?.setProject(event.detail?.projectId);
+  });
+  setInterval(() => collaboration?.flushPending(), 500);
+  window.addEventListener('beforeunload', () => { void collaboration?.stop(); });
 }
 
 // ── Keyboard ──────────────────────────────────────────────────
@@ -502,6 +823,14 @@ async function init() {
   refs.initialized = true;      // pastikan selalu true walau loadCurrentProject throw
   refs.dirty       = false;     // reset dirty setelah load awal
   renderTrash();
+  if (context.type === 'group') {
+    try {
+      await startGroupCollaboration(context);
+    } catch (error) {
+      console.warn('[WCF] collaboration unavailable:', error);
+      flash(`Realtime belum aktif: ${error?.message || error}`, false);
+    }
+  }
   // Trash toggle
   $id('btn-toggle-trash')?.addEventListener('click', () => {
     const list = $id('trash-list');

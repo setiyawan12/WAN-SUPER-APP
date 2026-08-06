@@ -14,6 +14,7 @@ import {
   increment,
   serverTimestamp,
   setDoc,
+  Timestamp,
   writeBatch,
 } from 'firebase/firestore';
 import {
@@ -90,6 +91,7 @@ const adminDatabase = getAdminDatabase(adminApp);
 const owner = await createClient('owner');
 const editor = await createClient('editor');
 const outsider = await createClient('outsider');
+const intruder = await createClient('intruder');
 
 await adminAuth.setCustomUserClaims(owner.uid, { admin: true });
 await owner.auth.currentUser.getIdToken(true);
@@ -199,6 +201,120 @@ memberBatch.update(doc(owner.firestore, `groups/${groupId}`), {
 });
 await memberBatch.commit();
 assert.equal((await getDoc(doc(outsider.firestore, `groups/${groupId}`))).exists(), true);
+const fileKey = 'ZGVmYXVsdA';
+const editorSession = doc(editor.firestore, 'groups', groupId, 'collaborationSessions', 'editor-session');
+const viewerSession = doc(outsider.firestore, 'groups', groupId, 'collaborationSessions', 'viewer-session');
+await setDoc(editorSession, {
+  uid: editor.uid,
+  username: 'editor',
+  color: '#0ea5e9',
+  fileId: 'default',
+  updatedAt: serverTimestamp(),
+});
+await setDoc(viewerSession, {
+  uid: outsider.uid,
+  username: 'viewer',
+  color: '#10b981',
+  fileId: 'default',
+  updatedAt: serverTimestamp(),
+});
+assert.equal((await getDoc(doc(editor.firestore, 'groups', groupId, 'collaborationSessions', 'viewer-session'))).exists(), true);
+await expectDenied(
+  () => getDoc(doc(intruder.firestore, 'groups', groupId, 'collaborationSessions', 'editor-session')),
+  'Outsider membaca room kolaborasi grup'
+);
+
+await setDoc(doc(editor.firestore, 'groups', groupId, 'collaborationFiles', fileKey, 'cursors', 'editor-session'), {
+  uid: editor.uid,
+  sessionId: 'editor-session',
+  username: 'editor',
+  color: '#0ea5e9',
+  x: 120,
+  y: 240,
+  updatedAt: serverTimestamp(),
+});
+await setDoc(doc(outsider.firestore, 'groups', groupId, 'collaborationFiles', fileKey, 'cursors', 'viewer-session'), {
+  uid: outsider.uid,
+  sessionId: 'viewer-session',
+  username: 'viewer',
+  color: '#10b981',
+  x: 180,
+  y: 280,
+  updatedAt: serverTimestamp(),
+});
+await expectDenied(
+  () => setDoc(doc(intruder.firestore, 'groups', groupId, 'collaborationFiles', fileKey, 'cursors', 'intruder-session'), {
+    uid: intruder.uid,
+    sessionId: 'intruder-session',
+    username: 'intruder',
+    color: '#ef4444',
+    x: 1,
+    y: 1,
+    updatedAt: serverTimestamp(),
+  }),
+  'Outsider menulis cursor kolaborasi'
+);
+
+await setDoc(doc(editor.firestore, 'groups', groupId, 'collaborationEvents', 'editor-session'), {
+  uid: editor.uid,
+  sessionId: 'editor-session',
+  username: 'editor',
+  color: '#0ea5e9',
+  fileId: 'default',
+  type: 'node_pos',
+  sequence: 1,
+  sentAt: serverTimestamp(),
+  payload: { nodeId: '1', x: 150, y: 250 },
+});
+await expectDenied(
+  () => setDoc(doc(outsider.firestore, 'groups', groupId, 'collaborationEvents', 'viewer-session'), {
+    uid: outsider.uid,
+    sessionId: 'viewer-session',
+    username: 'viewer',
+    color: '#10b981',
+    fileId: 'default',
+    type: 'node_text',
+    sequence: 1,
+    sentAt: serverTimestamp(),
+    payload: { nodeId: '1', text: 'denied' },
+  }),
+  'Viewer mengirim mutasi canvas realtime'
+);
+
+const editorLock = doc(editor.firestore, 'groups', groupId, 'collaborationFiles', fileKey, 'locks', 'MQ');
+await setDoc(editorLock, {
+  uid: editor.uid,
+  sessionId: 'editor-session',
+  nodeId: '1',
+  username: 'editor',
+  color: '#0ea5e9',
+  updatedAt: serverTimestamp(),
+  expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+});
+await expectDenied(
+  () => setDoc(doc(owner.firestore, 'groups', groupId, 'collaborationFiles', fileKey, 'locks', 'MQ'), {
+    uid: owner.uid,
+    sessionId: 'owner-session',
+    nodeId: '1',
+    username: 'owner',
+    color: '#7c6dfa',
+    updatedAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+  }),
+  'Editor lain merebut node lock aktif'
+);
+await expectDenied(
+  () => setDoc(doc(outsider.firestore, 'groups', groupId, 'collaborationFiles', fileKey, 'locks', 'Mg'), {
+    uid: outsider.uid,
+    sessionId: 'viewer-session',
+    nodeId: '2',
+    username: 'viewer',
+    color: '#10b981',
+    updatedAt: serverTimestamp(),
+    expiresAt: Timestamp.fromMillis(Date.now() + 60_000),
+  }),
+  'Viewer mengambil node lock'
+);
 
 const groupMindmapId = `group-${groupId}--ZGVmYXVsdA`;
 await setDoc(doc(editor.firestore, 'mindmaps', groupMindmapId), {
@@ -235,6 +351,11 @@ console.log(JSON.stringify({
     'group editor create/write',
     'group member read',
     'group outsider denied',
+    'collaboration member presence',
+    'collaboration outsider denied',
+    'editor and viewer cursor allowed',
+    'viewer mutation denied',
+    'active node lock protected',
   ],
 }, null, 2));
 
@@ -242,6 +363,7 @@ await Promise.all([
   deleteApp(owner.app),
   deleteApp(editor.app),
   deleteApp(outsider.app),
+  deleteApp(intruder.app),
   deleteAdminApp(adminApp),
 ]);
 process.exit(0);

@@ -7,7 +7,9 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return signedIn() && request.auth.token.admin == true;
+      return signedIn()
+        && request.auth.token.keys().hasAny(['admin'])
+        && request.auth.token.admin == true;
     }
 
     function isSelf(uid) {
@@ -160,6 +162,52 @@ service cloud.firestore {
       match /mindmaps/{projectId} {
         allow read: if groupMember(groupId) || isAdmin();
         allow create, update, delete: if groupCanWrite(groupId) || isAdmin();
+      }
+
+      match /collaborationSessions/{sessionId} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow create, update: if (groupMember(groupId) || isAdmin())
+          && request.resource.data.uid == request.auth.uid;
+        allow delete: if signedIn()
+          && (resource.data.uid == request.auth.uid || groupCanManage(groupId) || isAdmin());
+      }
+
+      match /collaborationEvents/{sessionId} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow create, update: if (groupCanWrite(groupId) || isAdmin())
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.sessionId == sessionId
+          && request.resource.data.type in ['node_pos', 'node_text', 'node_typing'];
+        allow delete: if signedIn()
+          && (resource.data.uid == request.auth.uid || groupCanManage(groupId) || isAdmin());
+      }
+
+      match /collaborationFiles/{fileId} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow write: if false;
+
+        match /cursors/{sessionId} {
+          allow read: if groupMember(groupId) || isAdmin();
+          allow create, update: if (groupMember(groupId) || isAdmin())
+            && request.resource.data.uid == request.auth.uid
+            && request.resource.data.sessionId == sessionId;
+          allow delete: if signedIn()
+            && (resource.data.uid == request.auth.uid || groupCanManage(groupId) || isAdmin());
+        }
+
+        match /locks/{nodeId} {
+          allow read: if groupMember(groupId) || isAdmin();
+          allow create: if (groupCanWrite(groupId) || isAdmin())
+            && request.resource.data.uid == request.auth.uid;
+          allow update: if (groupCanWrite(groupId) || isAdmin())
+            && request.resource.data.uid == request.auth.uid
+            && (
+              resource.data.uid == request.auth.uid
+              || resource.data.expiresAt < request.time
+            );
+          allow delete: if signedIn()
+            && (resource.data.uid == request.auth.uid || groupCanManage(groupId) || isAdmin());
+        }
       }
     }
 

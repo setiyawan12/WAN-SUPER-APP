@@ -1,7 +1,7 @@
 {
   "name": "wan-super-app",
   "productName": "WAN Super App",
-  "version": "0.9.6",
+  "version": "0.9.7",
   "description": "WAN Super App — CLIProxyAPI desktop + WAN NET tunnel/inspector",
   "author": "WAN",
   "license": "MIT",
@@ -25,6 +25,7 @@
     "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.cliproxy.json --noEmit && tsc -p modules/ssh/tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit",
     "firebase:emulators": "firebase emulators:start",
     "firebase:test:rules": "PATH=/opt/homebrew/opt/node@22/bin:$PATH firebase emulators:exec --project demo-wan-super-app --only auth,firestore,database \"node firebase/rules-smoke.mjs\"",
+    "firebase:test:collaboration": "PATH=/opt/homebrew/opt/node@22/bin:$PATH firebase emulators:exec --project demo-wan-super-app --only auth,firestore \"node firebase/collaboration-smoke.mjs\"",
     "firebase:test:bootstrap": "PATH=/opt/homebrew/opt/node@22/bin:$PATH firebase emulators:exec --project demo-wan-super-app --only auth,firestore \"node firebase/bootstrap-smoke.mjs\"",
     "firebase:bootstrap-admin": "npm --prefix firebase/functions run bootstrap-admin --",
     "firebase:deploy": "firebase deploy --only firestore,database,functions,hosting",
