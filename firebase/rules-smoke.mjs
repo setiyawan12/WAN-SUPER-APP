@@ -7,11 +7,14 @@ import {
   getAuth,
 } from 'firebase/auth';
 import {
+  collection,
   connectFirestoreEmulator,
   doc,
   getDoc,
+  getDocs,
   getFirestore,
   increment,
+  onSnapshot,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -92,6 +95,7 @@ const owner = await createClient('owner');
 const editor = await createClient('editor');
 const outsider = await createClient('outsider');
 const intruder = await createClient('intruder');
+const visitor = client('public-visitor');
 
 await adminAuth.setCustomUserClaims(owner.uid, { admin: true });
 await owner.auth.currentUser.getIdToken(true);
@@ -316,6 +320,138 @@ await expectDenied(
   'Viewer mengambil node lock'
 );
 
+const personalPublicToken = 'personalPublicToken1234567890abc';
+const personalPointerId = 'ZGVmYXVsdA';
+const personalPublicBatch = writeBatch(owner.firestore);
+personalPublicBatch.set(doc(owner.firestore, 'users', owner.uid, 'publicShares', personalPointerId), {
+  token: personalPublicToken,
+  ownerType: 'user',
+  ownerId: owner.uid,
+  pointerId: personalPointerId,
+  projectId: 'default',
+  createdBy: owner.uid,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+});
+personalPublicBatch.set(doc(owner.firestore, 'publicShares', personalPublicToken), {
+  token: personalPublicToken,
+  ownerType: 'user',
+  ownerId: owner.uid,
+  pointerId: personalPointerId,
+  projectId: 'default',
+  displayName: 'Public Personal',
+  snapshot: { nodes: { root: { id: 'root', text: 'Public' } }, connections: [], nextId: 2 },
+  enabled: true,
+  createdBy: owner.uid,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+  schemaVersion: 1,
+});
+await personalPublicBatch.commit();
+assert.equal((await getDoc(doc(visitor.firestore, 'publicShares', personalPublicToken))).data()?.displayName, 'Public Personal');
+const publicRealtimeUpdate = new Promise((resolve, reject) => {
+  const timeout = setTimeout(() => {
+    unsubscribe();
+    reject(new Error('Visitor tidak menerima update public share realtime'));
+  }, 8_000);
+  const unsubscribe = onSnapshot(doc(visitor.firestore, 'publicShares', personalPublicToken), snapshot => {
+    if (snapshot.data()?.snapshot?.nodes?.second?.text !== 'Node baru') return;
+    clearTimeout(timeout);
+    unsubscribe();
+    resolve(snapshot.data());
+  }, reject);
+});
+await setDoc(doc(owner.firestore, 'publicShares', personalPublicToken), {
+  snapshot: {
+    nodes: {
+      root: { id: 'root', text: 'Public' },
+      second: { id: 'second', text: 'Node baru' },
+    },
+    connections: [{ from: 'root', to: 'second' }],
+    nextId: 3,
+  },
+  updatedBy: owner.uid,
+  updatedAt: serverTimestamp(),
+}, { merge: true });
+assert.equal((await publicRealtimeUpdate).snapshot.nodes.second.text, 'Node baru');
+await expectDenied(
+  () => getDocs(collection(visitor.firestore, 'publicShares')),
+  'Visitor menampilkan daftar semua public share'
+);
+await expectDenied(
+  () => setDoc(doc(intruder.firestore, 'publicShares', personalPublicToken), {
+    token: personalPublicToken,
+    ownerType: 'user',
+    ownerId: intruder.uid,
+    pointerId: personalPointerId,
+    projectId: 'default',
+    displayName: 'Hijacked',
+    snapshot: { nodes: {}, connections: [], nextId: 1 },
+    enabled: true,
+    createdBy: intruder.uid,
+  }),
+  'User lain mengambil alih token public share'
+);
+
+const groupPublicToken = 'groupPublicToken1234567890123abc';
+const groupPublicBatch = writeBatch(editor.firestore);
+groupPublicBatch.set(doc(editor.firestore, 'groups', groupId, 'publicShares', personalPointerId), {
+  token: groupPublicToken,
+  ownerType: 'group',
+  ownerId: groupId,
+  pointerId: personalPointerId,
+  projectId: 'default',
+  createdBy: editor.uid,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+});
+groupPublicBatch.set(doc(editor.firestore, 'publicShares', groupPublicToken), {
+  token: groupPublicToken,
+  ownerType: 'group',
+  ownerId: groupId,
+  pointerId: personalPointerId,
+  projectId: 'default',
+  displayName: 'Public Group',
+  snapshot: { nodes: { root: { id: 'root', text: 'Group Public' } }, connections: [], nextId: 2 },
+  enabled: true,
+  createdBy: editor.uid,
+  createdAt: serverTimestamp(),
+  updatedAt: serverTimestamp(),
+  schemaVersion: 1,
+});
+await groupPublicBatch.commit();
+assert.equal((await getDoc(doc(visitor.firestore, 'publicShares', groupPublicToken))).data()?.displayName, 'Public Group');
+const deniedGroupBatch = writeBatch(outsider.firestore);
+deniedGroupBatch.set(doc(outsider.firestore, 'groups', groupId, 'publicShares', 'dmlld2Vy'), {
+  token: 'viewerPublicToken123456789012abc',
+  ownerType: 'group',
+  ownerId: groupId,
+  pointerId: 'dmlld2Vy',
+  projectId: 'viewer',
+  createdBy: outsider.uid,
+});
+deniedGroupBatch.set(doc(outsider.firestore, 'publicShares', 'viewerPublicToken123456789012abc'), {
+  token: 'viewerPublicToken123456789012abc',
+  ownerType: 'group',
+  ownerId: groupId,
+  pointerId: 'dmlld2Vy',
+  projectId: 'viewer',
+  displayName: 'Denied',
+  snapshot: { nodes: {}, connections: [], nextId: 1 },
+  enabled: true,
+  createdBy: outsider.uid,
+});
+await expectDenied(() => deniedGroupBatch.commit(), 'Viewer membuat group public share');
+
+const revokeBatch = writeBatch(owner.firestore);
+revokeBatch.delete(doc(owner.firestore, 'publicShares', personalPublicToken));
+revokeBatch.delete(doc(owner.firestore, 'users', owner.uid, 'publicShares', personalPointerId));
+await revokeBatch.commit();
+await expectDenied(
+  () => getDoc(doc(visitor.firestore, 'publicShares', personalPublicToken)),
+  'Visitor membaca public share yang sudah dicabut'
+);
+
 const groupMindmapId = `group-${groupId}--ZGVmYXVsdA`;
 await setDoc(doc(editor.firestore, 'mindmaps', groupMindmapId), {
   id: groupMindmapId,
@@ -356,6 +492,12 @@ console.log(JSON.stringify({
     'editor and viewer cursor allowed',
     'viewer mutation denied',
     'active node lock protected',
+    'personal public share readable by token',
+    'public share snapshot updates realtime',
+    'public share listing denied',
+    'group editor public share allowed',
+    'group viewer public share denied',
+    'revoked public share denied',
   ],
 }, null, 2));
 
@@ -364,6 +506,7 @@ await Promise.all([
   deleteApp(editor.app),
   deleteApp(outsider.app),
   deleteApp(intruder.app),
+  deleteApp(visitor.app),
   deleteAdminApp(adminApp),
 ]);
 process.exit(0);

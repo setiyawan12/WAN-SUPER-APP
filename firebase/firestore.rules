@@ -83,6 +83,10 @@ service cloud.firestore {
         allow update: if isAdmin() || groupCanManage(groupId);
         allow delete: if isAdmin() || groupCanManage(groupId);
       }
+
+      match /publicShares/{shareId} {
+        allow read, create, update, delete: if isSelf(uid) || isAdmin();
+      }
     }
 
     match /usernames/{username} {
@@ -209,6 +213,11 @@ service cloud.firestore {
             && (resource.data.uid == request.auth.uid || groupCanManage(groupId) || isAdmin());
         }
       }
+
+      match /publicShares/{shareId} {
+        allow read: if groupMember(groupId) || isAdmin();
+        allow create, update, delete: if groupCanWrite(groupId) || isAdmin();
+      }
     }
 
     match /shares/{shareId} {
@@ -218,7 +227,43 @@ service cloud.firestore {
     }
 
     match /publicShares/{token} {
-      allow read, write: if false;
+      allow get: if resource.data.enabled == true;
+      allow list: if false;
+      allow create: if signedIn()
+        && request.resource.data.token == token
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.enabled == true
+        && request.resource.data.pointerId is string
+        && (
+          (
+            request.resource.data.ownerType == 'user'
+            && request.resource.data.ownerId == request.auth.uid
+            && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)/publicShares/$(request.resource.data.pointerId)).data.token == token
+          )
+          || (
+            request.resource.data.ownerType == 'group'
+            && groupCanWrite(request.resource.data.ownerId)
+            && getAfter(/databases/$(database)/documents/groups/$(request.resource.data.ownerId)/publicShares/$(request.resource.data.pointerId)).data.token == token
+          )
+          || isAdmin()
+        );
+      allow update: if signedIn()
+        && request.resource.data.token == resource.data.token
+        && request.resource.data.ownerType == resource.data.ownerType
+        && request.resource.data.ownerId == resource.data.ownerId
+        && request.resource.data.pointerId == resource.data.pointerId
+        && request.resource.data.projectId == resource.data.projectId
+        && (
+          (resource.data.ownerType == 'user' && resource.data.ownerId == request.auth.uid)
+          || (resource.data.ownerType == 'group' && groupCanWrite(resource.data.ownerId))
+          || isAdmin()
+        );
+      allow delete: if signedIn()
+        && (
+          (resource.data.ownerType == 'user' && resource.data.ownerId == request.auth.uid)
+          || (resource.data.ownerType == 'group' && groupCanWrite(resource.data.ownerId))
+          || isAdmin()
+        );
     }
 
     match /invites/{token} {

@@ -47,6 +47,11 @@
       "collectionGroup": "mindmaps",
       "fieldPath": "rawSnapshot",
       "indexes": []
+    },
+    {
+      "collectionGroup": "publicShares",
+      "fieldPath": "snapshot",
+      "indexes": []
     }
   ]
 }

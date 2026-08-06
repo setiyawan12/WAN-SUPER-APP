@@ -91,6 +91,27 @@ function localSet(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
 }
 
+async function syncPublicSnapshot(services, ownerType, ownerId, projectId, data) {
+  if (!services.configured || !services.firestore || !services.auth?.currentUser) return false;
+  const pointer = ownerType === 'group'
+    ? doc(services.firestore, 'groups', String(ownerId), 'publicShares', safeId(projectId))
+    : doc(services.firestore, 'users', String(ownerId), 'publicShares', safeId(projectId));
+  try {
+    const pointerSnapshot = await getDoc(pointer);
+    const token = pointerSnapshot.data()?.token;
+    if (!pointerSnapshot.exists() || !token) return false;
+    await updateDoc(doc(services.firestore, 'publicShares', String(token)), {
+      snapshot: JSON.parse(JSON.stringify(data)),
+      updatedBy: services.auth.currentUser.uid,
+      updatedAt: serverTimestamp(),
+    });
+    return true;
+  } catch (error) {
+    console.warn('[WCF] Public share belum tersinkron:', error);
+    return false;
+  }
+}
+
 function normalizeSnapshot(value) {
   if (!value || typeof value !== 'object') return null;
   return {
@@ -322,7 +343,8 @@ export async function saveGroupMindmap(groupId, projectId, data) {
     updatedAt: serverTimestamp(),
     schemaVersion: 1,
   });
-  return { revision, storage: 'firestore-group' };
+  const publicSynced = await syncPublicSnapshot(services, 'group', groupId, projectId, data);
+  return { revision, storage: 'firestore-group', publicSynced };
 }
 
 export async function deleteGroupMindmap(groupId, projectId) {
@@ -397,7 +419,8 @@ export async function saveMindmap(projectId, data) {
       updatedAt: serverTimestamp(),
       schemaVersion: 1,
     });
-    return { revision, storage: 'firestore-group' };
+    const publicSynced = await syncPublicSnapshot(services, 'group', context.groupId, projectId, data);
+    return { revision, storage: 'firestore-group', publicSynced };
   }
   if (context.type === 'personal') localSet(cacheKey, data);
   if (!services.configured || !services.database) {
@@ -449,6 +472,7 @@ export async function saveMindmap(projectId, data) {
 
   if (!revision) throw new Error('Realtime Database gagal menyimpan setelah beberapa percobaan.');
   revisions.set(id, revision);
+  const publicSynced = await syncPublicSnapshot(services, 'user', uid, projectId, data);
   const metadata = {
     id,
     name: projectId,
@@ -463,13 +487,14 @@ export async function saveMindmap(projectId, data) {
   };
   try {
     await saveMindmapMetadata(services, id, metadata);
-    return { revision, storage: 'firebase', metadataSynced: true };
+    return { revision, storage: 'firebase', metadataSynced: true, publicSynced };
   } catch (error) {
     console.warn('[WCF] Metadata Firestore belum tersinkron:', error);
     return {
       revision,
       storage: 'firebase',
       metadataSynced: false,
+      publicSynced,
       metadataError: error?.message || String(error),
     };
   }

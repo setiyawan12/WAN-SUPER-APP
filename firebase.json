@@ -13,14 +13,21 @@
   "hosting": {
     "public": "firebase/hosting",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "rewrites": [
+    "headers": [
       {
-        "source": "/api/public-share/**",
-        "function": {
-          "functionId": "publicShareData",
-          "region": "asia-southeast2"
-        }
+        "source": "/share.js",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
       },
+      {
+        "source": "/share.css",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
+      },
+      {
+        "source": "/share/**",
+        "headers": [{ "key": "Cache-Control", "value": "no-cache, max-age=0, must-revalidate" }]
+      }
+    ],
+    "rewrites": [
       {
         "source": "/share/**",
         "destination": "/share.html"

@@ -29,6 +29,7 @@ import {
   saveWorkspaceTree,
   renameGroupMindmap,
   searchMindmaps,
+  workspaceContext,
 } from './data/repository.js';
 
 const ok = (extra = {}) => ({ ok: true, ...extra });
@@ -433,12 +434,142 @@ export const apiListGroupMindmaps = async (groupId) => {
   return ok({ projects });
 };
 export const apiGetGroupActivity = (groupId) => callFunction('getGroupActivity', { groupId });
-export const apiGetPublicShare = (name) => callFunction('getPublicShare', { name });
-export const apiEnablePublicShare = (name, displayName) => callFunction('createPublicShare', { name, displayName });
-export const apiDisablePublicShare = (name) => callFunction('revokePublicShare', { name });
-export const apiGetGroupPublicShare = async () => unavailable('Group public share');
-export const apiEnableGroupPublicShare = async () => unavailable('Group public share');
-export const apiDisableGroupPublicShare = async () => unavailable('Group public share');
+
+function safePublicShareId(value) {
+  const bytes = new TextEncoder().encode(String(value));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+}
+
+function createPublicToken() {
+  const bytes = crypto.getRandomValues(new Uint8Array(24));
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+}
+
+function publicShareUrl(services, token) {
+  return `https://${services.app.options.projectId}.web.app/share/${encodeURIComponent(token)}`;
+}
+
+function publicPointerRef(services, ownerType, ownerId, projectId) {
+  return ownerType === 'group'
+    ? doc(services.firestore, 'groups', ownerId, 'publicShares', safePublicShareId(projectId))
+    : doc(services.firestore, 'users', ownerId, 'publicShares', safePublicShareId(projectId));
+}
+
+async function publicShareStatus(ownerType, ownerId, projectId) {
+  const services = await firebaseServices();
+  const user = services.auth?.currentUser;
+  if (!services.configured || !services.firestore || !user) return unavailable('Public share');
+  try {
+    const pointer = await getDoc(publicPointerRef(services, ownerType, ownerId, projectId));
+    if (!pointer.exists() || !pointer.data().token) return ok({ enabled: false });
+    const token = String(pointer.data().token);
+    const share = await getDoc(doc(services.firestore, 'publicShares', token));
+    if (!share.exists() || share.data().enabled !== true) return ok({ enabled: false });
+    return ok({ enabled: true, token, url: publicShareUrl(services, token) });
+  } catch (error) {
+    return { ok: false, error: error.message, errorCode: error.code };
+  }
+}
+
+async function enablePublicShare(ownerType, ownerId, projectId, displayName) {
+  const services = await firebaseServices();
+  const user = services.auth?.currentUser;
+  if (!services.configured || !services.firestore || !user) return unavailable('Public share');
+  try {
+    const snapshot = ownerType === 'group'
+      ? await loadGroupMindmap(ownerId, projectId)
+      : await loadMindmap(projectId);
+    if (!snapshot || typeof snapshot.nodes !== 'object') {
+      return { ok: false, error: 'Mindmap belum memiliki snapshot yang dapat dibagikan.' };
+    }
+    const pointerId = safePublicShareId(projectId);
+    const pointerRef = publicPointerRef(services, ownerType, ownerId, projectId);
+    const current = await getDoc(pointerRef);
+    const token = String(current.data()?.token || createPublicToken());
+    const shareRef = doc(services.firestore, 'publicShares', token);
+    const batch = writeBatch(services.firestore);
+    batch.set(shareRef, {
+      token,
+      ownerType,
+      ownerId,
+      pointerId,
+      projectId: String(projectId),
+      displayName: String(displayName || projectId).slice(0, 500),
+      snapshot: JSON.parse(JSON.stringify(snapshot)),
+      enabled: true,
+      createdBy: user.uid,
+      createdAt: current.exists() ? current.data().createdAt || serverTimestamp() : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      schemaVersion: 1,
+    });
+    batch.set(pointerRef, {
+      token,
+      ownerType,
+      ownerId,
+      pointerId,
+      projectId: String(projectId),
+      createdBy: user.uid,
+      createdAt: current.exists() ? current.data().createdAt || serverTimestamp() : serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+    await batch.commit();
+    return ok({ enabled: true, token, url: publicShareUrl(services, token) });
+  } catch (error) {
+    const tooLarge = /maximum size|too large|exceeds/i.test(error?.message || '');
+    return {
+      ok: false,
+      error: tooLarge ? 'Mindmap terlalu besar untuk public share Firestore.' : error.message,
+      errorCode: error.code,
+    };
+  }
+}
+
+async function disablePublicShare(ownerType, ownerId, projectId) {
+  const services = await firebaseServices();
+  const user = services.auth?.currentUser;
+  if (!services.configured || !services.firestore || !user) return unavailable('Public share');
+  try {
+    const pointerRef = publicPointerRef(services, ownerType, ownerId, projectId);
+    const pointer = await getDoc(pointerRef);
+    if (!pointer.exists() || !pointer.data().token) return ok({ revoked: 0 });
+    const batch = writeBatch(services.firestore);
+    batch.delete(doc(services.firestore, 'publicShares', String(pointer.data().token)));
+    batch.delete(pointerRef);
+    await batch.commit();
+    return ok({ revoked: 1 });
+  } catch (error) {
+    return { ok: false, error: error.message, errorCode: error.code };
+  }
+}
+
+export const apiGetPublicShare = (name) => {
+  const context = workspaceContext();
+  const uid = firebaseServices().then(services => services.auth?.currentUser?.uid || '');
+  return uid.then(ownerId => context.type === 'group'
+    ? publicShareStatus('group', String(context.groupId), name)
+    : publicShareStatus('user', ownerId, name));
+};
+export const apiEnablePublicShare = (name, displayName) => {
+  const context = workspaceContext();
+  const uid = firebaseServices().then(services => services.auth?.currentUser?.uid || '');
+  return uid.then(ownerId => context.type === 'group'
+    ? enablePublicShare('group', String(context.groupId), name, displayName)
+    : enablePublicShare('user', ownerId, name, displayName));
+};
+export const apiDisablePublicShare = (name) => {
+  const context = workspaceContext();
+  const uid = firebaseServices().then(services => services.auth?.currentUser?.uid || '');
+  return uid.then(ownerId => context.type === 'group'
+    ? disablePublicShare('group', String(context.groupId), name)
+    : disablePublicShare('user', ownerId, name));
+};
+export const apiGetGroupPublicShare = (groupId, name) => publicShareStatus('group', String(groupId), name);
+export const apiEnableGroupPublicShare = (groupId, name, displayName) => enablePublicShare('group', String(groupId), name, displayName);
+export const apiDisableGroupPublicShare = (groupId, name) => disablePublicShare('group', String(groupId), name);
 export const apiAdminGetWorkspace = async () => unavailable('Admin workspace viewer');
 export const apiAdminLoadMindmap = async () => unavailable('Admin workspace viewer');
 export const apiGetComments = async () => ok({ comments: [] });
