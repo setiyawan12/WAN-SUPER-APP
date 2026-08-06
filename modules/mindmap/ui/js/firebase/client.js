@@ -17,9 +17,17 @@ async function loadConfig() {
     return result?.configured ? result.config : null;
   }
   const raw = import.meta.env.VITE_FIREBASE_CONFIG || localStorage.getItem('wan_firebase_config');
-  if (!raw) return null;
+  if (raw) {
+    try {
+      return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    } catch {
+      return null;
+    }
+  }
+  if (!['http:', 'https:'].includes(window.location.protocol)) return null;
   try {
-    return typeof raw === 'string' ? JSON.parse(raw) : raw;
+    const response = await fetch('/__/firebase/init.json', { cache: 'no-store' });
+    return response.ok ? response.json() : null;
   } catch {
     return null;
   }
