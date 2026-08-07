@@ -57,6 +57,9 @@ WAN Super App membungkus **empat aplikasi mandiri** ke dalam satu shell Electron
 
 Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP.md)**.
 
+Target arsitektur dan relasi tugas **WAN Cliproxy Local + WAN Router Cloud** ada
+di **[modules/cliproxy/HANDBOOK-WAN-ROUTER-CLOUD.md](./modules/cliproxy/HANDBOOK-WAN-ROUTER-CLOUD.md)**.
+
 ---
 
 ## Fitur Utama
