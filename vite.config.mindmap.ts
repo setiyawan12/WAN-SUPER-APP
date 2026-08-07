@@ -26,7 +26,7 @@ export default defineConfig({
       : path.join(__dirname, "out/modules/mindmap/renderer"),
     emptyOutDir: true,
     rollupOptions: {
-      input: hostingBuild ? desktopInputs.index : desktopInputs,
+      input: desktopInputs,
       output: {
         manualChunks(id) {
           if (id.includes("node_modules/firebase") || id.includes("node_modules/@firebase")) {
