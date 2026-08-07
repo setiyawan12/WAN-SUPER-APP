@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#090a09">
+  <title>WAN Case Flow — Public View</title>
+  <link rel="stylesheet" href="./css/tailwind.css">
+  <link rel="stylesheet" href="./css/style.css">
+  <link rel="stylesheet" href="./css/premium.css">
+  <style>
+    body.wan-case-flow {
+      margin: 0;
+      min-height: 100dvh;
+      overflow: hidden;
+      background: var(--premium-base);
+      color: var(--premium-copy);
+    }
+
+    #share-topbar {
+      position: fixed;
+      inset: 0 0 auto;
+      z-index: 100;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      align-items: center;
+      gap: 18px;
+      height: 56px;
+      padding: 0 20px;
+    }
+
+    #share-topbar .brand,
+    #share-topbar .file-info,
+    #share-topbar .share-actions {
+      display: flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    #share-topbar .brand { gap: 9px; }
+    #share-topbar .file-info { justify-content: center; gap: 7px; }
+    #share-topbar .share-actions { justify-content: flex-end; }
+
+    #share-topbar .brand-logo {
+      display: grid;
+      place-items: center;
+      width: 32px;
+      height: 32px;
+    }
+
+    #share-topbar .brand-copy { display: grid; gap: 2px; }
+    #share-topbar .brand-name { line-height: 1; }
+    #share-topbar .brand-copy small {
+      color: var(--premium-faint);
+      font-size: 7px;
+      font-weight: 700;
+      line-height: 1;
+      letter-spacing: 0;
+    }
+
+    #share-topbar .file-name,
+    #share-topbar .file-owner {
+      max-width: min(34vw, 360px);
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    body.is-public-view .cta-btn {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 14px;
+      border: 1px solid var(--premium-gold);
+      border-radius: 5px;
+      color: #17140e;
+      background: linear-gradient(180deg, var(--premium-gold-bright), var(--premium-gold));
+      box-shadow: 0 8px 20px rgba(0, 0, 0, .18);
+      font-size: 11px;
+      font-weight: 650;
+      text-decoration: none;
+    }
+
+    #share-canvas-wrap { position: fixed; inset: 56px 0 0; overflow: hidden; }
+    #container { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
+    #container.grabbing { cursor: grabbing; }
+    #canvas {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      overflow: visible;
+      transform-origin: 0 0;
+      will-change: transform;
+      transition: transform .22s cubic-bezier(.2, .75, .25, 1);
+    }
+    #canvas.is-panning { transition: none; }
+    #svg-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+
+    #readonly-badge {
+      position: fixed;
+      bottom: 16px;
+      left: 50%;
+      z-index: 200;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 32px;
+      padding: 0 13px;
+      transform: translateX(-50%);
+      pointer-events: none;
+    }
+
+    #readonly-badge i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--premium-green);
+      box-shadow: 0 0 10px rgba(126, 170, 141, .38);
+    }
+
+    #zoom-controls {
+      position: fixed;
+      right: 16px;
+      bottom: 16px;
+      z-index: 200;
+      display: flex;
+      gap: 4px;
+    }
+
+    #zoom-controls button,
+    #zoom-label {
+      display: grid;
+      place-items: center;
+      min-width: 34px;
+      height: 34px;
+    }
+
+    #zoom-controls button { cursor: pointer; }
+    #zoom-label { min-width: 52px; padding-inline: 8px; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+    #share-loading,
+    #share-error {
+      position: fixed;
+      inset: 0;
+      z-index: 300;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      padding: 24px;
+      text-align: center;
+    }
+
+    #share-error[hidden] { display: none; }
+    #share-error strong { color: var(--premium-copy); font: 600 22px/1.15 var(--font-display); }
+    #share-error span { max-width: 46ch; color: var(--premium-muted); font-size: 12px; line-height: 1.6; }
+
+    .share-spinner {
+      width: 42px;
+      height: 42px;
+      border: 1px solid var(--premium-line-strong);
+      border-radius: 7px;
+      background: var(--premium-gold-soft);
+      transform: rotate(45deg);
+    }
+
+    .share-spinner::after {
+      content: "";
+      position: absolute;
+      inset: 9px;
+      border: 1px solid var(--premium-gold);
+      animation: wcf-loading-pulse 1.25s ease-in-out infinite;
+    }
+
+    #share-loading p { color: var(--premium-muted); font-size: 10px; letter-spacing: 0; text-transform: uppercase; }
+
+    body.is-public-view #canvas .node,
+    body.is-public-view #canvas .sticky-note,
+    body.is-public-view #canvas .canvas-frame,
+    body.is-public-view #canvas .canvas-frame-label,
+    body.is-public-view #canvas .node-collapse-btn,
+    body.is-public-view #svg-lines * {
+      pointer-events: none !important;
+      user-select: none !important;
+    }
+
+    body.is-public-view .conn-dot,
+    body.is-public-view .node-resize-handle,
+    body.is-public-view .node-img-remove,
+    body.is-public-view .sticky-colors,
+    body.is-public-view .sticky-del,
+    body.is-public-view .sticky-resize {
+      display: none !important;
+    }
+
+    body.is-public-view .sticky-hdr { cursor: default; }
+    body.is-public-view .sticky-text { pointer-events: none; resize: none; }
+
+    @media (max-width: 700px) {
+      #share-topbar {
+        grid-template-columns: minmax(0, 1fr) auto;
+        height: 52px;
+        padding: 0 12px;
+      }
+      #share-topbar .file-info { display: none; }
+      #share-topbar .brand-copy small { display: none; }
+      #share-canvas-wrap { inset: 52px 0 0; }
+      #readonly-badge { right: 10px; bottom: 10px; left: auto; transform: none; }
+      #zoom-controls { right: auto; bottom: 10px; left: 10px; }
+      #zoom-controls button, #zoom-label { height: 32px; min-width: 32px; }
+    }
+  </style>
+</head>
+<body class="wan-case-flow is-public-view">
+  <header id="share-topbar">
+    <div class="brand">
+      <span class="brand-logo" aria-hidden="true">W</span>
+      <span class="brand-copy"><strong class="brand-name">WAN CASE FLOW</strong><small>PUBLIC VIEW</small></span>
+    </div>
+    <div class="file-info">
+      <span class="file-name" id="hdr-file-name">Memuat mindmap...</span>
+      <span class="file-owner" id="hdr-owner"></span>
+    </div>
+    <div class="share-actions"><a href="/app/" class="cta-btn">Buka workspace</a></div>
+  </header>
+
+  <main id="share-canvas-wrap">
+    <div id="container" tabindex="0" aria-label="Mindmap publik">
+      <div id="canvas">
+        <div id="frame-layer"></div>
+        <svg id="svg-lines" xmlns="http://www.w3.org/2000/svg"></svg>
+      </div>
+    </div>
+  </main>
+
+  <div id="readonly-badge"><i></i><span>Live · hanya baca</span></div>
+  <div id="zoom-controls" aria-label="Kontrol zoom">
+    <button id="btn-zoom-out" title="Perkecil" aria-label="Perkecil">−</button>
+    <span id="zoom-label">100%</span>
+    <button id="btn-zoom-in" title="Perbesar" aria-label="Perbesar">+</button>
+    <button id="btn-zoom-fit" title="Fit seluruh mindmap">Fit</button>
+  </div>
+
+  <div id="share-loading" role="status" aria-live="polite">
+    <span class="share-spinner" aria-hidden="true"></span>
+    <p>Menyiapkan mindmap publik...</p>
+  </div>
+
+  <div id="share-error" hidden role="alert">
+    <strong id="share-error-title">Link tidak tersedia</strong>
+    <span id="share-error-message">Link mungkin sudah dicabut atau tidak valid.</span>
+    <a href="/app/" class="cta-btn">Kembali ke WAN Case Flow</a>
+  </div>
+
+  <script type="module" src="./js/public-share.js"></script>
+</body>
+</html>

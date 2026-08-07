@@ -15,6 +15,7 @@ const desktopInputs = {
   "change-password": path.join(__dirname, "modules/mindmap/ui/change-password.html"),
   admin: path.join(__dirname, "modules/mindmap/ui/admin.html"),
   share: path.join(__dirname, "modules/mindmap/ui/share.html"),
+  "public-share": path.join(__dirname, "modules/mindmap/ui/public-share.html"),
 };
 
 export default defineConfig({

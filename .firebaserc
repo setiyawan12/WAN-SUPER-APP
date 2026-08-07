@@ -5,6 +5,9 @@
       "hosting": {
         "mindmap-web": [
           "wan-wcf"
+        ],
+        "mindmap-legacy": [
+          "wan-ssh"
         ]
       }
     }

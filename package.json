@@ -29,7 +29,7 @@
     "firebase:test:collaboration": "PATH=/opt/homebrew/opt/node@22/bin:$PATH firebase emulators:exec --project demo-wan-super-app --only auth,firestore \"node firebase/collaboration-smoke.mjs\"",
     "firebase:test:bootstrap": "PATH=/opt/homebrew/opt/node@22/bin:$PATH firebase emulators:exec --project demo-wan-super-app --only auth,firestore \"node firebase/bootstrap-smoke.mjs\"",
     "firebase:bootstrap-admin": "npm --prefix firebase/functions run bootstrap-admin --",
-    "firebase:deploy:mindmap": "npm run build:mindmap-hosting && firebase deploy --only hosting:mindmap-web --project wan-ssh",
+    "firebase:deploy:mindmap": "npm run build:mindmap-hosting && firebase deploy --only hosting:mindmap-web,hosting:mindmap-legacy --project wan-ssh",
     "firebase:deploy": "firebase deploy --only firestore,database,functions,hosting",
     "dist": "npm run build && electron-builder"
   },

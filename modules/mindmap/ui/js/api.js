@@ -441,7 +441,7 @@ function createPublicToken() {
 }
 
 function publicShareUrl(services, token) {
-  return `https://${services.app.options.projectId}.web.app/share/${encodeURIComponent(token)}`;
+  return `https://wan-wcf.web.app/share/${encodeURIComponent(token)}`;
 }
 
 function publicPointerRef(services, ownerType, ownerId, projectId) {
