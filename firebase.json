@@ -11,6 +11,7 @@
     "runtime": "nodejs22"
   },
   "hosting": {
+    "target": "mindmap-web",
     "public": "firebase/hosting",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "headers": [

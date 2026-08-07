@@ -1,0 +1,13 @@
+{
+  "projects": {},
+  "targets": {
+    "wan-ssh": {
+      "hosting": {
+        "mindmap-web": [
+          "wan-wcf"
+        ]
+      }
+    }
+  },
+  "etags": {}
+}

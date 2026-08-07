@@ -22,7 +22,6 @@ modules/ssh/main/
 npm-debug.log*
 
 # Firebase local credentials, emulator state, and migration reports
-.firebaserc
 .firebase/
 firebase-debug.log
 firebase/**/.runtimeconfig.json
