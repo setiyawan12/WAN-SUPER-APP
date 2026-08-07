@@ -1,6 +1,7 @@
 import { getApp, getApps, initializeApp } from 'firebase/app';
 import {
   browserLocalPersistence,
+  browserPopupRedirectResolver,
   getAuth,
   indexedDBLocalPersistence,
   initializeAuth,
@@ -43,9 +44,13 @@ async function createServices() {
   const app = existing || initializeApp(config, 'mindmap');
   let auth;
   try {
-    auth = initializeAuth(app, {
+    const authOptions = {
       persistence: [indexedDBLocalPersistence, browserLocalPersistence],
-    });
+    };
+    if (['http:', 'https:'].includes(window.location.protocol)) {
+      authOptions.popupRedirectResolver = browserPopupRedirectResolver;
+    }
+    auth = initializeAuth(app, authOptions);
   } catch {
     auth = getAuth(getApp('mindmap'));
   }

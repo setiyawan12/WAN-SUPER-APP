@@ -97,6 +97,11 @@ const outsider = await createClient('outsider');
 const intruder = await createClient('intruder');
 const visitor = client('public-visitor');
 
+await expectDenied(
+  () => setDoc(doc(outsider.firestore, 'users', outsider.uid), { role: 'admin' }, { merge: true }),
+  'User biasa menaikkan role menjadi admin'
+);
+
 await adminAuth.setCustomUserClaims(owner.uid, { admin: true });
 await owner.auth.currentUser.getIdToken(true);
 
@@ -477,6 +482,7 @@ assert.equal((await getDoc(doc(owner.firestore, 'mindmaps', groupMindmapId))).ex
 console.log(JSON.stringify({
   ok: true,
   checks: [
+    'normal user role escalation denied',
     'SSH owner vault read/write',
     'SSH outsider denied',
     'owner empty personal path readable',
