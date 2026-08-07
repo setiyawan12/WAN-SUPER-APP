@@ -44,72 +44,82 @@ function renderChildren(children, container, depth, filter) {
 
 function buildTreeItem(node, depth, filter = '') {
   const isActive  = node.type === 'file' && node.id === state.currentProject;
+  const isFolder = node.type === 'folder';
 
   const el = document.createElement('div');
-  el.className = [
-    'group flex items-center gap-1 py-[5px] pr-2 cursor-pointer text-[12.5px]',
-    'transition-colors select-none overflow-hidden whitespace-nowrap',
-    isActive ? 'wcf-tree-active' : 'wcf-tree-inactive',
-  ].join(' ');
+  el.className = `wcf-tree-item ${isActive ? 'wcf-tree-active' : 'wcf-tree-inactive'}`;
   el.dataset.id   = node.id;
   el.dataset.type = node.type;
-  el.style.paddingLeft = (10 + depth * 14) + 'px';
-
-  const togCls  = 'flex-shrink-0 wcf-tree-toggle' + ' ' + 'w-3.5 text-center text-[9px]';
-  const spcCls  = 'flex-shrink-0 w-3.5';
-  const icoCls  = 'flex-shrink-0 text-xs leading-none';
-  const namCls  = 'flex-1 overflow-hidden text-ellipsis font-medium min-w-0';
-  const badgeCls = 'flex-shrink-0 text-[9px] wcf-tree-badge tabular-nums mr-0.5';
-  const mnuCls  = 'flex-shrink-0 opacity-0 group-hover:opacity-100 text-[11px] tracking-widest px-1 py-0.5 rounded transition-all wcf-tree-menu-btn';
+  el.style.setProperty('--tree-depth', String(depth));
+  el.setAttribute('role', 'treeitem');
+  el.setAttribute('tabindex', '0');
+  el.setAttribute('aria-level', String(depth));
+  el.setAttribute('aria-selected', String(isActive));
+  if (isFolder) el.setAttribute('aria-expanded', String(Boolean(node.expanded || filter)));
 
   // Highlight filter match
   const displayName = filter
-    ? escHtml(node.name).replace(new RegExp(`(${escHtml(filter)})`, 'gi'), '<mark class="bg-yellow-400/30 rounded px-0.5">$1</mark>')
+    ? escHtml(node.name).replace(new RegExp(`(${escHtml(filter)})`, 'gi'), '<mark class="wcf-tree-match">$1</mark>')
     : escHtml(node.name);
 
-  // Badge (node count for files)
-  const count = node.type === 'file' && refs.nodeCounts[node.id] != null
-    ? `<span class="${badgeCls}">${refs.nodeCounts[node.id]}</span>` : '';
+  const countValue = isFolder
+    ? node.children?.length
+    : refs.nodeCounts[node.id];
+  const count = countValue != null
+    ? `<span class="wcf-tree-badge" aria-label="${isFolder ? 'Jumlah item' : 'Jumlah node'}: ${countValue}">${countValue}</span>`
+    : '';
+  const menu = `<button type="button" class="wcf-tree-menu-btn" data-tree-menu aria-label="Opsi untuk ${escHtml(node.name)}"><span aria-hidden="true"></span></button>`;
 
-  if (node.type === 'folder') {
+  if (isFolder) {
     el.innerHTML = `
-      <span class="${togCls}">${node.expanded ? '▾' : '▸'}</span>
-      <span class="${icoCls}">${node.expanded ? '📂' : '📁'}</span>
-      <span class="${namCls}">${displayName}</span>
+      <span class="wcf-tree-toggle" aria-hidden="true"></span>
+      <span class="wcf-tree-icon is-folder${node.expanded || filter ? ' is-expanded' : ''}" aria-hidden="true"></span>
+      <span class="wcf-tree-name">${displayName}</span>
       ${count}
-      <span class="${mnuCls}" title="Opsi">···</span>`;
+      ${menu}`;
     el.addEventListener('click', e => {
-      if (e.target.title === 'Opsi') return;
+      if (e.target.closest('[data-tree-menu]')) return;
       node.expanded = !node.expanded;
       renderSidebar();
       saveWorkspaceTree();
     });
   } else {
     el.innerHTML = `
-      <span class="${spcCls}"></span>
-      <span class="${icoCls}">${isActive ? '⚡' : '📄'}</span>
-      <span class="${namCls}">${displayName}</span>
+      <span class="wcf-tree-toggle is-spacer" aria-hidden="true"></span>
+      <span class="wcf-tree-icon is-file${isActive ? ' is-active' : ''}" aria-hidden="true"></span>
+      <span class="wcf-tree-name">${displayName}</span>
       ${count}
-      <span class="${mnuCls}" title="Opsi">···</span>`;
+      ${menu}`;
     el.addEventListener('click', e => {
-      if (e.target.title === 'Opsi') return;
+      if (e.target.closest('[data-tree-menu]')) return;
       switchProject(node.id);
     });
     // Dblclick name → inline rename
-    el.querySelector(`.${namCls.split(' ')[0]}`)?.addEventListener('dblclick', e => {
+    el.querySelector('.wcf-tree-name')?.addEventListener('dblclick', e => {
       e.stopPropagation();
       startInlineRename(el, node);
     });
   }
 
   // ··· menu
-  el.querySelector('[title="Opsi"]').addEventListener('click', e => {
+  el.querySelector('[data-tree-menu]').addEventListener('click', e => {
     e.stopPropagation();
     showTreeCtx(e.clientX, e.clientY, node, depth);
   });
   el.addEventListener('contextmenu', e => {
     e.preventDefault();
     showTreeCtx(e.clientX, e.clientY, node, depth);
+  });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      el.click();
+    }
+    if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) {
+      e.preventDefault();
+      const rect = el.getBoundingClientRect();
+      showTreeCtx(rect.right - 12, rect.top + rect.height / 2, node, depth);
+    }
   });
 
   // ── Drag & Drop ──────────────────────────────────────────────
@@ -169,7 +179,7 @@ function buildTreeItem(node, depth, filter = '') {
 
 // ── Inline rename ────────────────────────────────────────────
 function startInlineRename(el, node) {
-  const nameEl = el.querySelector('.flex-1');
+  const nameEl = el.querySelector('.wcf-tree-name');
   if (!nameEl) return;
   const before = node.name;
   nameEl.contentEditable = 'true';
