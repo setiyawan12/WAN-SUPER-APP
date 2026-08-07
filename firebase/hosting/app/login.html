@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Case Flow — Login</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #06060a;
+      --bg-card:     rgba(12,12,22,0.85);
+      --bg-input:    rgba(255,255,255,0.04);
+      --border:      rgba(255,255,255,0.07);
+      --border-focus:rgba(139,124,248,0.55);
+      --text-1:      rgba(255,255,255,0.92);
+      --text-2:      rgba(255,255,255,0.55);
+      --text-3:      rgba(255,255,255,0.28);
+      --accent:      #8b7cf8;
+      --accent-h:    #7c6dfa;
+      --accent-dim:  rgba(139,124,248,0.18);
+      --accent-glow: rgba(139,124,248,0.30);
+      --error-bg:    rgba(248,113,113,0.10);
+      --error-bd:    rgba(248,113,113,0.30);
+      --error-txt:   #f87171;
+      --dot:         rgba(255,255,255,0.048);
+      --shadow:      0 0 0 1px rgba(255,255,255,0.06), 0 32px 80px rgba(0,0,0,0.70);
+    }
+    html.light {
+      --bg:          #f0f0f8;
+      --bg-card:     rgba(255,255,255,0.88);
+      --bg-input:    rgba(0,0,0,0.04);
+      --border:      rgba(0,0,0,0.09);
+      --border-focus:rgba(109,94,224,0.50);
+      --text-1:      #0e0e1a;
+      --text-2:      #5a5880;
+      --text-3:      #9896be;
+      --accent:      #6d5ee0;
+      --accent-h:    #5546cc;
+      --accent-dim:  rgba(109,94,224,0.10);
+      --accent-glow: rgba(109,94,224,0.22);
+      --error-bg:    rgba(220,38,38,0.08);
+      --error-bd:    rgba(220,38,38,0.22);
+      --error-txt:   #b91c1c;
+      --dot:         rgba(0,0,0,0.055);
+      --shadow:      0 0 0 1px rgba(0,0,0,0.06), 0 16px 48px rgba(0,0,0,0.12);
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      font-feature-settings: "cv02","cv03","cv04","cv11";
+      -webkit-font-smoothing: antialiased;
+      background: var(--bg);
+      background-image: radial-gradient(circle, var(--dot) 1px, transparent 1px);
+      background-size: 28px 28px;
+      color: var(--text-1);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      transition: background-color 0.25s, color 0.2s;
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      padding: 42px 38px 34px;
+      width: 100%;
+      max-width: 380px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(24px) saturate(160%);
+      -webkit-backdrop-filter: blur(24px) saturate(160%);
+      transition: border-color 0.25s;
+    }
+
+    /* ── Logo ── */
+    .logo {
+      text-align: center;
+      margin-bottom: 34px;
+    }
+    .logo-icon {
+      font-size: 2.4rem;
+      display: block;
+      margin-bottom: 12px;
+      line-height: 1;
+    }
+    .logo h1 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      background: linear-gradient(135deg, #c4b5fd 0%, var(--accent) 55%, #60a5fa 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    html.light .logo h1 {
+      background: linear-gradient(135deg, var(--accent) 0%, #4f46e5 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .logo p {
+      font-size: 0.78rem;
+      color: var(--text-3);
+      margin-top: 5px;
+    }
+
+    /* ── Form ── */
+    .field { margin-top: 18px; }
+
+    label {
+      display: block;
+      font-size: 0.70rem;
+      font-weight: 700;
+      color: var(--text-3);
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      background: var(--bg-input);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 13px;
+      color: var(--text-1);
+      font-size: 0.91rem;
+      font-family: inherit;
+      outline: none;
+      transition: border-color 0.18s, box-shadow 0.18s;
+    }
+    input:focus {
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    input::-moz-placeholder { color: var(--text-3); }
+    input::placeholder { color: var(--text-3); }
+
+    /* ── Button ── */
+    .btn {
+      width: 100%;
+      margin-top: 26px;
+      padding: 12px;
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-size: 0.93rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: 0.1px;
+      box-shadow: 0 0 18px var(--accent-glow);
+      transition: background 0.18s, box-shadow 0.18s, transform 0.12s;
+    }
+    .btn:hover   { background: var(--accent-h); box-shadow: 0 0 28px var(--accent-glow); }
+    .btn:active  { transform: scale(0.98); }
+    .btn:disabled {
+      background: var(--accent-dim);
+      box-shadow: none;
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    /* ── Error ── */
+    #error-msg {
+      margin-top: 14px;
+      padding: 9px 13px;
+      background: var(--error-bg);
+      border: 1px solid var(--error-bd);
+      border-radius: 9px;
+      color: var(--error-txt);
+      font-size: 0.83rem;
+      display: none;
+      line-height: 1.5;
+    }
+    #error-msg.show { display: block; }
+
+    /* ── Theme toggle ── */
+    .theme-btn {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-2);
+      font-size: 0.9rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.18s, border-color 0.18s;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+    }
+    .theme-btn:hover {
+      border-color: var(--border-focus);
+      background: var(--accent-dim);
+    }
+
+    /* ── Divider ── */
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin: 22px 0 0;
+    }
+    .footer-note {
+      text-align: center;
+      margin-top: 14px;
+      font-size: 0.73rem;
+      color: var(--text-3);
+    }
+    .footer-note a {
+      color: var(--accent);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .footer-note a:hover { text-decoration: underline; }
+  </style>
+  <link rel="stylesheet" crossorigin href="/app/assets/premium-DSRFSlj6.css">
+</head>
+<body>
+
+  <!-- Theme toggle -->
+  <button class="theme-btn" id="btn-theme" title="Ganti tema">🌙</button>
+
+  <div class="card">
+    <div class="logo">
+      <span class="logo-icon">🧠</span>
+      <h1>WAN Case Flow</h1>
+      <p>Masuk untuk melanjutkan</p>
+    </div>
+
+    <form id="login-form">
+      <div class="field">
+        <label for="username">Username atau Email</label>
+        <input id="username" type="text" placeholder="Username atau email@domain.com"
+               autocomplete="username" autofocus>
+      </div>
+
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" placeholder="Masukkan password"
+               autocomplete="current-password">
+      </div>
+
+      <button class="btn" type="submit" id="btn-login">Masuk</button>
+    </form>
+
+    <div id="error-msg"></div>
+
+    <div class="divider"></div>
+    <p class="footer-note" style="margin-bottom:8px">
+      <a href="/forgot-password.html" style="color:var(--accent);text-decoration:none">Lupa password?</a>
+    </p>
+    <p class="footer-note">
+      Belum punya akun? <a href="/signup.html" style="color:var(--accent);text-decoration:none">Daftar sekarang</a>
+    </p>
+  </div>
+
+  <script>
+    // ── Theme (baca dari localStorage atau OS preference) ────────
+    (function () {
+      const saved = localStorage.getItem('wcf_theme');
+      const preferLight = window.matchMedia('(prefers-color-scheme: light)').matches;
+      const isLight = saved ? (saved === 'light') : preferLight;
+      applyTheme(isLight ? 'light' : 'dark');
+    })();
+
+    function applyTheme(theme) {
+      const html = document.documentElement;
+      const btn  = document.getElementById('btn-theme');
+      if (theme === 'light') {
+        html.classList.remove('dark'); html.classList.add('light');
+        if (btn) btn.textContent = '☀️';
+      } else {
+        html.classList.remove('light'); html.classList.add('dark');
+        if (btn) btn.textContent = '🌙';
+      }
+      localStorage.setItem('wcf_theme', theme);
+    }
+
+    document.getElementById('btn-theme')?.addEventListener('click', () => {
+      const isLight = document.documentElement.classList.contains('light');
+      applyTheme(isLight ? 'dark' : 'light');
+    });
+
+    // ── Auto-redirect jika sudah login ──────────────────────────
+    const _nextUrl = new URLSearchParams(location.search).get('next') || '/';
+    (async () => {
+      const token = localStorage.getItem('wcf_token');
+      if (!token) return;
+      try {
+        const r = await fetch('/api/auth/me', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        if (r.ok) window.location.replace(_nextUrl);
+      } catch {}
+    })();
+
+    // ── Login form ───────────────────────────────────────────────
+    const form  = document.getElementById('login-form');
+    const errEl = document.getElementById('error-msg');
+    const btnEl = document.getElementById('btn-login');
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!username || !password) {
+        showError('Username dan password wajib diisi');
+        return;
+      }
+
+      btnEl.disabled    = true;
+      btnEl.textContent = 'Memproses…';
+      errEl.classList.remove('show');
+
+      try {
+        const res  = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+        const json = await res.json();
+
+        if (json.ok) {
+          localStorage.setItem('wcf_token', json.token);
+          localStorage.setItem('wcf_user',  JSON.stringify(json.user));
+          if (json.user?.must_change_password) {
+            window.location.replace('/change-password.html');
+          } else {
+            window.location.replace(_nextUrl);
+          }
+        } else {
+          showError(json.error || 'Login gagal');
+        }
+      } catch {
+        showError('Tidak dapat menghubungi server');
+      } finally {
+        btnEl.disabled    = false;
+        btnEl.textContent = 'Masuk';
+      }
+    });
+
+    function showError(msg) {
+      errEl.textContent = msg;
+      errEl.classList.add('show');
+    }
+  </script>
+</body>
+</html>

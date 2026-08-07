@@ -1,5 +1,6 @@
 // ── js/ui/minimap.js ─────────────────────────────────────────
 import { state, $c } from '../state.js';
+import { applyTransform } from '../canvas/transform.js';
 
 const CANVAS_SIZE = 6000;
 let _canvas, _ctx, _wrap;
@@ -73,7 +74,7 @@ function onMinimapClick(e) {
   const my = (e.clientY - r.top)  / _canvas.height * CANVAS_SIZE;
   state.pan.x = -mx * state.zoom + $c.offsetWidth  / 2;
   state.pan.y = -my * state.zoom + $c.offsetHeight / 2;
-  import('../canvas/transform.js').then(({ applyTransform }) => applyTransform());
+  applyTransform();
 }
 
 function roundRect(ctx, x, y, w, h, r) {

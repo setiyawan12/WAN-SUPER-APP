@@ -10,10 +10,6 @@ import {
   updateDoc,
   where,
 } from 'firebase/firestore';
-import {
-  ref,
-  remove,
-} from 'firebase/database';
 import { firebaseServices } from '../firebase/client.js';
 
 const revisions = new Map();

@@ -1,6 +1,8 @@
 // ── js/features/kanban.js — Kanban view of nodes by status ───
 import { state, refs } from '../state.js';
 import { pushUndo }    from '../state.js';
+import { selectNode }  from '../canvas/selection.js';
+import { panToNode }   from '../canvas/transform.js';
 
 const COLS = [
   { status: '',         label: '—',    color: 'rgba(255,255,255,0.12)', badge: '#888' },
@@ -73,8 +75,8 @@ function _render() {
     card.addEventListener('click', () => {
       const id = card.dataset.id;
       closeKanban();
-      import('../canvas/selection.js').then(({ selectNode }) => selectNode(id));
-      import('../canvas/transform.js').then(({ panToNode }) => panToNode(id));
+      selectNode(id);
+      panToNode(id);
     });
 
     // Drag to change status
@@ -109,8 +111,6 @@ export function closeKanban() {
   if (overlay) overlay.classList.add('hidden');
   _open = false;
 }
-
-export function isKanbanOpen() { return _open; }
 
 export function initKanban() {
   document.addEventListener('wcf:cmd', e => {

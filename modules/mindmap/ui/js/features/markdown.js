@@ -86,10 +86,3 @@ export function renderMd(raw) {
 
   return out.join('');
 }
-
-/**
- * Cek apakah teks mengandung sintaks markdown.
- */
-export function hasMd(raw) {
-  return /\*\*|(?<!\*)\*(?!\*)|`|^[-*•]\s|^\d+\.\s/m.test(raw ?? '');
-}

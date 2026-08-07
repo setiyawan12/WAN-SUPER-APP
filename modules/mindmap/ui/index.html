@@ -877,7 +877,7 @@
   <!-- ── Mermaid Import Modal ─────────────────────────────────── -->
   <div id="mermaid-import-modal"
        class="modal-overlay hidden" style="z-index:350">
-    <div class="modal-box w-[520px] max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="modal-box mmd-import-dialog flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="flex items-center px-5 py-4 border-b border-white/[0.08] shrink-0">
         <h2 class="flex-1 text-sm font-bold text-purple-400/80">⬇ Import dari Mermaid</h2>
@@ -912,25 +912,34 @@
           <div class="flex-1 h-px bg-white/[0.06]"></div>
         </div>
 
-        <!-- Textarea -->
-        <textarea id="mmd-textarea"
-                  rows="12"
-                  placeholder="flowchart TB
+        <div class="mmd-import-workbench">
+          <section class="mmd-import-pane">
+            <div class="mmd-pane-heading">
+              <span>Kode Mermaid</span>
+              <small>Input</small>
+            </div>
+            <textarea id="mmd-textarea"
+                      rows="12"
+                      placeholder="flowchart TB
     A([&quot;Start&quot;]) --&gt; B[&quot;Proses&quot;]
     B --&gt; C{&quot;Kondisi?&quot;}
     C -- Ya --&gt; D[&quot;Hasil A&quot;]
     C -- Tidak --&gt; E[&quot;Hasil B&quot;]"
-                  class="w-full modal-input font-mono text-[11px] text-white/70 leading-relaxed
-                         resize-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20
-                         outline-none transition"
-                  style="min-height:200px"></textarea>
-
-        <!-- Preview chip -->
-        <div id="mmd-preview" class="hidden flex gap-2 flex-wrap text-[10px]">
-          <span class="text-white/25">Terdeteksi:</span>
-          <span id="mmd-preview-nodes"  class="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300/80 border border-purple-500/25"></span>
-          <span id="mmd-preview-edges"  class="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300/80 border border-cyan-500/25"></span>
-          <span id="mmd-preview-dir"    class="px-2 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/10"></span>
+                      class="w-full modal-input font-mono text-[11px] text-white/70 leading-relaxed resize-none outline-none transition"></textarea>
+            <div id="mmd-preview" class="hidden mmd-import-stats">
+              <span>Terdeteksi</span>
+              <strong id="mmd-preview-nodes"></strong>
+              <strong id="mmd-preview-edges"></strong>
+              <strong id="mmd-preview-dir"></strong>
+            </div>
+          </section>
+          <section class="mmd-import-pane is-preview">
+            <div class="mmd-pane-heading">
+              <span>Preview diagram</span>
+              <small>Fit otomatis</small>
+            </div>
+            <div id="mmd-diagram-preview" class="mmd-diagram-preview" aria-live="polite"></div>
+          </section>
         </div>
       </div>
 
@@ -2018,7 +2027,7 @@
 
   <!-- ── Mermaid Import Modal wiring ───────────────────────────── -->
   <script type="module">
-    import { parseMermaidToWCF, importMermaidText } from '/js/features/mermaid-import.js';
+    import { parseMermaidToWCF, renderMermaidPreview, importMermaidText } from '/js/features/mermaid-import.js';
 
     const modal      = document.getElementById('mermaid-import-modal');
     const textarea   = document.getElementById('mmd-textarea');
@@ -2032,12 +2041,14 @@
     const prevNodes  = document.getElementById('mmd-preview-nodes');
     const prevEdges  = document.getElementById('mmd-preview-edges');
     const prevDir    = document.getElementById('mmd-preview-dir');
+    const diagramEl  = document.getElementById('mmd-diagram-preview');
 
     function openModal() {
       textarea.value = '';
       fileLabel.textContent = 'Belum ada file dipilih';
       errorEl.classList.add('hidden');
       previewEl.classList.add('hidden');
+      renderMermaidPreview(diagramEl, null);
       modal.classList.remove('hidden');
       setTimeout(() => textarea.focus(), 80);
     }
@@ -2065,10 +2076,10 @@
     function updatePreview() {
       const text = textarea.value.trim();
       errorEl.classList.add('hidden');
-      if (!text) { previewEl.classList.add('hidden'); return; }
+      if (!text) { previewEl.classList.add('hidden'); renderMermaidPreview(diagramEl, null); return; }
       try {
         const data = parseMermaidToWCF(text);
-        if (!data) { previewEl.classList.add('hidden'); return; }
+        if (!data) { previewEl.classList.add('hidden'); renderMermaidPreview(diagramEl, null); return; }
         const nodeCount = Object.keys(data.nodes).length;
         const edgeCount = data.connections.length;
         const dirLine   = text.split('\n').find(l => /^(flowchart|graph)\s/i.test(l.trim())) || '';
@@ -2078,7 +2089,8 @@
         prevEdges.textContent  = `${edgeCount} koneksi`;
         prevDir.textContent    = `arah: ${dir}`;
         previewEl.classList.remove('hidden');
-      } catch { previewEl.classList.add('hidden'); }
+        renderMermaidPreview(diagramEl, data);
+      } catch { previewEl.classList.add('hidden'); renderMermaidPreview(diagramEl, null); }
     }
     textarea?.addEventListener('input', updatePreview);
 

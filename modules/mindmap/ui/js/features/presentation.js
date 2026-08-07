@@ -8,10 +8,6 @@ let idx     = 0;
 
 const CLS = 'wcf-presentation';
 
-// ── Public API ───────────────────────────────────────────────
-
-export function isPresentation() { return active; }
-
 export function togglePresentation() {
   active ? exit() : enter();
 }

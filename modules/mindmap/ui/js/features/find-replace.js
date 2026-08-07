@@ -3,6 +3,7 @@ import { state, $id, pushUndo, refs }  from '../state.js';
 import { flash }                       from '../ui/flash.js';
 import { renderLines }                 from '../canvas/connection.js';
 import { applyNodeStyle }              from '../canvas/node.js';
+import { panToNode }                   from '../canvas/transform.js';
 
 let _matches   = [];   // array of node ids matching current search
 let _cursor    = -1;   // index into _matches
@@ -151,6 +152,5 @@ function _scrollToCurrent() {
   _highlightAll();
   if (_cursor < 0) return;
   const id = _matches[_cursor];
-  // Import lazily to avoid circular dep
-  import('../canvas/transform.js').then(({ panToNode }) => panToNode(id));
+  panToNode(id);
 }

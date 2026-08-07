@@ -1,5 +1,5 @@
 // ── js/canvas/node.js ────────────────────────────────────────
-import { state, ui, $c, $cv, $el, COLORS, pushUndo, snapshot, selectedNodes, refs } from '../state.js';
+import { state, ui, $cv, $el, pushUndo, snapshot, selectedNodes, refs } from '../state.js';
 import { renderLines, syncColors, addConnection }                          from './connection.js';
 import { selectNode, clearSelection }                                        from './selection.js';
 import { logAction }                                                         from '../features/history-log.js';

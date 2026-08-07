@@ -1,6 +1,6 @@
 // ── js/sidebar/workspace.js ──────────────────────────────────
-import { state, refs, hist, selectedNodes, snapshotData } from '../state.js';
-import { apiLoad, apiSave, apiGetWorkspace, apiSaveWorkspace, apiDelete } from '../api.js';
+import { state, refs, hist, snapshotData } from '../state.js';
+import { apiLoad, apiSave, apiGetWorkspace, apiSaveWorkspace } from '../api.js';
 import { applyData }  from '../canvas/node.js';
 import { fitToNodes } from '../canvas/transform.js';
 import { renderSidebar } from './tree.js';

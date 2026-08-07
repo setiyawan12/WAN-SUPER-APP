@@ -4,6 +4,7 @@
 
 import { state, refs, pushUndo } from '../state.js';
 import { applyData }             from '../canvas/node.js';
+import { fitToNodes }            from '../canvas/transform.js';
 
 // ── Node token parser ─────────────────────────────────────────
 // Extracts { id, label, shape } from a Mermaid node token
@@ -84,11 +85,12 @@ function parseLine(line, nodeMap, edges) {
 // ── Hierarchical layout ───────────────────────────────────────
 function layoutNodes(nodeMap, edges, direction) {
   const ids = Object.keys(nodeMap);
-  if (!ids.length) return {};
+  if (!ids.length) return { positions: {}, levels: {} };
 
-  // Build children list & in-degree (dedup edges)
+  // Build a spanning forest. Cycle/back edges remain connections, but they do
+  // not participate in placement so they cannot pull nodes across the tree.
   const children = {};
-  const inDeg    = {};
+  const inDeg = {};
   ids.forEach(id => { children[id] = []; inDeg[id] = 0; });
 
   const seenEdge = new Set();
@@ -100,64 +102,79 @@ function layoutNodes(nodeMap, edges, direction) {
     inDeg[e.to]++;
   }
 
-  // BFS level assignment — longest-path variant (handles diamonds)
-  const level = {};
-  const queue = [];
-  ids.forEach(id => { if (inDeg[id] === 0) { level[id] = 0; queue.push(id); } });
-  if (!queue.length) { level[ids[0]] = 0; queue.push(ids[0]); } // all in cycle → pick first
+  const levels = {};
+  const treeChildren = Object.fromEntries(ids.map(id => [id, []]));
+  const assigned = new Set();
+  const roots = ids.filter(id => inDeg[id] === 0);
+  if (!roots.length) roots.push(ids[0]);
 
-  const visited = new Set();
-  while (queue.length) {
-    const id = queue.shift();
-    if (visited.has(id)) continue;
-    visited.add(id);
+  const visit = (id, level, ancestors) => {
+    if (assigned.has(id)) return;
+    assigned.add(id);
+    levels[id] = level;
+    const branch = new Set(ancestors);
+    branch.add(id);
     for (const child of children[id]) {
-      if (visited.has(child)) continue;  // back-edge → skip (breaks cycles)
-      const proposed = (level[id] ?? 0) + 1;
-      if (level[child] === undefined || level[child] < proposed) {
-        level[child] = proposed;
-        queue.push(child);
-      }
+      if (branch.has(child) || assigned.has(child)) continue;
+      treeChildren[id].push(child);
+      visit(child, level + 1, branch);
     }
-  }
-  // Assign any still-unvisited (isolated or in-cycle) nodes
-  ids.forEach(id => { if (level[id] === undefined) level[id] = 0; });
-
-  // Group by level
-  const byLevel = {};
+  };
+  roots.forEach(root => visit(root, 0, new Set()));
   ids.forEach(id => {
-    const lv = level[id];
-    (byLevel[lv] = byLevel[lv] || []).push(id);
+    if (!assigned.has(id)) {
+      roots.push(id);
+      visit(id, 0, new Set());
+    }
   });
 
-  // Dimensions — use diamond size (130px square) as the baseline unit
-  const NODE_W = 140, NODE_H = 130;
-  const GAP_X  = 60,  GAP_Y  = 50;
-  const ORIG_X  = 80,  ORIG_Y  = 60;
-  const maxCount = Math.max(...Object.values(byLevel).map(a => a.length));
-  const isH     = direction === 'LR' || direction === 'RL';
+  // Leaves get stable slots; every parent is centered over the full span of
+  // its descendants. This prevents sibling subtrees from occupying the same
+  // columns while keeping long decision chains visually balanced.
+  const crossAxis = {};
+  const SLOT = 250;
+  let cursor = 0;
+  const placeTree = id => {
+    const descendants = treeChildren[id];
+    if (!descendants.length) {
+      crossAxis[id] = cursor;
+      cursor += SLOT;
+      return;
+    }
+    descendants.forEach(placeTree);
+    crossAxis[id] = (crossAxis[descendants[0]] + crossAxis[descendants[descendants.length - 1]]) / 2;
+  };
+  roots.forEach((root, index) => {
+    if (index) cursor += SLOT * .6;
+    placeTree(root);
+  });
 
+  const minCross = Math.min(...Object.values(crossAxis));
+  const maxCross = Math.max(...Object.values(crossAxis));
+  const DEPTH = 190;
+  const ORIGIN_X = 110;
+  const ORIGIN_Y = 70;
+  const isHorizontal = direction === 'LR' || direction === 'RL';
   const positions = {};
-  for (const [lv, lvIds] of Object.entries(byLevel)) {
-    const lvNum  = Number(lv);
-    const count  = lvIds.length;
-    lvIds.forEach((id, i) => {
-      if (isH) {
-        const x       = ORIG_X + lvNum * (NODE_W + GAP_X);
-        const totalH  = count * NODE_H + (count - 1) * GAP_Y;
-        const canvasH = maxCount * NODE_H + (maxCount - 1) * GAP_Y;
-        const y       = ORIG_Y + (canvasH - totalH) / 2 + i * (NODE_H + GAP_Y);
-        positions[id] = { x, y: Math.round(y) };
-      } else {
-        const y       = ORIG_Y + lvNum * (NODE_H + GAP_Y);
-        const totalW  = count * NODE_W + (count - 1) * GAP_X;
-        const canvasW = maxCount * NODE_W + (maxCount - 1) * GAP_X;
-        const x       = ORIG_X + (canvasW - totalW) / 2 + i * (NODE_W + GAP_X);
-        positions[id] = { x: Math.round(x), y };
-      }
-    });
+  ids.forEach(id => {
+    const cross = crossAxis[id] - minCross;
+    const depth = levels[id] * DEPTH;
+    if (isHorizontal) {
+      positions[id] = { x: ORIGIN_X + depth, y: ORIGIN_Y + cross };
+    } else {
+      positions[id] = { x: ORIGIN_X + cross, y: ORIGIN_Y + depth };
+    }
+  });
+
+  if (direction === 'RL') {
+    const maxDepth = Math.max(...Object.values(positions).map(position => position.x));
+    ids.forEach(id => { positions[id].x = ORIGIN_X + maxDepth - positions[id].x; });
+  } else if (direction === 'BT') {
+    const maxDepth = Math.max(...Object.values(positions).map(position => position.y));
+    ids.forEach(id => { positions[id].y = ORIGIN_Y + maxDepth - positions[id].y; });
   }
-  return positions;
+
+  return { positions, levels };
 }
 
 // ── Main parser ───────────────────────────────────────────────
@@ -184,7 +201,7 @@ export function parseMermaidToWCF(text) {
   const ids = Object.keys(nodeMap);
   if (!ids.length) return null;
 
-  const positions = layoutNodes(nodeMap, rawEdges, direction);
+  const { positions, levels } = layoutNodes(nodeMap, rawEdges, direction);
 
   // Map Mermaid shape names → WCF shape names (CSS classes)
   //   diamond → 'diamond'  (::before rotated square, CSS handles amber color)
@@ -225,7 +242,8 @@ export function parseMermaidToWCF(text) {
     // Color:
     //   diamond → no customColor (CSS ::before handles amber color)
     //   oval    → teal, applied via syncColors
-    if (wcfShape === 'oval') node.customColor = '#06b6d4';
+    if (wcfShape === 'oval') node.customColor = '#6d9fc9';
+    node.mermaidLevel = levels[mId] ?? 0;
 
     wcfNodes[wcfId] = node;
   }
@@ -233,16 +251,315 @@ export function parseMermaidToWCF(text) {
   // Deduplicate connections
   const wcfConnections = [];
   const seenConn       = new Set();
+  let backEdgeLane = 0;
   for (const e of rawEdges) {
     const from = idMap[e.from], to = idMap[e.to];
     if (!from || !to || from === to) continue;
     const key = `${from}→${to}`;
     if (seenConn.has(key)) continue;
     seenConn.add(key);
-    wcfConnections.push({ from, to, style: 'arrow', label: e.label || '', color: '' });
+    const isForward = (levels[e.to] ?? 0) > (levels[e.from] ?? 0);
+    wcfConnections.push({
+      from,
+      to,
+      style: 'arrow',
+      label: e.label || '',
+      color: '',
+      routing: 'orthogonal',
+      direction,
+      routeType: isForward ? 'forward' : 'back',
+      routeLane: isForward ? 0 : backEdgeLane++,
+    });
+    if (isForward) {
+      const children = wcfNodes[from].children;
+      if (!children.includes(to)) children.push(to);
+    }
   }
 
   return { nodes: wcfNodes, connections: wcfConnections, nextId };
+}
+
+// ── Modal preview renderer ────────────────────────────────────
+export function renderMermaidPreview(container, data) {
+  if (!container) return;
+  container.replaceChildren();
+
+  const nodes = data ? Object.values(data.nodes) : [];
+  if (!nodes.length) {
+    const empty = document.createElement('div');
+    empty.className = 'mmd-diagram-empty';
+    empty.innerHTML = '<span></span><strong>Preview diagram</strong><small>Diagram akan tampil saat kode Mermaid terbaca.</small>';
+    container.appendChild(empty);
+    return;
+  }
+
+  const NS = 'http://www.w3.org/2000/svg';
+  const createSvg = (tag, attrs = {}) => {
+    const element = document.createElementNS(NS, tag);
+    Object.entries(attrs).forEach(([key, value]) => element.setAttribute(key, String(value)));
+    return element;
+  };
+  const dimensions = new Map(nodes.map(node => [node.id, {
+    x: node.x,
+    y: node.y,
+    width: node.width || 180,
+    height: node.shape === 'diamond' ? 130 : 72,
+    shape: node.shape || 'rect',
+  }]));
+  const nodeBounds = [...dimensions.values()].reduce((result, box) => ({
+    minX: Math.min(result.minX, box.x),
+    minY: Math.min(result.minY, box.y),
+    maxX: Math.max(result.maxX, box.x + box.width),
+    maxY: Math.max(result.maxY, box.y + box.height),
+  }), { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity });
+  const backLanes = data.connections.filter(connection => connection.routeType === 'back').length;
+  const routePadding = backLanes ? 110 + (backLanes - 1) * 28 : 52;
+  const padding = 52;
+  const viewX = nodeBounds.minX - routePadding;
+  const viewY = nodeBounds.minY - routePadding;
+  const viewW = Math.max(320, nodeBounds.maxX - nodeBounds.minX + routePadding * 2);
+  const viewH = Math.max(240, nodeBounds.maxY - nodeBounds.minY + routePadding * 2);
+
+  const svg = createSvg('svg', {
+    class: 'mmd-diagram-svg',
+    viewBox: `${viewX} ${viewY} ${viewW} ${viewH}`,
+    preserveAspectRatio: 'xMidYMid meet',
+    role: 'img',
+    'aria-label': `Preview Mermaid berisi ${nodes.length} node dan ${data.connections.length} koneksi`,
+  });
+  const defs = createSvg('defs');
+  const marker = createSvg('marker', {
+    id: 'mmd-preview-arrow',
+    markerWidth: 8,
+    markerHeight: 8,
+    refX: 7,
+    refY: 4,
+    orient: 'auto',
+    markerUnits: 'strokeWidth',
+  });
+  marker.appendChild(createSvg('path', { d: 'M0,0 L8,4 L0,8 Z', class: 'mmd-preview-arrow' }));
+  defs.appendChild(marker);
+  svg.appendChild(defs);
+
+  const edgePoint = (box, targetX, targetY) => {
+    const centerX = box.x + box.width / 2;
+    const centerY = box.y + box.height / 2;
+    const dx = targetX - centerX;
+    const dy = targetY - centerY;
+    const radiusX = box.width / 2;
+    const radiusY = box.height / 2;
+    let scale;
+    if (box.shape === 'oval') {
+      scale = 1 / Math.sqrt((dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY));
+    } else if (box.shape === 'diamond') {
+      scale = 1 / (Math.abs(dx) / radiusX + Math.abs(dy) / radiusY);
+    } else {
+      scale = 1 / Math.max(Math.abs(dx) / radiusX, Math.abs(dy) / radiusY);
+    }
+    return { x: centerX + dx * scale, y: centerY + dy * scale };
+  };
+
+  const roundedPolyline = (points, radius = 13) => {
+    const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+    const toward = (from, to, amount) => {
+      const length = distance(from, to);
+      if (!length) return { ...from };
+      return {
+        x: from.x + (to.x - from.x) * amount / length,
+        y: from.y + (to.y - from.y) * amount / length,
+      };
+    };
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let index = 1; index < points.length - 1; index++) {
+      const previous = points[index - 1];
+      const corner = points[index];
+      const next = points[index + 1];
+      const cornerRadius = Math.min(radius, distance(corner, previous) / 2, distance(corner, next) / 2);
+      const entry = toward(corner, previous, cornerRadius);
+      const exit = toward(corner, next, cornerRadius);
+      path += ` L ${entry.x} ${entry.y} Q ${corner.x} ${corner.y} ${exit.x} ${exit.y}`;
+    }
+    const last = points[points.length - 1];
+    return `${path} L ${last.x} ${last.y}`;
+  };
+
+  const orthogonalRoute = connection => {
+    const from = dimensions.get(connection.from);
+    const to = dimensions.get(connection.to);
+    if (!from || !to) return null;
+    const fromBox = { ...from, left: from.x, right: from.x + from.width, top: from.y, bottom: from.y + from.height, cx: from.x + from.width / 2, cy: from.y + from.height / 2 };
+    const toBox = { ...to, left: to.x, right: to.x + to.width, top: to.y, bottom: to.y + to.height, cx: to.x + to.width / 2, cy: to.y + to.height / 2 };
+    const horizontal = connection.direction === 'LR' || connection.direction === 'RL';
+    const reverse = connection.direction === 'BT' || connection.direction === 'RL';
+    const verticalPort = (box, targetX, edge) => {
+      const delta = targetX - box.cx;
+      const offset = Math.abs(delta) < 20 ? 0 : Math.sign(delta) * Math.min(box.width * .24, 32);
+      const x = box.cx + offset;
+      if (box.shape === 'diamond') {
+        const inset = Math.abs(offset) * box.height / box.width;
+        return { x, y: edge === 'bottom' ? box.bottom - inset : box.top + inset };
+      }
+      if (box.shape === 'oval') {
+        const ratio = Math.min(1, Math.abs(offset) / (box.width / 2));
+        const yOffset = box.height / 2 * Math.sqrt(1 - ratio * ratio);
+        return { x, y: edge === 'bottom' ? box.cy + yOffset : box.cy - yOffset };
+      }
+      return { x, y: edge === 'bottom' ? box.bottom : box.top };
+    };
+    const horizontalPort = (box, targetY, edge) => {
+      const delta = targetY - box.cy;
+      const offset = Math.abs(delta) < 20 ? 0 : Math.sign(delta) * Math.min(box.height * .24, 28);
+      const y = box.cy + offset;
+      if (box.shape === 'diamond') {
+        const inset = Math.abs(offset) * box.width / box.height;
+        return { x: edge === 'right' ? box.right - inset : box.left + inset, y };
+      }
+      if (box.shape === 'oval') {
+        const ratio = Math.min(1, Math.abs(offset) / (box.height / 2));
+        const xOffset = box.width / 2 * Math.sqrt(1 - ratio * ratio);
+        return { x: edge === 'right' ? box.cx + xOffset : box.cx - xOffset, y };
+      }
+      return { x: edge === 'right' ? box.right : box.left, y };
+    };
+    let points;
+
+    if (connection.routeType === 'back') {
+      const laneOffset = 68 + (connection.routeLane || 0) * 28;
+      if (horizontal) {
+        const centerY = (nodeBounds.minY + nodeBounds.maxY) / 2;
+        const useTop = (fromBox.cy + toBox.cy) / 2 <= centerY;
+        const laneY = useTop ? nodeBounds.minY - laneOffset : nodeBounds.maxY + laneOffset;
+        const start = horizontalPort(fromBox, toBox.cy, useTop ? 'left' : 'right');
+        const end = horizontalPort(toBox, fromBox.cy, useTop ? 'left' : 'right');
+        points = [start, { x: start.x + (reverse ? -28 : 28), y: start.y }, { x: start.x + (reverse ? -28 : 28), y: laneY }, { x: end.x + (reverse ? 28 : -28), y: laneY }, { x: end.x + (reverse ? 28 : -28), y: end.y }, end];
+      } else {
+        const centerX = (nodeBounds.minX + nodeBounds.maxX) / 2;
+        const useLeft = (fromBox.cx + toBox.cx) / 2 <= centerX;
+        const laneX = useLeft ? nodeBounds.minX - laneOffset : nodeBounds.maxX + laneOffset;
+        const start = horizontalPort(fromBox, toBox.cy, useLeft ? 'left' : 'right');
+        const end = horizontalPort(toBox, fromBox.cy, useLeft ? 'left' : 'right');
+        points = [start, { x: start.x, y: start.y + (reverse ? -28 : 28) }, { x: laneX, y: start.y + (reverse ? -28 : 28) }, { x: laneX, y: end.y + (reverse ? 28 : -28) }, { x: end.x, y: end.y + (reverse ? 28 : -28) }, end];
+      }
+    } else if (horizontal) {
+      const start = horizontalPort(fromBox, toBox.cy, reverse ? 'left' : 'right');
+      const end = horizontalPort(toBox, fromBox.cy, reverse ? 'right' : 'left');
+      const middleX = (start.x + end.x) / 2;
+      points = [start, { x: middleX, y: start.y }, { x: middleX, y: end.y }, end];
+    } else {
+      const start = verticalPort(fromBox, toBox.cx, reverse ? 'top' : 'bottom');
+      const end = verticalPort(toBox, fromBox.cx, reverse ? 'bottom' : 'top');
+      const middleY = (start.y + end.y) / 2;
+      points = [start, { x: start.x, y: middleY }, { x: end.x, y: middleY }, end];
+    }
+
+    const longestSegment = points.slice(1).reduce((best, point, index) => {
+      const previous = points[index];
+      const length = Math.hypot(point.x - previous.x, point.y - previous.y);
+      return length > best.length ? { length, from: previous, to: point } : best;
+    }, { length: 0, from: points[0], to: points[1] });
+    return {
+      d: roundedPolyline(points),
+      label: {
+        x: (longestSegment.from.x + longestSegment.to.x) / 2,
+        y: (longestSegment.from.y + longestSegment.to.y) / 2,
+      },
+    };
+  };
+
+  const edgeLayer = createSvg('g', { class: 'mmd-preview-edges' });
+  data.connections.forEach(connection => {
+    const from = dimensions.get(connection.from);
+    const to = dimensions.get(connection.to);
+    if (!from || !to) return;
+    const fromCenter = { x: from.x + from.width / 2, y: from.y + from.height / 2 };
+    const toCenter = { x: to.x + to.width / 2, y: to.y + to.height / 2 };
+    const route = connection.routing === 'orthogonal' ? orthogonalRoute(connection) : null;
+    const start = edgePoint(from, toCenter.x, toCenter.y);
+    const end = edgePoint(to, fromCenter.x, fromCenter.y);
+    const horizontal = Math.abs(end.x - start.x) >= Math.abs(end.y - start.y);
+    const bend = horizontal ? Math.abs(end.x - start.x) * .42 : Math.abs(end.y - start.y) * .42;
+    const pathData = route?.d || (horizontal
+      ? `M ${start.x} ${start.y} C ${start.x + Math.sign(end.x - start.x) * bend} ${start.y}, ${end.x - Math.sign(end.x - start.x) * bend} ${end.y}, ${end.x} ${end.y}`
+      : `M ${start.x} ${start.y} C ${start.x} ${start.y + Math.sign(end.y - start.y) * bend}, ${end.x} ${end.y - Math.sign(end.y - start.y) * bend}, ${end.x} ${end.y}`);
+    edgeLayer.appendChild(createSvg('path', {
+      d: pathData,
+      class: 'mmd-preview-edge',
+      'marker-end': 'url(#mmd-preview-arrow)',
+    }));
+    if (connection.label) {
+      const label = createSvg('text', {
+        x: route?.label.x ?? (start.x + end.x) / 2,
+        y: (route?.label.y ?? (start.y + end.y) / 2) - 7,
+        class: 'mmd-preview-edge-label',
+        'text-anchor': 'middle',
+      });
+      label.textContent = connection.label;
+      edgeLayer.appendChild(label);
+    }
+  });
+  svg.appendChild(edgeLayer);
+
+  const splitLabel = (text, maxChars = 23) => {
+    const words = String(text).split(/\s+/).filter(Boolean);
+    const lines = [];
+    for (const word of words) {
+      const current = lines[lines.length - 1];
+      if (!current || `${current} ${word}`.length > maxChars) lines.push(word);
+      else lines[lines.length - 1] = `${current} ${word}`;
+    }
+    if (lines.length > 3) {
+      lines.length = 3;
+      lines[2] = `${lines[2].slice(0, Math.max(1, maxChars - 1))}…`;
+    }
+    return lines;
+  };
+
+  const nodeLayer = createSvg('g', { class: 'mmd-preview-nodes' });
+  nodes.forEach((node, index) => {
+    const box = dimensions.get(node.id);
+    const group = createSvg('g', { class: `mmd-preview-node is-${box.shape}` });
+    const colorIndex = index % 5;
+    group.setAttribute('data-color-index', String(colorIndex));
+    if (box.shape === 'diamond') {
+      group.appendChild(createSvg('polygon', {
+        points: `${box.x + box.width / 2},${box.y} ${box.x + box.width},${box.y + box.height / 2} ${box.x + box.width / 2},${box.y + box.height} ${box.x},${box.y + box.height / 2}`,
+      }));
+    } else if (box.shape === 'oval') {
+      group.appendChild(createSvg('ellipse', {
+        cx: box.x + box.width / 2,
+        cy: box.y + box.height / 2,
+        rx: box.width / 2,
+        ry: box.height / 2,
+      }));
+    } else {
+      group.appendChild(createSvg('rect', {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        rx: 7,
+      }));
+    }
+    const lines = splitLabel(node.text, box.shape === 'diamond' ? 17 : 23);
+    const text = createSvg('text', {
+      x: box.x + box.width / 2,
+      y: box.y + box.height / 2 - ((lines.length - 1) * 8),
+      class: 'mmd-preview-node-label',
+      'text-anchor': 'middle',
+    });
+    lines.forEach((line, lineIndex) => {
+      const tspan = createSvg('tspan', {
+        x: box.x + box.width / 2,
+        dy: lineIndex === 0 ? 0 : 16,
+      });
+      tspan.textContent = line;
+      text.appendChild(tspan);
+    });
+    group.appendChild(text);
+    nodeLayer.appendChild(group);
+  });
+  svg.appendChild(nodeLayer);
+  container.appendChild(svg);
 }
 
 // ── Apply import to canvas ────────────────────────────────────
@@ -259,6 +576,7 @@ function doImport(text) {
 
   pushUndo();
   applyData(data);
+  requestAnimationFrame(() => fitToNodes(72));
   refs.dirty = true;
   flash(`✓ Import Mermaid berhasil — ${Object.keys(data.nodes).length} node`, true);
   if (typeof window.wcfUpdateEmptyState === 'function') window.wcfUpdateEmptyState();

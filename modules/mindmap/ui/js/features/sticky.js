@@ -183,17 +183,3 @@ export function deleteSticky(id) {
   document.getElementById('sticky-' + id)?.remove();
   refs.dirty = true;
 }
-
-// ── Load stickies from saved data ────────────────────────────
-export function loadStickies(data) {
-  state.stickies    = data?.stickies     ?? {};
-  state.nextStickyId = data?.nextStickyId ?? 1;
-  // Ensure nextStickyId doesn't collide with existing
-  const existingNums = Object.keys(state.stickies)
-    .map(k => parseInt(k.replace('s', ''), 10))
-    .filter(n => !isNaN(n));
-  if (existingNums.length) {
-    state.nextStickyId = Math.max(state.nextStickyId, Math.max(...existingNums) + 1);
-  }
-  renderStickies();
-}

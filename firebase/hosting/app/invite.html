@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bergabung ke Grup — WAN Case Flow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:         #06060a;
+      --surface:    rgba(14,14,26,0.8);
+      --border:     rgba(255,255,255,0.08);
+      --text:       #f1f0ff;
+      --muted:      #a8a4c0;
+      --accent:     #8b7cf8;
+      --accent-h:   #a59bff;
+      --success:    #22c55e;
+      --error:      #f87171;
+      --radius:     16px;
+    }
+    html.light {
+      --bg:      #f4f3ff;
+      --surface: rgba(255,255,255,0.9);
+      --border:  rgba(0,0,0,0.09);
+      --text:    #1e1e3a;
+      --muted:   #6060a0;
+      --accent:  #7c6dfa;
+      --accent-h:#6b5ce8;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      min-height: 100vh;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: var(--bg); color: var(--text);
+      font-family: 'Inter', system-ui, sans-serif;
+      padding: 24px 16px;
+      -webkit-font-smoothing: antialiased;
+    }
+    /* Subtle bg gradient */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background: radial-gradient(ellipse 80% 50% at 50% -10%, rgba(139,124,248,0.12), transparent);
+      pointer-events: none;
+    }
+
+    /* ── card ── */
+    .card {
+      background: var(--surface);
+      backdrop-filter: blur(24px);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 40px 36px;
+      width: 100%; max-width: 420px;
+      text-align: center;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+      position: relative;
+    }
+    .card-icon { font-size: 3rem; margin-bottom: 12px; }
+    .card-title { font-size: 1.3rem; font-weight: 700; margin-bottom: 6px; }
+    .card-sub { color: var(--muted); font-size: .9rem; margin-bottom: 28px; min-height: 20px; }
+
+    /* ── group info box ── */
+    .group-box {
+      background: rgba(139,124,248,0.06);
+      border: 1px solid rgba(139,124,248,0.2);
+      border-radius: 12px;
+      padding: 16px 20px;
+      margin-bottom: 24px;
+      text-align: left;
+    }
+    .group-name { font-size: 1.05rem; font-weight: 700; margin-bottom: 4px; }
+    .group-desc { font-size: .85rem; color: var(--muted); margin-bottom: 8px; min-height: 16px; }
+    .group-meta { font-size: .78rem; color: var(--muted); }
+
+    /* ── button ── */
+    button {
+      width: 100%;
+      padding: 12px;
+      border: none; border-radius: 8px;
+      font-size: .95rem; font-weight: 600; cursor: pointer;
+      transition: opacity .15s, transform .1s;
+    }
+    button:active { transform: scale(.98); }
+    .btn-join {
+      background: var(--accent); color: #fff;
+      margin-bottom: 10px;
+      box-shadow: 0 4px 20px rgba(139,124,248,0.35);
+      font-family: 'Inter', system-ui, sans-serif;
+    }
+    .btn-join:hover { opacity: .9; transform: translateY(-1px); box-shadow: 0 6px 24px rgba(139,124,248,0.45); }
+    .btn-join:disabled { opacity: .5; cursor: default; }
+    .btn-home {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .btn-home:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── status msg ── */
+    .msg {
+      display: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-size: .85rem;
+      margin-bottom: 16px;
+      text-align: left;
+    }
+    .msg.show { display: block; }
+    .msg.error { background: rgba(248,113,113,.1); border: 1px solid var(--error); color: var(--error); }
+    .msg.success { background: rgba(34,197,94,.1); border: 1px solid var(--success); color: var(--success); }
+
+    /* ── loading spinner ── */
+    .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── theme toggle ── */
+    #theme-btn {
+      position: fixed; top: 14px; right: 14px;
+      width: 34px; height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 1rem;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+    }
+  </style>
+  <link rel="stylesheet" crossorigin href="/app/assets/premium-DSRFSlj6.css">
+</head>
+<body>
+  <button id="theme-btn" title="Toggle tema">🌙</button>
+
+  <div class="card" id="card">
+    <!-- Loading state -->
+    <div id="state-loading">
+      <div class="spinner"></div>
+      <p>Memuat informasi undangan...</p>
+      <div class="wcf-shimmer-list" style="margin-top:20px;text-align:left">
+        <div class="wcf-shimmer-list-row"><span class="wcf-shimmer-avatar"></span><span class="wcf-shimmer-list-copy"><span class="wcf-shimmer-line is-title"></span><span class="wcf-shimmer-line is-short"></span></span></div>
+        <div class="wcf-shimmer-list-row"><span class="wcf-shimmer-avatar"></span><span class="wcf-shimmer-list-copy"><span class="wcf-shimmer-line is-title"></span><span class="wcf-shimmer-line is-short"></span></span></div>
+      </div>
+    </div>
+
+    <!-- Error state -->
+    <div id="state-error" style="display:none">
+      <div class="card-icon">❌</div>
+      <div class="card-title">Link Tidak Valid</div>
+      <div class="card-sub" id="error-text">Link undangan ini tidak ditemukan atau sudah kadaluarsa.</div>
+      <button class="btn-home" onclick="location.replace('/')">Ke Halaman Utama</button>
+    </div>
+
+    <!-- Info + join state -->
+    <div id="state-join" style="display:none">
+      <div class="card-icon">👥</div>
+      <div class="card-title">Kamu Diundang!</div>
+      <div class="card-sub">Bergabunglah ke grup berikut di WAN Case Flow:</div>
+
+      <div class="group-box">
+        <div class="group-name" id="g-name">—</div>
+        <div class="group-desc" id="g-desc"></div>
+        <div class="group-meta" id="g-meta"></div>
+      </div>
+
+      <div class="msg" id="msg"></div>
+
+      <button class="btn-join" id="btn-join">🚀 Bergabung Sekarang</button>
+      <button class="btn-home" onclick="location.replace('/')">Nanti Saja</button>
+    </div>
+
+    <!-- Already member state -->
+    <div id="state-already" style="display:none">
+      <div class="card-icon">✅</div>
+      <div class="card-title">Sudah Bergabung</div>
+      <div class="card-sub">Kamu sudah menjadi anggota grup <strong id="already-name"></strong>.</div>
+      <button class="btn-join" id="btn-goto-group">Buka Workspace Grup</button>
+      <button class="btn-home" style="margin-top:8px" onclick="location.replace('/')">Ke Halaman Utama</button>
+    </div>
+
+    <!-- Success state -->
+    <div id="state-success" style="display:none">
+      <div class="card-icon">🎉</div>
+      <div class="card-title">Berhasil Bergabung!</div>
+      <div class="card-sub">Kamu kini menjadi anggota grup <strong id="success-name"></strong>.</div>
+      <button class="btn-join" id="btn-open-group">Buka Workspace Grup</button>
+      <button class="btn-home" style="margin-top:8px" onclick="location.replace('/')">Ke Halaman Utama</button>
+    </div>
+  </div>
+
+  <script>
+    // ── Theme ───────────────────────────────────────────────────
+    const saved = localStorage.getItem('wcf_theme') || 'dark';
+    document.documentElement.className = saved;
+    const themeBtn = document.getElementById('theme-btn');
+    themeBtn.textContent = saved === 'dark' ? '☀️' : '🌙';
+    themeBtn.addEventListener('click', () => {
+      const cur  = document.documentElement.className;
+      const next = cur === 'dark' ? 'light' : 'dark';
+      document.documentElement.className = next;
+      localStorage.setItem('wcf_theme', next);
+      themeBtn.textContent = next === 'dark' ? '☀️' : '🌙';
+    });
+
+    // ── Helpers ─────────────────────────────────────────────────
+    const token = localStorage.getItem('wcf_token') || '';
+    const qs    = new URLSearchParams(location.search);
+    const inviteToken = qs.get('token') || '';
+
+    function show(id) {
+      ['state-loading','state-error','state-join','state-already','state-success']
+        .forEach(s => document.getElementById(s).style.display = s === id ? '' : 'none');
+    }
+    function showMsg(text, type = 'error') {
+      const el = document.getElementById('msg');
+      el.textContent = text;
+      el.className = `msg show ${type}`;
+    }
+    function hideMsg() { document.getElementById('msg').classList.remove('show'); }
+
+    // ── Check token + fetch invite info ─────────────────────────
+    async function main() {
+      if (!inviteToken) {
+        show('state-error');
+        document.getElementById('error-text').textContent = 'Token undangan tidak ditemukan di URL.';
+        return;
+      }
+
+      // Fetch invite info (public endpoint — no auth needed)
+      let info;
+      try {
+        const r = await fetch(`/api/invite/${encodeURIComponent(inviteToken)}`);
+        info = await r.json();
+      } catch {
+        show('state-error');
+        document.getElementById('error-text').textContent = 'Tidak dapat menghubungi server.';
+        return;
+      }
+
+      if (!info.ok) {
+        show('state-error');
+        document.getElementById('error-text').textContent = info.error || 'Link tidak valid.';
+        return;
+      }
+
+      // Populate group info
+      const g = info.group;
+      document.getElementById('g-name').textContent = g.name;
+      document.getElementById('g-desc').textContent = g.description || '';
+      document.getElementById('g-meta').textContent = `👥 ${g.member_count} anggota`;
+
+      // If not logged in → redirect to login with ?next= pointing back here
+      if (!token) {
+        const next = encodeURIComponent(location.pathname + location.search);
+        location.replace(`/login.html?next=${next}`);
+        return;
+      }
+
+      show('state-join');
+
+      // ── Join button ──────────────────────────────────────────
+      const btnJoin = document.getElementById('btn-join');
+      btnJoin.addEventListener('click', async () => {
+        btnJoin.disabled = true;
+        btnJoin.textContent = 'Bergabung…';
+        hideMsg();
+
+        let result;
+        try {
+          const r = await fetch(`/api/invite/${encodeURIComponent(inviteToken)}/join`, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
+          });
+          result = await r.json();
+        } catch {
+          showMsg('Tidak dapat menghubungi server.');
+          btnJoin.disabled = false;
+          btnJoin.textContent = '🚀 Bergabung Sekarang';
+          return;
+        }
+
+        if (!result.ok) {
+          showMsg(result.error || 'Gagal bergabung.');
+          btnJoin.disabled = false;
+          btnJoin.textContent = '🚀 Bergabung Sekarang';
+          return;
+        }
+
+        const groupUrl = `/group.html?id=${result.groupId}`;
+
+        if (result.alreadyMember) {
+          document.getElementById('already-name').textContent = result.groupName;
+          document.getElementById('btn-goto-group').onclick = () => location.replace(groupUrl);
+          show('state-already');
+        } else {
+          document.getElementById('success-name').textContent = result.groupName;
+          document.getElementById('btn-open-group').onclick = () => location.replace(groupUrl);
+          show('state-success');
+        }
+      });
+    }
+
+    main();
+  </script>
+</body>
+</html>

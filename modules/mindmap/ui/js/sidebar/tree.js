@@ -4,7 +4,7 @@ import { switchProject, saveWorkspaceTree, findNode, findParent,
          removeNode, isDescendant, collectFileIds,
          genId, escHtml, MAX_DEPTH, pasteFile } from './workspace.js';
 import { flash }                               from '../ui/flash.js';
-import { wcfPrompt, wcfConfirm }              from '../ui/modal.js';
+import { wcfPrompt }                          from '../ui/modal.js';
 import { apiDelete }                           from '../api.js';
 import { renderLog }                           from '../features/history-log.js';
 

@@ -16,10 +16,20 @@
       else document.documentElement.classList.add('dark');
     })();
   </script>
-  <script type="module" crossorigin src="/app/assets/index-BWAIbqx4.js"></script>
-  <link rel="modulepreload" crossorigin href="/app/assets/export-tools-DeIMPfq9.js">
-  <link rel="modulepreload" crossorigin href="/app/assets/firebase-k1FCMSLg.js">
-  <link rel="stylesheet" crossorigin href="/app/assets/index-DFxz8uxQ.css">
+  <script type="module" crossorigin src="/app/assets/index-tCB_KUUg.js"></script>
+  <link rel="modulepreload" crossorigin href="/app/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/node-CIFtV35y.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/modal-BPJtuKiq.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/firebase-Cdpz2wns.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/api-CjCFgNSB.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/tree-B7KBvLXf.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/mermaid-import-DTcZlXGK.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/import-C6AQKyTG.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/sticky-DTHK912a.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/frames-PQ8nX5eE.js">
+  <link rel="stylesheet" crossorigin href="/app/assets/node-DmmPsVZ3.css">
+  <link rel="stylesheet" crossorigin href="/app/assets/mermaid-import-D8z5_s9H.css">
+  <link rel="stylesheet" crossorigin href="/app/assets/premium-DSRFSlj6.css">
 </head>
 <body class="wan-case-flow flex flex-col h-screen overflow-hidden">
   <a class="skip-link" href="#workspace">Lewati ke workspace</a>
@@ -878,7 +888,7 @@
   <!-- ── Mermaid Import Modal ─────────────────────────────────── -->
   <div id="mermaid-import-modal"
        class="modal-overlay hidden" style="z-index:350">
-    <div class="modal-box w-[520px] max-h-[90vh] flex flex-col overflow-hidden">
+    <div class="modal-box mmd-import-dialog flex flex-col overflow-hidden">
       <!-- Header -->
       <div class="flex items-center px-5 py-4 border-b border-white/[0.08] shrink-0">
         <h2 class="flex-1 text-sm font-bold text-purple-400/80">⬇ Import dari Mermaid</h2>
@@ -913,25 +923,34 @@
           <div class="flex-1 h-px bg-white/[0.06]"></div>
         </div>
 
-        <!-- Textarea -->
-        <textarea id="mmd-textarea"
-                  rows="12"
-                  placeholder="flowchart TB
+        <div class="mmd-import-workbench">
+          <section class="mmd-import-pane">
+            <div class="mmd-pane-heading">
+              <span>Kode Mermaid</span>
+              <small>Input</small>
+            </div>
+            <textarea id="mmd-textarea"
+                      rows="12"
+                      placeholder="flowchart TB
     A([&quot;Start&quot;]) --&gt; B[&quot;Proses&quot;]
     B --&gt; C{&quot;Kondisi?&quot;}
     C -- Ya --&gt; D[&quot;Hasil A&quot;]
     C -- Tidak --&gt; E[&quot;Hasil B&quot;]"
-                  class="w-full modal-input font-mono text-[11px] text-white/70 leading-relaxed
-                         resize-none focus:border-purple-500/50 focus:ring-2 focus:ring-purple-500/20
-                         outline-none transition"
-                  style="min-height:200px"></textarea>
-
-        <!-- Preview chip -->
-        <div id="mmd-preview" class="hidden flex gap-2 flex-wrap text-[10px]">
-          <span class="text-white/25">Terdeteksi:</span>
-          <span id="mmd-preview-nodes"  class="px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300/80 border border-purple-500/25"></span>
-          <span id="mmd-preview-edges"  class="px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300/80 border border-cyan-500/25"></span>
-          <span id="mmd-preview-dir"    class="px-2 py-0.5 rounded-full bg-white/5 text-white/40 border border-white/10"></span>
+                      class="w-full modal-input font-mono text-[11px] text-white/70 leading-relaxed resize-none outline-none transition"></textarea>
+            <div id="mmd-preview" class="hidden mmd-import-stats">
+              <span>Terdeteksi</span>
+              <strong id="mmd-preview-nodes"></strong>
+              <strong id="mmd-preview-edges"></strong>
+              <strong id="mmd-preview-dir"></strong>
+            </div>
+          </section>
+          <section class="mmd-import-pane is-preview">
+            <div class="mmd-pane-heading">
+              <span>Preview diagram</span>
+              <small>Fit otomatis</small>
+            </div>
+            <div id="mmd-diagram-preview" class="mmd-diagram-preview" aria-live="polite"></div>
+          </section>
         </div>
       </div>
 

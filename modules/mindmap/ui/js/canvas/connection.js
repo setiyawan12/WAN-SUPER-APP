@@ -1,5 +1,5 @@
 // ── js/canvas/connection.js ──────────────────────────────────
-import { state, ui, $svg, $cv, $el, COLORS, pushUndo, refs, selectedNodes } from '../state.js';
+import { state, ui, $svg, $cv, $el, COLORS, pushUndo, refs } from '../state.js';
 import { updateMinimap } from '../ui/minimap.js';
 import { toCanvas } from './transform.js';
 
@@ -76,6 +76,138 @@ function nodeCenter(id) {
   return {
     x: n.x + w / 2,
     y: n.y + (e ? e.offsetHeight : 40) / 2,
+  };
+}
+
+function _nodeBox(id) {
+  const node = state.nodes[id];
+  const element = $el(id);
+  if (!node) return null;
+  const width = node.width ?? element?.offsetWidth ?? 80;
+  const height = element?.offsetHeight ?? (node.shape === 'diamond' ? width : 56);
+  return {
+    left: node.x,
+    top: node.y,
+    right: node.x + width,
+    bottom: node.y + height,
+    width,
+    height,
+    cx: node.x + width / 2,
+    cy: node.y + height / 2,
+    shape: node.shape || 'rect',
+  };
+}
+
+function _verticalPort(box, targetX, edge) {
+  const delta = targetX - box.cx;
+  const offset = Math.abs(delta) < 20 ? 0 : Math.sign(delta) * Math.min(box.width * .24, 32);
+  const x = box.cx + offset;
+  if (box.shape === 'diamond') {
+    const inset = Math.abs(offset) * box.height / box.width;
+    return { x, y: edge === 'bottom' ? box.bottom - inset : box.top + inset };
+  }
+  if (box.shape === 'oval') {
+    const ratio = Math.min(1, Math.abs(offset) / (box.width / 2));
+    const yOffset = box.height / 2 * Math.sqrt(1 - ratio * ratio);
+    return { x, y: edge === 'bottom' ? box.cy + yOffset : box.cy - yOffset };
+  }
+  return { x, y: edge === 'bottom' ? box.bottom : box.top };
+}
+
+function _horizontalPort(box, targetY, edge) {
+  const delta = targetY - box.cy;
+  const offset = Math.abs(delta) < 20 ? 0 : Math.sign(delta) * Math.min(box.height * .24, 28);
+  const y = box.cy + offset;
+  if (box.shape === 'diamond') {
+    const inset = Math.abs(offset) * box.width / box.height;
+    return { x: edge === 'right' ? box.right - inset : box.left + inset, y };
+  }
+  if (box.shape === 'oval') {
+    const ratio = Math.min(1, Math.abs(offset) / (box.height / 2));
+    const xOffset = box.width / 2 * Math.sqrt(1 - ratio * ratio);
+    return { x: edge === 'right' ? box.cx + xOffset : box.cx - xOffset, y };
+  }
+  return { x: edge === 'right' ? box.right : box.left, y };
+}
+
+function _roundedPolyline(points, radius = 14) {
+  if (points.length < 2) return '';
+  const distance = (a, b) => Math.hypot(b.x - a.x, b.y - a.y);
+  const toward = (from, to, amount) => {
+    const length = distance(from, to);
+    if (!length) return { ...from };
+    return {
+      x: from.x + (to.x - from.x) * amount / length,
+      y: from.y + (to.y - from.y) * amount / length,
+    };
+  };
+  let path = `M${points[0].x},${points[0].y}`;
+  for (let index = 1; index < points.length - 1; index++) {
+    const previous = points[index - 1];
+    const corner = points[index];
+    const next = points[index + 1];
+    const cornerRadius = Math.min(radius, distance(corner, previous) / 2, distance(corner, next) / 2);
+    const entry = toward(corner, previous, cornerRadius);
+    const exit = toward(corner, next, cornerRadius);
+    path += ` L${entry.x},${entry.y} Q${corner.x},${corner.y} ${exit.x},${exit.y}`;
+  }
+  const last = points[points.length - 1];
+  return `${path} L${last.x},${last.y}`;
+}
+
+function _orthogonalRoute(conn) {
+  const from = _nodeBox(conn.from);
+  const to = _nodeBox(conn.to);
+  if (!from || !to) return null;
+  const horizontal = conn.direction === 'LR' || conn.direction === 'RL';
+  const reverse = conn.direction === 'BT' || conn.direction === 'RL';
+  let points;
+
+  if (conn.routeType === 'back') {
+    const boxes = Object.keys(state.nodes).map(_nodeBox).filter(Boolean);
+    const laneOffset = 68 + (conn.routeLane || 0) * 28;
+    if (horizontal) {
+      const centerY = boxes.reduce((sum, box) => sum + box.cy, 0) / boxes.length;
+      const useTop = (from.cy + to.cy) / 2 <= centerY;
+      const laneY = useTop
+        ? Math.min(...boxes.map(box => box.top)) - laneOffset
+        : Math.max(...boxes.map(box => box.bottom)) + laneOffset;
+      const start = _horizontalPort(from, to.cy, useTop ? 'left' : 'right');
+      const end = _horizontalPort(to, from.cy, useTop ? 'left' : 'right');
+      points = [start, { x: start.x + (reverse ? -28 : 28), y: start.y }, { x: start.x + (reverse ? -28 : 28), y: laneY }, { x: end.x + (reverse ? 28 : -28), y: laneY }, { x: end.x + (reverse ? 28 : -28), y: end.y }, end];
+    } else {
+      const centerX = boxes.reduce((sum, box) => sum + box.cx, 0) / boxes.length;
+      const useLeft = (from.cx + to.cx) / 2 <= centerX;
+      const laneX = useLeft
+        ? Math.min(...boxes.map(box => box.left)) - laneOffset
+        : Math.max(...boxes.map(box => box.right)) + laneOffset;
+      const start = _horizontalPort(from, to.cy, useLeft ? 'left' : 'right');
+      const end = _horizontalPort(to, from.cy, useLeft ? 'left' : 'right');
+      points = [start, { x: start.x, y: start.y + (reverse ? -28 : 28) }, { x: laneX, y: start.y + (reverse ? -28 : 28) }, { x: laneX, y: end.y + (reverse ? 28 : -28) }, { x: end.x, y: end.y + (reverse ? 28 : -28) }, end];
+    }
+  } else if (horizontal) {
+    const start = _horizontalPort(from, to.cy, reverse ? 'left' : 'right');
+    const end = _horizontalPort(to, from.cy, reverse ? 'right' : 'left');
+    const middleX = (start.x + end.x) / 2;
+    points = [start, { x: middleX, y: start.y }, { x: middleX, y: end.y }, end];
+  } else {
+    const start = _verticalPort(from, to.cx, reverse ? 'top' : 'bottom');
+    const end = _verticalPort(to, from.cx, reverse ? 'bottom' : 'top');
+    const middleY = (start.y + end.y) / 2;
+    points = [start, { x: start.x, y: middleY }, { x: end.x, y: middleY }, end];
+  }
+
+  const longestSegment = points.slice(1).reduce((best, point, index) => {
+    const previous = points[index];
+    const length = Math.hypot(point.x - previous.x, point.y - previous.y);
+    return length > best.length ? { length, from: previous, to: point } : best;
+  }, { length: 0, from: points[0], to: points[1] });
+  return {
+    d: _roundedPolyline(points),
+    label: {
+      x: (longestSegment.from.x + longestSegment.to.x) / 2,
+      y: (longestSegment.from.y + longestSegment.to.y) / 2,
+    },
   };
 }
 
@@ -387,8 +519,10 @@ export function renderLines() {
     const col = conn.color || COLORS[Math.min(lvls[conn.from] ?? 0, COLORS.length - 1)].bg;
     const sty = conn.style || 'curved';
     const path = makePath(f.x, f.y, t.x, t.y, col, 2.5, 0.65, sty);
+    const orthogonalRoute = conn.routing === 'orthogonal' ? _orthogonalRoute(conn) : null;
+    if (orthogonalRoute) path.setAttribute('d', orthogonalRoute.d);
     // Obstacle-aware routing: arc around any node blocking the direct path (all styles)
-    {
+    if (!orthogonalRoute) {
       const blocker = _findBlocker(f.x, f.y, t.x, t.y, conn.from, conn.to);
       if (blocker) path.setAttribute('d', _avoidPath(f.x, f.y, t.x, t.y, blocker));
     }
@@ -476,7 +610,8 @@ export function renderLines() {
 
     // Draw label if set
     if (conn.label) {
-      const mx = (f.x + t.x) / 2, my = (f.y + t.y) / 2;
+      const mx = orthogonalRoute?.label.x ?? (f.x + t.x) / 2;
+      const my = orthogonalRoute?.label.y ?? (f.y + t.y) / 2;
       const fo = document.createElementNS('http://www.w3.org/2000/svg','foreignObject');
       fo.setAttribute('x', mx - 40); fo.setAttribute('y', my - 11);
       fo.setAttribute('width', 80); fo.setAttribute('height', 22);

@@ -1,6 +1,8 @@
 // ── js/features/cmd-palette.js — Command Palette (Ctrl+K) ────
 import { state, $el } from '../state.js';
 import { zoomReset } from '../ui/toolbar.js';
+import { panToNode } from '../canvas/transform.js';
+import { selectNode } from '../canvas/selection.js';
 
 let _active = false;
 let _cursor = 0;
@@ -67,11 +69,10 @@ function _execute(item) {
 
   if (item.type === 'node') {
     // Navigate to node
-    import('./align.js').then(() => {});
     const el = $el(item.id);
     if (el) {
-      import('../canvas/transform.js').then(({ panToNode }) => panToNode(item.id));
-      import('../canvas/selection.js').then(({ selectNode }) => selectNode(item.id));
+      panToNode(item.id);
+      selectNode(item.id);
     }
     return;
   }

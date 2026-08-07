@@ -1,6 +1,6 @@
 // ── js/features/smart-paste.js ───────────────────────────────
 // Paste indented/bullet text → mindmap node tree
-import { state, $cv, $el, pushUndo, selectedNodes, refs, COLORS } from '../state.js';
+import { state, $cv, pushUndo, selectedNodes, refs, COLORS } from '../state.js';
 import { renderLines, syncColors, addConnection }                  from '../canvas/connection.js';
 import { buildEl }                                                 from '../canvas/node.js';
 import { flash }                                                   from '../ui/flash.js';

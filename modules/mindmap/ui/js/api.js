@@ -35,10 +35,6 @@ import {
 const ok = (extra = {}) => ({ ok: true, ...extra });
 const unavailable = (feature) => ({ ok: false, error: `${feature} memerlukan Firebase backend production.` });
 
-export function getToken() {
-  return '';
-}
-
 export async function apiSave(data, name) {
   try {
     return ok(await saveMindmap(name, data));
@@ -53,13 +49,6 @@ export async function apiLoad(name) {
 
 export async function apiDelete(name) {
   await deleteMindmap(name);
-  return ok();
-}
-
-export async function apiRename(oldName, newName) {
-  const data = await loadMindmap(oldName);
-  if (data) await saveMindmap(newName, data);
-  await deleteMindmap(oldName);
   return ok();
 }
 
@@ -577,7 +566,6 @@ export const apiAdminLoadMindmap = async () => unavailable('Admin workspace view
 export const apiGetComments = async () => ok({ comments: [] });
 export const apiPostComment = async () => unavailable('Cloud comments');
 export const apiGetNodeHistory = async () => ok({ history: [] });
-export const apiGetFileHistory = async () => ok({ history: [] });
 
 export async function apiSearchGlobal(query) {
   return ok({ results: await searchMindmaps(query) });

@@ -1,5 +1,5 @@
 // ── js/app.js — Entry Point ───────────────────────────────────
-import { state, refs, ui, hist, selectedNodes, snapshotData, $c, $cv, $svg, $el, $id }
+import { state, refs, ui, hist, selectedNodes, snapshotData, $c, $cv, $el, $id }
   from './state.js';
 import { applyTransform, toCanvas } from './canvas/transform.js';
 import { renderLines, addConnection, hideConnCtx, syncColors }
@@ -11,16 +11,16 @@ import { selectNode, clearSelection, selectAll,
 import { flash }                     from './ui/flash.js';
 import { initTheme }                 from './ui/theme.js';
 import { initMinimap, updateMinimap } from './ui/minimap.js';
-import { initShortcutHelp }          from './ui/shortcut-help.js';
+import { initShortcutHelp, showHelp } from './ui/shortcut-help.js';
 import { initCtxMenu, hideCtxMenu }  from './ui/ctx-menu.js';
 import { loadWorkspace, switchProject, loadCurrentProject, findParent, pasteFile }
   from './sidebar/workspace.js';
 import { renderSidebar, initTreeCtxHandlers, initSidebarButtons, renderTrash }
   from './sidebar/tree.js';
 import { initSearch }                from './sidebar/search.js';
-import { initToolbar, save }         from './ui/toolbar.js';
+import { initToolbar }               from './ui/toolbar.js';
 import { initHistoryPanel }          from './features/history-log.js';
-import { exportPDF, exportPNG, exportSVG, exportJSON, exportMarkdown } from './features/export.js';
+import { exportPDF, exportSVG, exportMarkdown } from './features/export.js';
 import { openImportDialog } from './features/import.js';
 import './features/mermaid-import.js';
 import { smartPaste, looksLikeTree }        from './features/smart-paste.js';
@@ -729,7 +729,7 @@ function initKeyboard() {
         }
       }
 
-      if (e.key === '?') { import('./ui/shortcut-help.js').then(m => m.showHelp()); }
+      if (e.key === '?') showHelp();
       // Ctrl+H — Find & Replace
       if (ctrl && e.key === 'h') { e.preventDefault(); openFindReplace(); }
       if (e.key === 'Escape') {

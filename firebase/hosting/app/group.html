@@ -1,0 +1,1052 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Case Flow — Workspace Grup</title>
+  <script>
+    // Terapkan tema sebelum render untuk menghindari flash
+    (function(){
+      const t = localStorage.getItem('wcf_theme') || 'dark';
+      if (t === 'light') document.documentElement.classList.remove('dark');
+      else document.documentElement.classList.add('dark');
+    })();
+  </script>
+  <style>
+    /* Group-workspace spesifik */
+    .grp-rename-input {
+      background: var(--bg-input); border: 1px solid var(--accent-border);
+      border-radius: 5px; color: var(--text-1); font-size: 12px; padding: 1px 5px;
+      outline: none; width: 100%; min-width: 0;
+    }
+    .grp-tree-item { border-left: 1px solid transparent; }
+    .grp-tree-item:hover { border-left-color: var(--accent-border); }
+    .wcf-search-match { outline: 2px solid #facc15 !important; }
+    .wcf-search-match-active { outline: 2px solid #f97316 !important; }
+
+    /* ── Typing indicator ── */
+    @keyframes wcf-typing-bounce {
+      0%,80%,100% { transform: scale(0.6); opacity:.4; }
+      40%         { transform: scale(1.0); opacity:1; }
+    }
+    .wcf-typing-indicator {
+      position: absolute;
+      bottom: -22px;
+      left: 0;
+      font-size: 9px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      z-index: 15;
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      padding: 2px 6px;
+      border-radius: 99px;
+      backdrop-filter: blur(4px);
+      box-shadow: 0 1px 6px rgba(0,0,0,.4);
+    }
+    .wcf-typing-dot {
+      display: inline-block;
+      width: 5px; height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      animation: wcf-typing-bounce 1.2s infinite;
+    }
+    .wcf-typing-dot:nth-child(2) { animation-delay: .15s; }
+    .wcf-typing-dot:nth-child(3) { animation-delay: .30s; }
+
+    /* ── Notification panel ── */
+    #notif-panel {
+      position: fixed;
+      top: 52px;
+      right: 14px;
+      width: 300px;
+      max-height: 380px;
+      z-index: 250;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-md);
+      border-radius: 14px;
+      box-shadow: var(--shadow-menu);
+      overflow: hidden;
+      backdrop-filter: blur(20px);
+    }
+    #notif-panel.hidden { display: none; }
+    #notif-badge {
+      position: absolute;
+      top: -5px; right: -5px;
+      min-width: 16px; height: 16px;
+      border-radius: 99px;
+      background: #ef4444;
+      color: #fff;
+      font-size: 9px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      pointer-events: none;
+    }
+    #notif-badge.hidden { display: none; }
+
+    /* ── Comment / History side panel ── */
+    .wcf-side-panel {
+      position: fixed;
+      top: 0; right: 0;
+      width: 300px;
+      height: 100%;
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface);
+      border-left: 1px solid var(--border-md);
+      box-shadow: -8px 0 32px rgba(0,0,0,.45);
+      transform: translateX(0);
+      transition: transform 0.25s ease;
+    }
+    .wcf-side-panel.hidden {
+      display: none;
+    }
+    .wcf-side-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .wcf-side-panel-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-2);
+    }
+    .wcf-side-panel-close {
+      color: var(--text-3);
+      font-size: 16px;
+      cursor: pointer;
+      line-height: 1;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: background .15s, color .15s;
+    }
+    .wcf-side-panel-close:hover { background: var(--bg-glass-light); color: var(--text-1); }
+    .wcf-comment-item {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .wcf-comment-author {
+      font-size: 10px; font-weight: 700;
+      color: var(--text-2);
+      margin-bottom: 3px;
+    }
+    .wcf-comment-text {
+      font-size: 12px;
+      color: var(--text-1);
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .wcf-comment-time {
+      font-size: 9px;
+      color: var(--text-4);
+      margin-top: 3px;
+    }
+    .wcf-history-item {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: flex-start;
+    }
+    .wcf-history-icon {
+      flex-shrink: 0;
+      width: 22px; height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      margin-top: 1px;
+    }
+    .wcf-history-body { flex: 1; min-width: 0; }
+    .wcf-history-who {
+      font-size: 10px; font-weight: 700;
+      color: var(--text-2);
+    }
+    .wcf-history-desc {
+      font-size: 11px;
+      color: var(--text-3);
+      margin-top: 2px;
+      word-break: break-word;
+    }
+    .wcf-history-time {
+      font-size: 9px;
+      color: var(--text-4);
+      margin-top: 2px;
+    }
+
+    /* Comment badge on node */
+    .wcf-comment-badge {
+      position: absolute;
+      top: -7px; left: -7px;
+      background: #7c6dfa;
+      color: #fff;
+      font-size: 8px;
+      font-weight: 700;
+      min-width: 14px; height: 14px;
+      border-radius: 99px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0 3px;
+      pointer-events: none;
+      box-shadow: 0 1px 4px rgba(0,0,0,.4);
+    }
+  </style>
+  <script type="module" crossorigin src="/app/assets/group-DClsedYF.js"></script>
+  <link rel="modulepreload" crossorigin href="/app/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/node-CIFtV35y.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/modal-BPJtuKiq.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/firebase-Cdpz2wns.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/api-CjCFgNSB.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/tree-B7KBvLXf.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/mermaid-import-DTcZlXGK.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/frames-PQ8nX5eE.js">
+  <link rel="stylesheet" crossorigin href="/app/assets/mermaid-import-D8z5_s9H.css">
+  <link rel="stylesheet" crossorigin href="/app/assets/node-DmmPsVZ3.css">
+  <link rel="stylesheet" crossorigin href="/app/assets/premium-DSRFSlj6.css">
+</head>
+<body class="wan-case-flow flex flex-col h-screen overflow-hidden" style="background:var(--bg-base);color:var(--text-1);font-family:'Inter',system-ui,sans-serif">
+
+<!-- ── Topbar ───────────────────────────────────────────────── -->
+<div id="toolbar">
+
+  <button id="btn-sidebar-toggle" title="Buka/tutup sidebar">&#9776;</button>
+
+  <a href="/" style="display:flex;align-items:center;height:30px;padding:0 10px;border-radius:8px;font-size:12px;font-weight:500;color:var(--text-3);text-decoration:none">&#x2190; Kembali</a>
+  <div class="toolbar-sep"></div>
+
+  <span id="grp-name-label" style="font-size:11px;font-weight:700;color:var(--accent);opacity:.8;user-select:none">&#x1F465; Workspace Grup</span>
+  <span id="grp-member-badge" style="display:none;font-size:9px;background:var(--accent-muted);color:var(--accent);border:1px solid var(--accent-border);border-radius:99px;padding:2px 8px;"></span>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-save" title="Simpan">&#x1F4BE; Simpan</button>
+  <button id="btn-load" title="Muat ulang">&#x21BB; Muat</button>
+  <button id="btn-clear" title="Hapus semua" style="color:#f87171">&#x1F5D1;</button>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-undo" title="Undo">&#x21A9;</button>
+  <button id="btn-redo" title="Redo">&#x21AA;</button>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-zoom-out" style="width:28px;padding:0" title="Zoom out">&#x2212;</button>
+  <span id="zoom-label" style="font-size:11px;color:var(--text-3);min-width:34px;text-align:center;font-variant-numeric:tabular-nums;user-select:none">100%</span>
+  <button id="btn-zoom-in"  style="width:28px;padding:0" title="Zoom in">+</button>
+  <button id="btn-zoom-reset" style="width:26px;padding:0;font-size:14px" title="Reset zoom">&#x2299;</button>
+  <button id="btn-zoom-fit"   style="width:26px;padding:0;font-size:14px" title="Fit semua node">&#x229E;</button>
+  <button id="btn-auto-layout" title="Auto Layout">&#x2B21; Layout</button>
+
+  <!-- Canvas tools dropdown -->
+  <div style="position:relative">
+    <button id="btn-canvas-tools-trigger" title="Canvas tools">&#x2395; Canvas &#x25BE;</button>
+    <div id="canvas-tools-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:160px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <button id="btn-snap-grid" title="Snap to grid" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x229E; Snap Grid</button>
+      <button id="btn-canvas-bg" title="Latar canvas" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2B21; Background</button>
+      <button id="btn-sticky" title="Sticky Note (Shift+Dblclick)" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F5D2; Sticky Note</button>
+      <button id="btn-frame" title="Gambar frame/section" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4D0; Frame</button>
+      <button id="btn-kanban" title="Kanban view" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4CB; Kanban</button>
+      <button id="btn-cmd" title="Command Palette (Ctrl+K)" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2318; Cmd</button>
+    </div>
+  </div>
+  <div class="toolbar-sep"></div>
+
+  <!-- Export dropdown -->
+  <div style="position:relative">
+    <button id="btn-export-trigger" title="Export">&#x2B06; Export &#x25BE;</button>
+    <div id="export-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:150px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <button id="btn-export-json" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">{ } JSON</button>
+      <button id="btn-export-png"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F5BC; PNG</button>
+      <button id="btn-export-svg"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F537; SVG</button>
+      <button id="btn-export-md"   style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4DD; Markdown</button>
+      <button id="btn-export-pdf"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4C4; PDF</button>
+    </div>
+  </div>
+
+  <button id="btn-snapshot"    title="Riwayat Versi">&#x1F551; Versi</button>
+  <button id="btn-activity"    title="Aktivitas Grup">&#x1F4CA; Aktivitas</button>
+  <div class="toolbar-sep"></div>
+
+  <!-- More dropdown -->
+  <div style="position:relative">
+    <button id="btn-more-trigger" title="Lainnya">&#x22EF; Lainnya &#x25BE;</button>
+    <div id="more-menu" style="display:none;position:absolute;top:calc(100% + 4px);right:0;background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:6px;min-width:170px;z-index:200;box-shadow:0 8px 24px rgba(0,0,0,0.3)">
+      <button id="btn-import-mermaid" style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2B07; Import Mermaid</button>
+      <button id="btn-import-json"    style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x2B07; Import JSON/MD</button>
+      <button id="btn-template"       style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F4CB; Template</button>
+      <button id="btn-presentation"   style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x229E; Presentasi</button>
+      <button id="btn-global-search"  style="width:100%;text-align:left;border-radius:7px;padding:6px 10px">&#x1F310; Cari Global</button>
+    </div>
+  </div>
+  <div class="toolbar-sep"></div>
+
+  <button id="btn-theme-toggle" style="width:30px;padding:0" title="Ganti tema">&#x1F319;</button>
+  <button id="btn-shortcuts"    style="width:30px;padding:0;font-weight:700" title="Shortcut keyboard">?</button>
+
+  <div style="position:relative">
+    <button id="btn-notifications" style="width:30px;padding:0" title="Notifikasi">&#x1F514;</button>
+    <span id="notif-badge" class="hidden" style="position:absolute;top:-5px;right:-5px;min-width:15px;height:15px;background:#ef4444;color:#fff;border-radius:99px;font-size:9px;font-weight:700;display:none;align-items:center;justify-content:center;padding:0 3px;pointer-events:none">0</span>
+  </div>
+
+  <span style="flex:1"></span>
+
+  <div id="online-strip" style="display:flex;align-items:center;gap:3px"></div>
+
+  <span id="grp-status" style="font-size:10px;color:var(--text-4);user-select:none">Belum ada file dibuka</span>
+  <div class="toolbar-sep"></div>
+  <span id="user-display" style="font-size:11px;color:var(--text-3);user-select:none"></span>
+</div>
+
+<!-- ── Main layout ───────────────────────────────────────────── -->
+<div style="display:flex;flex:1;min-height:0;overflow:hidden">
+
+  <!-- ── Sidebar ─────────────────────────────────────────────── -->
+  <div id="sidebar">
+
+    <!-- Sidebar header -->
+    <div style="display:flex;align-items:center;gap:4px;padding:0 10px;height:44px;border-bottom:1px solid var(--border);flex-shrink:0;background:linear-gradient(180deg,var(--bg-surface2) 0%,var(--bg-surface) 100%)">
+      <button id="btn-new-file" title="File baru di root"
+              style="display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-3);font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap">
+        &#x1F4C4; + File
+      </button>
+      <button id="btn-new-folder" title="Folder baru di root"
+              style="display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-3);font-size:11px;font-family:inherit;cursor:pointer;white-space:nowrap">
+        &#x1F4C1; + Folder
+      </button>
+    </div>
+
+    <!-- Search -->
+    <div style="padding:8px 10px;border-bottom:1px solid var(--border);flex-shrink:0">
+      <input id="grp-search" type="text" placeholder="Cari file&#x2026;"
+             style="width:100%;padding:5px 10px;background:var(--bg-input);border:1px solid var(--border);border-radius:8px;color:var(--text-1);font-size:11px;font-family:inherit;outline:none"
+             onfocus="this.style.borderColor='var(--accent-border)';this.style.boxShadow='0 0 0 3px var(--accent-muted)'"
+             onblur="this.style.borderColor='var(--border)';this.style.boxShadow='none'">
+    </div>
+
+    <!-- Starred section -->
+    <div id="sidebar-starred" class="hidden" style="flex-shrink:0">
+      <div id="starred-header" style="display:flex;align-items:center;gap:5px;padding:8px 14px 4px;cursor:pointer;user-select:none">
+        <span id="starred-arrow" style="font-size:9px;color:var(--text-4)">&#x25BE;</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-4)">Bintang</span>
+      </div>
+      <div id="starred-list" style="padding-bottom:2px"></div>
+      <div style="height:1px;background:var(--border);margin:4px 12px"></div>
+    </div>
+
+    <!-- Recently opened section -->
+    <div id="sidebar-recent" class="hidden" style="flex-shrink:0">
+      <div id="recent-header" style="display:flex;align-items:center;gap:5px;padding:8px 14px 4px;cursor:pointer;user-select:none">
+        <span id="recent-arrow" style="font-size:9px;color:var(--text-4)">&#x25BE;</span>
+        <span style="font-size:10px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--text-4)">Terakhir Dibuka</span>
+      </div>
+      <div id="recent-list" style="padding-bottom:2px"></div>
+      <div style="height:1px;background:var(--border);margin:4px 12px"></div>
+    </div>
+
+    <!-- Tree -->
+    <div id="project-list" style="flex:1;overflow-y:auto;padding:6px 0"></div>
+  </div>
+
+  <!-- ── Canvas ────────────────────────────────────────────────── -->
+  <div id="container">
+    <!-- Box-select rubber-band (positioned in container space) -->
+    <div id="wcf-select-box" style="display:none;position:absolute;pointer-events:none;
+         border:1.5px solid rgba(6,182,212,0.75);background:rgba(6,182,212,0.07);
+         border-radius:3px;z-index:5;"></div>
+    <div id="canvas">
+      <div id="frame-layer"></div>
+      <svg id="svg-lines"></svg>
+    </div>
+
+    <!-- Minimap -->
+        <div id="minimap-wrap"
+          class="hidden" style="position:absolute;bottom:12px;right:12px;z-index:40;">
+      <canvas id="minimap" width="180" height="130" class="block cursor-pointer"></canvas>
+      <canvas id="minimap-cursors" width="180" height="130"
+              style="position:absolute;top:0;left:0;pointer-events:none;"></canvas>
+    </div>
+
+    <!-- Canvas coordinates HUD -->
+    <div id="canvas-coords" style="position:absolute;bottom:28px;left:12px;font-size:9px;color:rgba(255,255,255,0.2);font-variant-numeric:tabular-nums;pointer-events:none;user-select:none;font-family:monospace;letter-spacing:.03em;display:none">X: 0  Y: 0</div>
+
+    <!-- Canvas search overlay (Ctrl+F) -->
+    <div id="canvas-search-bar" class="hidden" style="position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:50;display:none;align-items:center;gap:8px;padding:8px 12px;border-radius:12px;box-shadow:var(--shadow-menu)">
+      <span class="text-white/40 text-xs">🔍</span>
+      <input id="canvas-search-input" type="text" placeholder="Cari node…"
+             class="bg-transparent outline-none text-sm text-white placeholder-white/25 w-48">
+      <span id="canvas-search-count" class="text-[10px] text-white/30 min-w-[30px]"></span>
+      <button id="canvas-search-prev" class="text-white/40 hover:text-white text-xs px-1">▲</button>
+      <button id="canvas-search-next" class="text-white/40 hover:text-white text-xs px-1">▼</button>
+      <button id="canvas-search-close"
+              class="text-white/30 hover:text-white text-xs ml-1">✕</button>
+    </div>
+
+    <!-- Empty state overlay -->
+    <div id="canvas-empty"
+         class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+      <div class="text-center opacity-30">
+        <div class="text-5xl mb-3">👥</div>
+        <p class="text-sm font-semibold text-white/60">Workspace Grup</p>
+        <p class="text-xs text-white/30 mt-1">Buat file baru atau pilih file di sidebar</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Node Context Menu ─────────────────────────────────────── -->
+<div id="ctx-menu"
+     class="ctx-menu hidden" style="z-index:100;min-width:215px">
+  <!-- Tab bar -->
+  <div class="ctx-tabs-bar">
+    <button class="ctx-tab-btn active" data-tab="gaya">🎨 Tampilan</button>
+    <button class="ctx-tab-btn"        data-tab="node">⚡ Node</button>
+  </div>
+
+  <!-- ─── Tab: Tampilan ─── -->
+  <div class="ctx-tab-panel" data-panel="gaya">
+    <!-- Colors: compact 1 row -->
+    <div class="flex items-center gap-1 px-2 py-1.5 text-xs">
+      <div id="ctx-color" class="flex items-center gap-1 flex-1 min-w-0 text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer rounded px-1.5 py-0.5 transition">
+        🎨 <span class="text-[10px]">Node</span>
+        <input id="ctx-color-pick" type="color" value="#7c6dfa"
+               class="ml-auto w-5 h-5 rounded border-0 cursor-pointer bg-transparent flex-shrink-0" />
+      </div>
+      <button id="ctx-reset-color" title="Reset warna node"
+              class="text-white/30 hover:text-white/70 text-[11px] px-1 py-0.5 hover:bg-white/[0.07] rounded transition flex-shrink-0">↩</button>
+      <div class="w-px h-4 bg-white/10 mx-0.5 flex-shrink-0"></div>
+      <div id="ctx-text-color" class="flex items-center gap-1 flex-1 min-w-0 text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer rounded px-1.5 py-0.5 transition">
+        🔤 <span class="text-[10px]">Teks</span>
+        <input id="ctx-text-color-pick" type="color" value="#ffffff"
+               class="ml-auto w-5 h-5 rounded border-0 cursor-pointer bg-transparent flex-shrink-0" />
+      </div>
+      <button id="ctx-reset-text-color" title="Reset warna teks"
+              class="text-white/30 hover:text-white/70 text-[11px] px-1 py-0.5 hover:bg-white/[0.07] rounded transition flex-shrink-0">↩</button>
+    </div>
+    <!-- Font size + Align in one row -->
+    <div class="flex items-center gap-1 px-2 pb-1.5 text-[10px]">
+      <button id="ctx-fs-sm" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">S</button>
+      <button id="ctx-fs-md" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">M</button>
+      <button id="ctx-fs-lg" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">L</button>
+      <button id="ctx-fs-xl" class="px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition text-[9px]">XL</button>
+      <div class="flex-1"></div>
+      <button id="ctx-align-left"    title="Rata kiri"   class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">⬅</button>
+      <button id="ctx-align-center"  title="Tengah"      class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">↔</button>
+      <button id="ctx-align-right"   title="Rata kanan"  class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">➡</button>
+      <button id="ctx-align-justify" title="Justify"     class="ctx-align-btn px-1.5 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.12] text-white/50 hover:text-white transition">▤</button>
+    </div>
+    <!-- Shape Picker -->
+    <div class="px-2 py-1.5 border-t border-white/[0.04]">
+      <p class="text-[9px] text-white/25 mb-1 select-none uppercase tracking-wide">Bentuk</p>
+      <div id="ctx-shape-grid" class="grid grid-cols-7 gap-1">
+        <button data-shape="" title="Default" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="11" rx="3"/></svg>
+        </button>
+        <button data-shape="sharp" title="Kotak" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="16" height="11" rx="0.5"/></svg>
+        </button>
+        <button data-shape="pill" title="Kapsul" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="16" height="9" rx="4.5"/></svg>
+        </button>
+        <button data-shape="oval" title="Oval" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 13" width="16" height="11" fill="none" stroke="currentColor" stroke-width="1.5"><ellipse cx="9" cy="6.5" rx="8" ry="5"/></svg>
+        </button>
+        <button data-shape="circle" title="Lingkaran" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="7" cy="7" r="6"/></svg>
+        </button>
+        <button data-shape="diamond" title="Berlian" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,7 7,13 1,7"/></svg>
+        </button>
+        <button data-shape="hexagon" title="Segienam" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,4 13,10 7,13 1,10 1,4"/></svg>
+        </button>
+        <button data-shape="triangle" title="Segitiga" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,13 1,13"/></svg>
+        </button>
+        <button data-shape="parallelogram" title="Jajar Genjang" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 12" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="3,1 17,1 15,11 1,11"/></svg>
+        </button>
+        <button data-shape="trapezoid" title="Trapesium" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 12" width="16" height="10" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="4,1 14,1 17,11 1,11"/></svg>
+        </button>
+        <button data-shape="pentagon" title="Pentagon" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,1 13,5 10.5,13 3.5,13 1,5"/></svg>
+        </button>
+        <button data-shape="chevron" title="Panah" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 18 14" width="16" height="12" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="0,3 12,3 12,0 17,7 12,14 12,11 0,11"/></svg>
+        </button>
+        <button data-shape="cylinder" title="Silinder" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 16" width="12" height="14" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="4" width="12" height="11" rx="1"/><ellipse cx="7" cy="4" rx="6" ry="2.5"/></svg>
+        </button>
+        <button data-shape="star" title="Bintang" class="wcf-shape-btn flex items-center justify-center w-[22px] h-[22px] rounded hover:bg-white/[0.10] text-white/40 hover:text-white/90 transition-colors cursor-pointer">
+          <svg viewBox="0 0 14 14" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3"><polygon points="7,1 8.5,5.2 13,5.2 9.4,7.9 10.7,12.5 7,9.9 3.3,12.5 4.6,7.9 1,5.2 5.5,5.2"/></svg>
+        </button>
+      </div>
+    </div>
+    <!-- Emoji / Icon grid -->
+    <div class="px-2 py-1.5 border-t border-white/[0.04]">
+      <p class="text-[9px] text-white/25 mb-1 select-none uppercase tracking-wide">Icon</p>
+      <div id="ctx-emoji-grid" class="grid grid-cols-8 gap-0.5 text-base">
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" title="Hapus icon" data-emoji="">✕</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="⭐">⭐</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="✅">✅</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="❌">❌</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="⚠️">⚠️</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="💡">💡</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🔥">🔥</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🎯">🎯</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="📌">📌</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="📝">📝</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🔑">🔑</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🚀">🚀</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="💬">💬</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🔗">🔗</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="📊">📊</button>
+        <button class="ctx-emoji-btn hover:bg-white/10 rounded p-0.5 transition" data-emoji="🛠️">🛠️</button>
+      </div>
+    </div>
+    <!-- Border -->
+    <div class="flex items-center gap-1 px-2 py-1.5 border-t border-white/[0.04]">
+      <span class="text-[9px] text-white/25 uppercase tracking-wide mr-1">Border</span>
+      <button id="ctx-border-solid"  class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Solid">▬</button>
+      <button id="ctx-border-dashed" class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Dashed">╌</button>
+      <button id="ctx-border-dotted" class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Dotted">┄</button>
+      <button id="ctx-border-none"   class="ctx-border-btn hover:bg-white/10 rounded px-2 py-0.5 text-xs text-white/60 transition" title="Tanpa border">✕</button>
+    </div>
+  </div><!-- /tab gaya -->
+
+  <!-- ─── Tab: Node ─── -->
+  <div class="ctx-tab-panel hidden" data-panel="node">
+    <!-- Status row -->
+    <div class="flex gap-1 px-2 pt-1.5 pb-1">
+      <button id="ctx-status-none"     title="Hapus status" class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition">—</button>
+      <button id="ctx-status-todo"     title="Todo"         class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-slate-400  hover:bg-white/[0.07] transition">○ Todo</button>
+      <button id="ctx-status-progress" title="In Progress"  class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-yellow-400 hover:bg-white/[0.07] transition">◑ WIP</button>
+      <button id="ctx-status-done"     title="Done"         class="ctx-status-btn flex-1 py-0.5 rounded text-[10px] text-emerald-400 hover:bg-white/[0.07] transition">● Done</button>
+    </div>
+    <div class="h-px bg-white/[0.06] mx-2 mb-1"></div>
+    <!-- 2-column action grid -->
+    <div class="grid grid-cols-2 gap-px px-1 pb-1">
+      <div id="ctx-pin"       class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📌 Pin Node</div>
+      <div id="ctx-note"      class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📝 Catatan</div>
+      <div id="ctx-file-link" class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">🔗 Link File</div>
+      <div id="ctx-due-date"  class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📅 Due Date</div>
+      <div id="ctx-tags"      class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">🏷 Tags</div>
+      <div id="ctx-checklist" class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">☑ Checklist</div>
+      <div id="ctx-image"     class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">🖼 Gambar</div>
+      <div id="ctx-comment"   class="px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">💬 Komentar</div>
+      <div id="ctx-history"   class="col-span-2 px-2 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition rounded">📜 Riwayat Node</div>
+    </div>
+    <div class="h-px bg-white/[0.06] mx-2 my-0.5"></div>
+    <div id="ctx-disconnect"
+         class="px-3 py-1.5 text-xs text-white/50 hover:bg-white/[0.07] hover:text-white/80 cursor-pointer transition">
+      ✂ Putus Koneksi
+    </div>
+    <button id="ctx-delete" type="button"
+            class="w-full px-3 py-1.5 text-left text-xs text-red-400/70 hover:bg-red-500/10 hover:text-red-400 cursor-pointer transition">
+      Hapus Node
+    </button>
+  </div><!-- /tab node -->
+</div>
+
+<!-- ── Sidebar File/Folder Context Menu ─────────────────────── -->
+<div id="proj-ctx"
+     class="ctx-menu hidden" style="z-index:100;min-width:170px">
+  <div id="grp-ctx-add-file"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📄 Tambah File
+  </div>
+  <div id="grp-ctx-add-folder"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📁 Tambah Folder
+  </div>
+  <div class="h-px bg-white/[0.06] mx-2 my-0.5" id="grp-ctx-sep"></div>
+  <div id="grp-ctx-rename"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ✏️ Ubah Nama
+  </div>
+  <div id="grp-ctx-delete"
+       class="px-3 py-1.5 text-xs text-red-400/70 hover:bg-red-500/10 hover:text-red-400 cursor-pointer transition">
+    🗑 Hapus
+  </div>
+  <!-- File-only actions -->
+  <div class="h-px bg-white/[0.06] mx-2 my-0.5" id="grp-ctx-file-sep2"></div>
+  <div id="grp-ctx-duplicate"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📋 Salin File
+  </div>
+  <div id="grp-ctx-star"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ⭐ Tandai Bintang
+  </div>
+  <div id="grp-ctx-move"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    📦 Pindah ke Grup…
+  </div>
+  <div id="grp-ctx-pubshare"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    🌐 Share Publik…
+  </div>
+</div>
+
+<!-- ── Public Share Modal (group) ───────────────────────────── -->
+<div id="grp-pubshare-modal"
+     class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="modal-box w-96 p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div class="text-sm font-semibold text-white/80">🌐 Share Publik</div>
+      <button id="grp-pubshare-close" class="text-white/30 hover:text-white/60 transition text-lg leading-none">✕</button>
+    </div>
+    <p id="grp-pubshare-filename" class="text-[11px] text-white/35 mb-4"></p>
+
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <p class="text-xs font-semibold text-white/70">Link Akses Publik</p>
+        <p class="text-[10px] text-white/30 mt-0.5">Siapapun dengan link bisa melihat tanpa login</p>
+      </div>
+      <label class="flex items-center gap-2 cursor-pointer">
+        <span id="grp-pub-status" class="text-[11px] text-white/40">Nonaktif</span>
+        <div class="relative">
+          <input type="checkbox" id="grp-pub-toggle" class="sr-only peer">
+          <div class="w-9 h-5 rounded-full border border-white/10 bg-white/5
+                      peer-checked:bg-purple-600/70 peer-checked:border-purple-500/50 transition-all"></div>
+          <div class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white/30
+                      peer-checked:translate-x-4 peer-checked:bg-white transition-all"></div>
+        </div>
+      </label>
+    </div>
+
+    <div id="grp-pub-link-row" style="display:none" class="flex gap-2 items-center">
+      <input id="grp-pub-url" readonly
+             class="flex-1 modal-input text-[11px] text-white/60 cursor-pointer">
+      <button id="grp-pub-copy"
+              class="px-3 py-1.5 rounded text-xs font-semibold bg-purple-500/20 hover:bg-purple-500/30
+                     text-purple-300 border border-purple-500/30 transition whitespace-nowrap">
+        Salin
+      </button>
+      <a id="grp-pub-open" href="#" target="_blank"
+         class="px-3 py-1.5 rounded text-xs font-semibold bg-white/5 hover:bg-white/10
+                text-white/50 border border-white/10 transition whitespace-nowrap">
+        Buka
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- ── Move to group modal ───────────────────────────────────── -->
+<div id="move-group-modal"
+     class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-black/60 backdrop-blur-sm">
+  <div class="modal-box w-80 p-5">
+    <div class="text-sm font-semibold text-white/80 mb-1">📦 Pindah ke Grup</div>
+    <div class="text-[11px] text-white/35 mb-3" id="move-modal-filename"></div>
+    <select id="move-group-select"
+            class="modal-input w-full text-xs mb-4 outline-none">
+      <option value="">Pilih grup tujuan…</option>
+    </select>
+    <div class="flex gap-2">
+      <button id="move-group-confirm"
+              class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-medium py-2 rounded-lg transition">
+        Pindah
+      </button>
+      <button id="move-group-cancel"
+              class="flex-1 bg-white/5 hover:bg-white/10 text-white/60 text-xs py-2 rounded-lg transition">
+        Batal
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Find & Replace Panel ─────────────────────────────────── -->
+<div id="find-replace-panel" class="hidden"
+     style="position:fixed;top:60px;right:16px;z-index:500;
+            background:var(--bg-surface);border:1px solid var(--border-md);
+            border-radius:14px;box-shadow:var(--shadow-menu);
+            padding:12px 14px;width:320px;backdrop-filter:blur(20px);">
+  <div class="flex items-center mb-2">
+    <span style="font-size:12px;font-weight:600;color:var(--text-1)">🔍 Find &amp; Replace</span>
+    <span id="fr-counter" style="margin-left:8px;font-size:11px;color:var(--text-3)"></span>
+    <button id="fr-close" style="margin-left:auto;background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;line-height:1;padding:2px 4px" title="Tutup (Esc)">✕</button>
+  </div>
+  <input id="fr-find" placeholder="Cari teks…" autocomplete="off"
+         style="width:100%;box-sizing:border-box;background:var(--bg-input);border:1px solid var(--border-md);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text-1);margin-bottom:6px;outline:none"/>
+  <input id="fr-replace" placeholder="Ganti dengan…" autocomplete="off"
+         style="width:100%;box-sizing:border-box;background:var(--bg-input);border:1px solid var(--border-md);border-radius:8px;padding:6px 10px;font-size:12px;color:var(--text-1);margin-bottom:8px;outline:none"/>
+  <div class="flex items-center gap-2 flex-wrap">
+    <label style="font-size:11px;color:var(--text-3);display:flex;align-items:center;gap:4px;cursor:pointer">
+      <input id="fr-case" type="checkbox" style="margin:0"/> Case sensitive
+    </label>
+    <button id="fr-prev"        style="margin-left:auto;background:var(--bg-glass-light);border:1px solid var(--border-md);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text-2);cursor:pointer">◀</button>
+    <button id="fr-next"        style="background:var(--bg-glass-light);border:1px solid var(--border-md);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--text-2);cursor:pointer">▶</button>
+    <button id="fr-replace-one" style="background:var(--accent-muted);border:1px solid var(--accent);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--accent);cursor:pointer">Ganti</button>
+    <button id="fr-replace-all" style="background:var(--accent-muted);border:1px solid var(--accent);border-radius:6px;padding:3px 8px;font-size:11px;color:var(--accent);cursor:pointer">Semua</button>
+  </div>
+</div>
+
+<!-- ── Snapshot Panel ────────────────────────────────────────── -->
+<div id="snap-panel" class="hidden">
+  <div id="snap-panel-header">
+    🕑 Riwayat Versi
+    <span id="snap-save-btn"
+          class="ml-auto text-[10px] px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/30 cursor-pointer hover:bg-purple-500/35 transition">
+      + Simpan
+    </span>
+    <button id="snap-panel-close" class="ml-1 text-white/30 hover:text-white/70 transition text-xs leading-none">✕</button>
+  </div>
+  <div id="snap-list">
+    <div id="snap-empty">Belum ada snapshot.</div>
+  </div>
+</div>
+
+<!-- ── Activity Panel ────────────────────────────────────────── -->
+<div id="activity-panel" class="hidden" style="
+  position:fixed; top:52px; right:12px; width:360px; max-height:520px;
+  background:var(--bg-card); border:1px solid var(--border);
+  border-radius:14px; box-shadow:0 8px 40px rgba(0,0,0,.5);
+  display:none; flex-direction:column; z-index:900; overflow:hidden;">
+  <div style="display:flex;align-items:center;padding:12px 14px 8px;border-bottom:1px solid var(--border);gap:8px;">
+    <span style="font-size:.8rem;font-weight:600;color:var(--text-primary);flex:1">📊 Aktivitas Grup</span>
+    <button id="activity-refresh" style="font-size:.7rem;padding:2px 8px;border-radius:6px;
+      background:var(--bg-hover);color:var(--text-secondary);border:1px solid var(--border);cursor:pointer;">↻ Refresh</button>
+    <button id="activity-close" style="font-size:.75rem;color:var(--text-tertiary);background:none;border:none;cursor:pointer;padding:0 2px;">✕</button>
+  </div>
+  <div id="activity-list" style="overflow-y:auto;flex:1;padding:6px 0;">
+    <div id="activity-empty" style="padding:20px;text-align:center;font-size:.75rem;color:var(--text-tertiary);">
+      Belum ada aktivitas.
+    </div>
+  </div>
+</div>
+
+<!-- ── Connection context menu ──────────────────────────────── -->
+<div id="conn-ctx"
+     class="absolute hidden" style="z-index:50;overflow:hidden;padding:4px 0;min-width:160px;">
+  <div id="conn-ctx-label"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ✏️ Edit Label
+  </div>
+  <div id="conn-ctx-style"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    〰 Gaya Garis
+  </div>
+  <div id="conn-ctx-color"
+       class="flex items-center gap-2 px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    🎨 Warna Garis
+    <input id="conn-ctx-color-pick" type="color" value="#a78bfa"
+           class="ml-auto w-5 h-5 rounded border-0 cursor-pointer bg-transparent" />
+  </div>
+  <div id="conn-ctx-reset-color"
+       class="px-3 py-1.5 text-xs text-white/60 hover:bg-white/[0.07] hover:text-white cursor-pointer transition">
+    ↩ Reset Warna
+  </div>
+  <div class="h-px bg-white/[0.06] mx-2 my-0.5"></div>
+  <div id="conn-ctx-delete"
+       class="px-3 py-1.5 text-xs text-red-400/70 hover:bg-red-500/10 hover:text-red-400 cursor-pointer transition">
+    🗑 Hapus Koneksi
+  </div>
+</div>
+
+<!-- ── Connection Style Picker ──────────────────────────────── -->
+<div id="conn-style-picker"
+     class="ctx-menu hidden" style="z-index:110;min-width:170px;padding:6px 8px">
+  <p class="text-[9px] text-white/25 font-bold tracking-widest uppercase px-1 mb-1">Gaya Garis</p>
+  <div class="grid grid-cols-2 gap-1">
+    <button data-style="curved"        class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">〜 Kurva</button>
+    <button data-style="straight"      class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">— Lurus</button>
+    <button data-style="dashed"        class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">- - Putus</button>
+    <button data-style="arrow"         class="conn-style-btn px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">→ Panah</button>
+    <button data-style="bidirectional" class="conn-style-btn col-span-2 px-2 py-1 text-xs rounded text-white/60 hover:bg-purple-500/20 hover:text-white transition">↔ Dua Arah</button>
+  </div>
+</div>
+
+<!-- ── Shortcut Cheatsheet Modal ─────────────────────────────── -->
+<div id="shortcut-modal"
+     class="modal-overlay hidden" style="z-index:350">
+  <div class="modal-box w-96 p-5 max-h-[80vh] overflow-y-auto wcf-scrollbar">
+    <div class="flex items-center justify-between mb-4">
+      <h3 class="text-sm font-bold text-white/80">⌨ Shortcut Keyboard</h3>
+      <button id="shortcut-modal-close" class="text-white/30 hover:text-white/70 transition text-lg leading-none">✕</button>
+    </div>
+    <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+      <div class="text-white/25 col-span-2 font-bold uppercase tracking-widest text-[9px] mt-1">Canvas</div>
+      <span class="text-white/50">Dbl-klik canvas</span><span class="text-white/30">Node baru</span>
+      <span class="text-white/50">Ctrl + A</span><span class="text-white/30">Pilih semua node</span>
+      <span class="text-white/50">Shift + klik node</span><span class="text-white/30">Tambah/hapus dari seleksi</span>
+      <span class="text-white/50">Shift + drag canvas</span><span class="text-white/30">Seleksi kotak (box select)</span>
+      <span class="text-white/50">Ctrl + C</span><span class="text-white/30">Salin node terpilih</span>
+      <span class="text-white/50">Ctrl + V</span><span class="text-white/30">Tempel node</span>
+      <span class="text-white/50">Delete / Backspace</span><span class="text-white/30">Hapus node terpilih</span>
+      <span class="text-white/50">Arrow keys</span><span class="text-white/30">Geser node (+ Shift = cepat)</span>
+      <span class="text-white/50">Scroll</span><span class="text-white/30">Zoom in / out</span>
+      <span class="text-white/50">Middle-click drag</span><span class="text-white/30">Pan canvas</span>
+      <div class="text-white/25 col-span-2 font-bold uppercase tracking-widest text-[9px] mt-3">File & Edit</div>
+      <span class="text-white/50">Ctrl + S</span><span class="text-white/30">Simpan</span>
+      <span class="text-white/50">Ctrl + Z</span><span class="text-white/30">Undo</span>
+      <span class="text-white/50">Ctrl + Y</span><span class="text-white/30">Redo</span>
+      <span class="text-white/50">Ctrl + F</span><span class="text-white/30">Cari node di file ini</span>
+      <span class="text-white/50">Ctrl + Shift + F</span><span class="text-white/30">Cari global (semua file)</span>
+      <span class="text-white/50">Ctrl + G</span><span class="text-white/30">Group node yang dipilih</span>
+      <span class="text-white/50">Ctrl + Shift + G</span><span class="text-white/30">Ungroup</span>
+      <span class="text-white/50">Ctrl + Shift + 0</span><span class="text-white/30">Fit semua node di viewport</span>
+      <span class="text-white/50">F5</span><span class="text-white/30">Mode presentasi (ESC keluar)</span>
+      <div class="text-white/25 col-span-2 font-bold uppercase tracking-widest text-[9px] mt-3">Navigasi</div>
+      <span class="text-white/50">Escape</span><span class="text-white/30">Batalkan / tutup panel</span>
+      <span class="text-white/50">Dbl-klik node</span><span class="text-white/30">Edit teks</span>
+      <span class="text-white/50">Drag ke port</span><span class="text-white/30">Buat koneksi</span>
+    </div>
+  </div>
+</div>
+
+<!-- ── WCF Modal ─────────────────────────────────────────────── -->
+<div id="wcf-modal"
+     class="modal-overlay hidden" style="z-index:300">
+  <div class="modal-box w-80 p-6">
+    <p id="wcf-modal-msg" class="text-sm text-white/80 mb-4 whitespace-pre-line leading-relaxed"></p>
+    <input id="wcf-modal-input" type="text"
+           class="w-full px-3 py-2 rounded-lg bg-white/[0.06] border border-white/[0.1]
+                  text-sm text-white placeholder-white/25 outline-none
+                  focus:border-purple-500/60 transition mb-4 hidden">
+    <div class="flex gap-2 justify-end">
+      <button id="wcf-modal-cancel"
+              class="px-4 py-2 rounded-lg text-xs text-white/40 hover:bg-white/[0.07] hover:text-white/70 transition">Batal</button>
+      <button id="wcf-modal-ok"
+              class="px-4 py-2 rounded-lg text-xs font-semibold bg-purple-500 hover:bg-purple-600 text-white transition">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Notification Panel ────────────────────────────────────── -->
+<div id="notif-panel" class="hidden">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px 8px;border-bottom:1px solid var(--border);flex-shrink:0;">
+    <span style="font-size:11px;font-weight:700;color:var(--text-2);">🔔 Notifikasi</span>
+    <button id="notif-clear" style="font-size:10px;color:var(--text-3);cursor:pointer;padding:2px 8px;border-radius:6px;background:var(--bg-input);border:none;transition:background .15s;"
+            onmouseover="this.style.background='var(--bg-glass-light)'" onmouseout="this.style.background='var(--bg-input)'">
+      Hapus semua
+    </button>
+  </div>
+  <div id="notif-list" style="overflow-y:auto;flex:1;"></div>
+  <div id="notif-empty" style="padding:24px;text-align:center;color:var(--text-4);font-size:11px;">
+    Belum ada notifikasi
+  </div>
+</div>
+
+<!-- ── Comment Side Panel ─────────────────────────────────────── -->
+<div id="comment-panel" class="wcf-side-panel hidden">
+  <div class="wcf-side-panel-header">
+    <span class="wcf-side-panel-title">💬 Komentar — <span id="comment-node-name" style="color:#a78bfa;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;"></span></span>
+    <span class="wcf-side-panel-close" id="comment-panel-close">✕</span>
+  </div>
+  <div id="comment-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
+  <div id="comment-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-4);font-size:11px;">Belum ada komentar</div>
+  <div style="padding:10px 12px;border-top:1px solid var(--border);flex-shrink:0;">
+    <textarea id="comment-input"
+              placeholder="Tulis komentar…"
+              style="width:100%;padding:8px 10px;border-radius:8px;background:var(--bg-input);border:1px solid var(--border-md);color:var(--text-1);font-size:12px;line-height:1.5;resize:none;outline:none;font-family:inherit;height:62px;transition:border-color .15s;"
+              onfocus="this.style.borderColor='var(--accent-border)'" onblur="this.style.borderColor='var(--border-md)'"></textarea>
+    <div style="display:flex;justify-content:flex-end;margin-top:6px;">
+      <button id="comment-submit"
+              style="padding:6px 16px;border-radius:8px;background:#7c6dfa;color:#fff;font-size:11px;font-weight:600;border:none;cursor:pointer;transition:background .15s;"
+              onmouseover="this.style.background='#6b5ce7'" onmouseout="this.style.background='#7c6dfa'">
+        Kirim
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── History Side Panel ─────────────────────────────────────── -->
+<div id="history-panel" class="wcf-side-panel hidden">
+  <div class="wcf-side-panel-header">
+    <span class="wcf-side-panel-title">📜 Riwayat — <span id="history-node-name" style="color:#34d399;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle;"></span></span>
+    <span class="wcf-side-panel-close" id="history-panel-close">✕</span>
+  </div>
+  <div id="history-list" style="flex:1;overflow-y:auto;min-height:0;"></div>
+  <div id="history-empty" style="flex:1;display:flex;align-items:center;justify-content:center;color:var(--text-4);font-size:11px;">Belum ada riwayat</div>
+</div>
+
+<!-- ── Offline banner ────────────────────────────────────────── -->
+<div id="offline-banner"
+     class="hidden fixed top-10 left-1/2 -translate-x-1/2 z-[500]
+            flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold
+            bg-yellow-500/90 text-yellow-950 shadow-xl backdrop-blur-sm
+            border border-yellow-400/60 select-none pointer-events-none">
+  <svg class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+  </svg>
+  Koneksi realtime terputus — mencoba reconnect…<span class="ws-code"></span>
+</div>
+
+<!-- ── Template Modal ─────────────────────────────────────────── -->
+<div id="template-modal" class="hidden">
+  <div id="template-modal-box">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <h3 style="font-size:14px;font-weight:700;color:var(--text-1)">📋 Pilih Template</h3>
+      <button id="template-modal-close"
+              style="color:var(--text-3);font-size:18px;cursor:pointer;line-height:1;padding:2px 6px;border-radius:6px;border:none;background:none;transition:color .15s;"
+              onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-3)'">✕</button>
+    </div>
+    <p style="font-size:11px;color:var(--text-4);margin-bottom:0">
+      Pilih layout yang ingin dibuat di canvas. Node dan koneksi akan otomatis terbuat.
+    </p>
+    <div id="template-grid"></div>
+  </div>
+</div>
+
+<!-- ── Global Search Panel ───────────────────────────────────── -->
+<div id="global-search-panel" class="hidden">
+  <div id="gs-box">
+    <div id="gs-header">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px;opacity:.4">🔍</span>
+        <input id="gs-input" type="text" placeholder="Cari di semua file dan grup…" autocomplete="off" spellcheck="false">
+        <button id="gs-close"
+                style="color:var(--text-3);font-size:16px;cursor:pointer;border:none;background:none;flex-shrink:0;padding:2px 6px;border-radius:5px;transition:color .15s;"
+                onmouseover="this.style.color='var(--text-1)'" onmouseout="this.style.color='var(--text-3)'">✕</button>
+      </div>
+      <div id="gs-meta"></div>
+    </div>
+    <div id="gs-loading">
+      <span style="opacity:.4">Mencari…</span>
+    </div>
+    <div id="gs-results"></div>
+  </div>
+</div>
+
+<!-- ── Hidden file input for node image upload ────────────────── -->
+<input type="file" id="node-img-input" accept="image/*"
+       style="display:none" aria-hidden="true">
+
+<!-- ── Flash toast (gaya & posisi penuh dari #flash-toast di style.css) ── -->
+<div id="flash-toast" class="hidden"></div>
+
+<!-- ══════════════════════════════════════════════════════════ -->
+
+<!-- ── Mermaid Import Modal ───────────────────────────────────── -->
+<div id="grp-mermaid-import-modal"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
+            backdrop-filter:blur(8px);z-index:350;
+            align-items:center;justify-content:center">
+  <div class="mmd-import-dialog"
+       style="background:var(--bg-surface);border:1px solid var(--border-md);
+              display:flex;flex-direction:column;overflow:hidden">
+    <!-- Header -->
+    <div style="display:flex;align-items:center;padding:16px 20px 14px;
+                border-bottom:1px solid var(--border);flex-shrink:0">
+      <span style="flex:1;font-size:13px;font-weight:700;color:#a78bfa">⬇ Import dari Mermaid</span>
+      <button id="btn-grp-mmd-close"
+              style="background:none;border:none;color:var(--text-4);font-size:17px;
+                     cursor:pointer;line-height:1;padding:2px">✕</button>
+    </div>
+
+    <!-- Body -->
+    <div style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:12px">
+      <p style="font-size:11px;color:var(--text-3);line-height:1.6">
+        Tempel teks <code style="color:#c4b5fd;background:rgba(139,92,246,.1);padding:1px 5px;border-radius:4px">flowchart</code>
+        atau <code style="color:#c4b5fd;background:rgba(139,92,246,.1);padding:1px 5px;border-radius:4px">graph</code> Mermaid,
+        atau unggah file <code style="color:#c4b5fd;background:rgba(139,92,246,.1);padding:1px 5px;border-radius:4px">.mmd</code>.
+        Node canvas aktif akan <span style="color:#fca5a5">digantikan</span>.
+      </p>
+
+      <!-- File -->
+      <div style="display:flex;align-items:center;gap:8px">
+        <button id="btn-grp-mmd-file"
+                style="padding:5px 12px;border-radius:8px;border:1px solid var(--border);
+                       background:var(--bg-input);color:var(--text-3);font-size:11px;
+                       font-family:inherit;cursor:pointer">
+          📂 Pilih file .mmd
+        </button>
+        <span id="grp-mmd-filename" style="font-size:11px;color:var(--text-4);font-style:italic">
+          Belum ada file dipilih
+        </span>
+      </div>
+
+      <!-- Divider -->
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+        <span style="font-size:10px;color:var(--text-4);letter-spacing:.08em;text-transform:uppercase">atau tempel teks</span>
+        <div style="flex:1;height:1px;background:var(--border)"></div>
+      </div>
+
+      <div class="mmd-import-workbench">
+        <section class="mmd-import-pane">
+          <div class="mmd-pane-heading"><span>Kode Mermaid</span><small>Input</small></div>
+          <textarea id="grp-mmd-textarea" rows="12"
+                    placeholder="flowchart TB&#10;    A([&quot;Start&quot;]) --> B[&quot;Proses&quot;]&#10;    B --> C{&quot;Kondisi?&quot;}&#10;    C -- Ya --> D[&quot;Hasil A&quot;]&#10;    C -- Tidak --> E[&quot;Hasil B&quot;]"
+                    class="modal-input"
+                    style="width:100%;color:var(--text-1);font-family:monospace;font-size:11px;
+                           line-height:1.6;resize:none;outline:none;box-sizing:border-box"></textarea>
+          <div id="grp-mmd-preview" class="mmd-import-stats" style="display:none">
+            <span>Terdeteksi</span>
+            <strong id="grp-mmd-prev-nodes"></strong>
+            <strong id="grp-mmd-prev-edges"></strong>
+            <strong id="grp-mmd-prev-dir"></strong>
+          </div>
+        </section>
+        <section class="mmd-import-pane is-preview">
+          <div class="mmd-pane-heading"><span>Preview diagram</span><small>Fit otomatis</small></div>
+          <div id="grp-mmd-diagram-preview" class="mmd-diagram-preview" aria-live="polite"></div>
+        </section>
+      </div>
+
+      <p id="grp-mmd-error" style="font-size:11px;color:#f87171;display:none"></p>
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:12px 20px;border-top:1px solid var(--border);
+                display:flex;justify-content:flex-end;gap:8px;flex-shrink:0">
+      <button id="btn-grp-mmd-cancel"
+              style="padding:6px 16px;border-radius:9px;border:1px solid var(--border);
+                     background:var(--bg-input);color:var(--text-3);font-size:12px;
+                     font-family:inherit;cursor:pointer">
+        Batal
+      </button>
+      <button id="btn-grp-mmd-import"
+              style="padding:6px 18px;border-radius:9px;
+                     border:1px solid rgba(139,92,246,.4);
+                     background:rgba(139,92,246,.25);color:#ddd6fe;
+                     font-size:12px;font-weight:600;font-family:inherit;cursor:pointer">
+        ⬇ Import ke Canvas
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ── Alignment bar ──────────────────────────────────────── -->
+<div id="align-bar" class="align-bar hidden">
+  <span class="align-bar-label">Rata:</span>
+  <button class="align-btn" data-align="left"     title="Rata Kiri">⬦←</button>
+  <button class="align-btn" data-align="center-h" title="Tengah Horizontal">⬦↔</button>
+  <button class="align-btn" data-align="right"    title="Rata Kanan">→⬦</button>
+  <div class="align-bar-sep"></div>
+  <button class="align-btn" data-align="top"      title="Rata Atas">⬦↑</button>
+  <button class="align-btn" data-align="middle-v" title="Tengah Vertikal">⬦↕</button>
+  <button class="align-btn" data-align="bottom"   title="Rata Bawah">↓⬦</button>
+  <div class="align-bar-sep"></div>
+  <button class="align-btn" data-align="dist-h"   title="Distribusi Horizontal">⇔</button>
+  <button class="align-btn" data-align="dist-v"   title="Distribusi Vertikal">⇕</button>
+</div>
+
+<!-- ── Command Palette ───────────────────────────────────── -->
+<div id="cmd-palette" class="hidden">
+  <div class="cp-box">
+    <div class="cp-input-wrap">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input id="cp-input" placeholder="Cari node atau perintah…" autocomplete="off" spellcheck="false" />
+      <span style="font-size:10px;color:rgba(255,255,255,0.2);font-family:monospace">ESC</span>
+    </div>
+    <div id="cp-list"></div>
+  </div>
+</div>
+
+<!-- ── Kanban overlay ────────────────────────────────────── -->
+<div id="kanban-overlay" class="hidden" style="position:fixed;inset:0;z-index:200"></div>
+
+</body>
+</html>

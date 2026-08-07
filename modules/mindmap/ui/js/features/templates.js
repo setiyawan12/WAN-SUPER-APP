@@ -1,5 +1,5 @@
 // ── js/features/templates.js — node template siap pakai ──────
-import { state, refs, $cv, COLORS, pushUndo }  from '../state.js';
+import { state, refs, pushUndo }                from '../state.js';
 import { renderLines, syncColors }              from '../canvas/connection.js';
 import { buildEl }                              from '../canvas/node.js';
 

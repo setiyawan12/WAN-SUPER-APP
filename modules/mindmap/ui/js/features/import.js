@@ -1,5 +1,5 @@
 // ── js/features/import.js — Import JSON / Markdown ───────────
-import { state, refs, pushUndo } from '../state.js';
+import { refs, pushUndo } from '../state.js';
 import { flash } from '../ui/flash.js';
 
 // ── Import JSON ───────────────────────────────────────────────

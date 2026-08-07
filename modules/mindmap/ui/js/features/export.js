@@ -1,8 +1,21 @@
 // ── js/features/export.js ────────────────────────────────────
 import { state, snapshotData } from '../state.js';
 import { flash } from '../ui/flash.js';
-import html2canvas from 'html2canvas';
-import { jsPDF } from 'jspdf';
+
+let exportToolsPromise;
+
+function loadExportTools() {
+  if (!exportToolsPromise) {
+    exportToolsPromise = Promise.all([
+      import('html2canvas'),
+      import('jspdf'),
+    ]).then(([html2canvasModule, jspdfModule]) => ({
+      html2canvas: html2canvasModule.default,
+      jsPDF: jspdfModule.jsPDF,
+    }));
+  }
+  return exportToolsPromise;
+}
 
 export function exportJSON() {
   const data = JSON.stringify(snapshotData(), null, 2);
@@ -19,6 +32,7 @@ export function exportJSON() {
 export async function exportPNG() {
   flash('Mengekspor PNG…', true);
   try {
+    const { html2canvas } = await loadExportTools();
     const container = document.getElementById('container');
     const cvs = await html2canvas(container, {
       backgroundColor: document.documentElement.classList.contains('dark') ? '#090914' : '#e4e7ff',
@@ -40,6 +54,7 @@ export async function exportPNG() {
 export async function exportPDF() {
   flash('Mengekspor PDF…', true);
   try {
+    const { html2canvas, jsPDF } = await loadExportTools();
     const container = document.getElementById('container');
     const cvs = await html2canvas(container, {
       backgroundColor: document.documentElement.classList.contains('dark') ? '#090914' : '#e4e7ff',

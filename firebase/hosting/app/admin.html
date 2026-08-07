@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WAN Case Flow — Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #080b0c;
+      --bg2: #101516;
+      --bg3: #151b1c;
+      --bg4: #1a2122;
+      --border: rgba(229,220,195,.09);
+      --border2: rgba(229,220,195,.13);
+      --text: #f0eee7;
+      --text2: #9b9d98;
+      --text3: #626965;
+      --purple: #d8bf82;
+      --purple2: #ecd69f;
+      --purple3: rgba(216,191,130,.11);
+      --green: #78c998;
+      --red: #df756f;
+      --yellow: #d8bf82;
+      --cyan: #70cfc7;
+      --glass: rgba(16,21,22,.94);
+    }
+    body { height: 100vh; display: flex; flex-direction: column; overflow: hidden; color: var(--text); background: var(--bg); font: 13px "Avenir Next", Avenir, sans-serif; }
+    button, input, select, textarea { font: inherit; }
+    .topbar { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--glass); backdrop-filter: blur(22px); }
+    .brand { display: flex; align-items: center; gap: 9px; color: var(--text); font: 500 17px "Iowan Old Style", Georgia, serif; }
+    .brand span { color: var(--purple); }
+    .badge { display: inline-flex; padding: 3px 7px; border: 1px solid rgba(216,191,130,.25); border-radius: 4px; color: var(--purple); background: var(--purple3); font-size: 8px; font-weight: 800; letter-spacing: .12em; }
+    .spacer { flex: 1; }
+    .user-chip { padding: 6px 9px; border: 1px solid var(--border); border-radius: 5px; color: var(--text2); background: rgba(255,255,255,.025); }
+    .btn-sm, .btn { border: 1px solid var(--border); border-radius: 5px; color: var(--text2); background: rgba(255,255,255,.025); cursor: pointer; }
+    .btn-sm { min-height: 32px; padding: 0 11px; }
+    .btn { min-height: 32px; padding: 0 12px; font-size: 12px; font-weight: 600; }
+    .btn:hover, .btn-sm:hover { color: var(--text); border-color: var(--border2); background: rgba(255,255,255,.045); }
+    .btn-primary { border-color: var(--purple); color: #171913; background: var(--purple); }
+    .btn-primary:hover { color: #10120f; background: var(--purple2); }
+    .btn-danger, .btn-red { color: #efaaa6; border-color: rgba(223,117,111,.25); background: rgba(223,117,111,.09); }
+    .btn-amber { color: var(--purple2); border-color: rgba(216,191,130,.25); background: var(--purple3); }
+    .btn-green { color: var(--green); border-color: rgba(120,201,152,.25); background: rgba(120,201,152,.08); }
+    .btn-cyan { color: var(--cyan); border-color: rgba(112,207,199,.25); background: rgba(112,207,199,.08); }
+    .btn-xs { min-height: 27px; padding: 0 8px; font-size: 10px; }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .layout { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+    .sidebar { width: 232px; flex: 0 0 232px; display: flex; flex-direction: column; padding: 18px 10px; border-right: 1px solid var(--border); background: linear-gradient(180deg, rgba(216,191,130,.035), transparent 180px), var(--bg2); }
+    .nav-label { padding: 8px 10px 6px; color: var(--text3); font-size: 8px; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+    .nav-item { display: flex; align-items: center; gap: 9px; min-height: 38px; padding: 0 10px; border: 1px solid transparent; border-radius: 5px; color: var(--text2); cursor: pointer; -webkit-user-select: none; -moz-user-select: none; user-select: none; }
+    .nav-item:hover { color: var(--text); background: rgba(255,255,255,.03); }
+    .nav-item.active { color: var(--purple2); border-color: rgba(216,191,130,.22); background: linear-gradient(90deg, var(--purple3), transparent); box-shadow: inset 2px 0 var(--purple); }
+    .nav-item .icon { width: 18px; text-align: center; }
+    .sidebar-bottom { margin-top: auto; padding-top: 10px; border-top: 1px solid var(--border); }
+    .content { flex: 1; overflow: auto; padding: 34px 38px; background: linear-gradient(135deg, transparent 0 49%, rgba(216,191,130,.018) 49.5%, transparent 50%), var(--bg); background-size: 320px 320px, auto; }
+    .page { display: none; }
+    .page.active { display: block; }
+    .page-title { color: var(--text); font: 500 25px "Iowan Old Style", Georgia, serif; }
+    .page-sub { margin: 7px 0 24px; color: var(--text3); font-size: 12px; }
+    .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 28px; }
+    .stat-card, .table-wrap, .form-row, .group-card, .blast-form { border: 1px solid var(--border); border-radius: 7px; background: var(--bg2); box-shadow: 0 12px 34px rgba(0,0,0,.12); }
+    .stat-card { padding: 18px; }
+    .stat-card .value { color: var(--purple); font: 500 32px "Iowan Old Style", Georgia, serif; }
+    .stat-card.green .value { color: var(--green); }
+    .stat-card.cyan .value { color: var(--cyan); }
+    .stat-card.red .value { color: var(--red); }
+    .stat-card .label { margin-top: 4px; color: var(--text3); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .section-header { display: flex; align-items: center; margin-bottom: 10px; }
+    .section-title { color: var(--text); font-size: 13px; font-weight: 700; }
+    .table-wrap { overflow: auto; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; }
+    th { padding: 11px 13px; border-bottom: 1px solid var(--border); color: var(--text3); background: var(--bg3); font-size: 8px; letter-spacing: .12em; text-align: left; text-transform: uppercase; }
+    td { padding: 11px 13px; border-bottom: 1px solid rgba(229,220,195,.05); color: var(--text2); font-size: 12px; }
+    tr:last-child td { border-bottom: 0; }
+    tr:hover td { color: var(--text); background: rgba(216,191,130,.03); }
+    .form-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 14px; margin-bottom: 16px; }
+    .form-row input, .form-row select, .blast-form input, .blast-form select, .blast-form textarea, .add-member-row select { min-height: 38px; padding: 0 11px; border: 1px solid var(--border); border-radius: 5px; outline: none; color: var(--text); background: rgba(255,255,255,.025); }
+    .form-row input { flex: 1; min-width: 145px; }
+    input:focus, select:focus, textarea:focus { border-color: rgba(216,191,130,.38); box-shadow: 0 0 0 3px var(--purple3); }
+    .form-error { width: 100%; color: var(--red); font-size: 11px; }
+    .empty { padding: 34px; color: var(--text3); text-align: center; }
+    .badge { letter-spacing: 0; text-transform: uppercase; }
+    .badge-admin { color: var(--purple2); }
+    .badge-user, .badge-read { color: var(--text3); border-color: var(--border); background: rgba(255,255,255,.025); }
+    .dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; }
+    .dot-green { background: var(--green); }
+    .dot-red { background: var(--red); }
+    .group-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
+    .group-card { padding: 17px; }
+    .group-card h3 { color: var(--text); font-size: 14px; }
+    .group-card p { margin-top: 5px; color: var(--text3); font-size: 11px; }
+    .group-stats-box { margin-top: 12px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 5px; background: var(--bg3); }
+    .gs-row { display: flex; justify-content: space-between; padding: 2px 0; color: var(--text3); font-size: 11px; }
+    .gs-row strong { color: var(--text2); }
+    .member-list { display: grid; gap: 5px; }
+    .member-row { display: flex; align-items: center; gap: 7px; padding: 6px; border-radius: 5px; background: rgba(255,255,255,.025); }
+    .member-row > span:first-child { flex: 1; color: var(--text2); }
+    .add-member-row { display: grid; grid-template-columns: 1fr 95px auto; gap: 6px; margin-top: 7px; }
+    .blast-form { max-width: 760px; padding: 20px; }
+    .blast-form label { display: block; margin: 0 0 6px; color: var(--text3); font-size: 8px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    .blast-form input, .blast-form select, .blast-form textarea { width: 100%; margin-bottom: 14px; }
+    .blast-form textarea { min-height: 150px; padding-top: 11px; resize: vertical; }
+    .blast-result, .info-box { margin-top: 12px; padding: 10px 12px; border: 1px solid rgba(120,201,152,.25); border-radius: 5px; color: var(--green); background: rgba(120,201,152,.08); }
+    .blast-result.error { color: #efaaa6; border-color: rgba(223,117,111,.25); background: rgba(223,117,111,.08); }
+    .info-box { max-width: 760px; color: var(--cyan); border-color: rgba(112,207,199,.25); background: rgba(112,207,199,.07); }
+    @media (max-width: 860px) {
+      .sidebar { width: 190px; flex-basis: 190px; }
+      .content { padding: 24px 18px; }
+      .topbar .badge, .user-chip { display: none; }
+    }
+  </style>
+  <script type="module" crossorigin src="/app/assets/admin-Ca8Y-XLY.js"></script>
+  <link rel="modulepreload" crossorigin href="/app/assets/modulepreload-polyfill-B5Qt9EMX.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/firebase-Cdpz2wns.js">
+  <link rel="modulepreload" crossorigin href="/app/assets/api-CjCFgNSB.js">
+  <link rel="stylesheet" crossorigin href="/app/assets/premium-DSRFSlj6.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span>✦</span> WAN Case Flow</div>
+    <span class="badge">ADMIN PANEL</span>
+    <div class="spacer"></div>
+    <div class="user-chip">Admin · <span id="top-username">—</span></div>
+    <button class="btn-sm" id="btn-back-app">Kembali ke App</button>
+    <button class="btn-sm btn-danger" id="btn-logout">Keluar</button>
+  </header>
+
+  <main class="layout">
+    <nav class="sidebar" aria-label="Navigasi admin">
+      <div class="nav-label">Kontrol</div>
+      <div class="nav-item active" data-page="dashboard"><span class="icon">◇</span> Dashboard</div>
+      <div class="nav-item" data-page="users"><span class="icon">◫</span> Manajemen User</div>
+      <div class="nav-item" data-page="groups"><span class="icon">⌘</span> Grup &amp; Tim</div>
+      <div class="nav-item" data-page="email-blast"><span class="icon">↑</span> Email Blast</div>
+      <div class="sidebar-bottom">
+        <div class="nav-item" id="nav-back-app"><span class="icon">←</span> Kembali ke App</div>
+      </div>
+    </nav>
+
+    <section class="content">
+      <div class="page active" id="page-dashboard">
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-sub">Ringkasan akun dan workspace Firebase WAN Case Flow.</p>
+        <div class="stats-grid">
+          <div class="stat-card"><div class="value" id="s-total-users">—</div><div class="label">Total User</div></div>
+          <div class="stat-card green"><div class="value" id="s-active-users">—</div><div class="label">User Aktif</div></div>
+          <div class="stat-card"><div class="value" id="s-admins">—</div><div class="label">Administrator</div></div>
+          <div class="stat-card red"><div class="value" id="s-inactive-users">—</div><div class="label">User Nonaktif</div></div>
+          <div class="stat-card cyan"><div class="value" id="s-groups">—</div><div class="label">Grup Tim</div></div>
+        </div>
+        <div class="section-header"><span class="section-title">Pengguna Terbaru</span></div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>User</th><th>Role</th><th>Status</th></tr></thead>
+            <tbody id="recent-logins-body"><tr><td colspan="3" class="empty">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="page" id="page-users">
+        <h1 class="page-title">Manajemen User</h1>
+        <p class="page-sub">Buat akun, ubah role, status, dan password pengguna Firebase.</p>
+        <div class="form-row">
+          <input id="u-username" type="text" placeholder="Username baru" autocomplete="off">
+          <input id="u-email" type="email" placeholder="email@domain.com" autocomplete="off">
+          <input id="u-password" type="password" placeholder="Password minimal 8 karakter" autocomplete="new-password">
+          <select id="u-role"><option value="user">User</option><option value="admin">Admin</option></select>
+          <button class="btn btn-primary" id="btn-add-user">Tambah User</button>
+          <div class="form-error" id="add-user-error" style="display:none"></div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Status</th><th>Username</th><th>Email</th><th>Role</th><th>Dibuat</th><th>Aksi</th></tr></thead>
+            <tbody id="users-body"><tr><td colspan="6" class="empty">Memuat...</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="page" id="page-groups">
+        <h1 class="page-title">Grup &amp; Tim</h1>
+        <p class="page-sub">Buat workspace grup dan kelola anggota beserta hak aksesnya.</p>
+        <div class="form-row">
+          <input id="g-name" type="text" placeholder="Nama grup">
+          <input id="g-desc" type="text" placeholder="Deskripsi (opsional)">
+          <button class="btn btn-primary" id="btn-add-group">Buat Grup</button>
+          <div class="form-error" id="add-group-error" style="display:none"></div>
+        </div>
+        <div id="groups-container"><div class="empty">Memuat...</div></div>
+      </div>
+
+      <div class="page" id="page-email-blast">
+        <h1 class="page-title">Email Blast</h1>
+        <p class="page-sub">Kirim pemberitahuan melalui callable Firebase yang dilindungi claim admin.</p>
+        <div class="blast-form">
+          <label for="blast-target">Target penerima</label>
+          <select id="blast-target"><option value="all">Semua user aktif</option><option value="group">Per grup</option></select>
+          <div id="blast-group-row" style="display:none">
+            <label for="blast-group-id">Grup</label>
+            <select id="blast-group-id"><option value="">Pilih grup...</option></select>
+          </div>
+          <label for="blast-subject">Subject</label>
+          <input id="blast-subject" type="text" placeholder="Judul pemberitahuan">
+          <label for="blast-message">Isi pesan</label>
+          <textarea id="blast-message" placeholder="Tulis pesan di sini..."></textarea>
+          <div style="display:flex;align-items:center;gap:10px">
+            <button class="btn btn-primary" id="btn-blast-send">Kirim Email</button>
+            <span id="blast-preview-count" style="color:var(--text3)"></span>
+          </div>
+          <div class="blast-result" id="blast-result" style="display:none"></div>
+        </div>
+        <div class="info-box">Email blast memerlukan Functions production dan secret Resend yang aktif.</div>
+      </div>
+    </section>
+  </main>
+
+</body>
+</html>

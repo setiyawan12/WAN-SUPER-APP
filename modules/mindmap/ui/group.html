@@ -919,11 +919,11 @@
 <!-- ══════════════════════════════════════════════════════════ -->
 <script type="module">
 import { state, refs, ui, hist, selectedNodes, pushUndo, snapshotData,
-         $c, $cv, $svg, $el, $id }                           from './js/state.js';
+         $c, $cv, $el, $id }                                 from './js/state.js';
 import { applyTransform, toCanvas, fitToNodes }               from './js/canvas/transform.js';
 import { renderLines, addConnection, hideConnCtx, syncColors } from './js/canvas/connection.js';
-import { createNode, applyData, deleteNode, attachImageToNode } from './js/canvas/node.js';
-import { selectNode, clearSelection, selectAll, updateSelectionUI,
+import { createNode, applyData, attachImageToNode }             from './js/canvas/node.js';
+import { clearSelection, selectAll, updateSelectionUI,
          copyNodes, pasteNodes, deleteSelectedNodes,
          moveSelected }                                        from './js/canvas/selection.js';
 import { flash }                                               from './js/ui/flash.js';
@@ -934,7 +934,7 @@ import { wcfPrompt, wcfConfirm }                               from './js/ui/mod
 import { undo, redo, zoomBy, zoomReset }                       from './js/ui/toolbar.js';
 import { exportJSON, exportPNG, exportSVG, exportMarkdown, exportPDF } from './js/features/export.js';
 import { initFindReplace, openFindReplace, closeFindReplace }   from './js/features/find-replace.js';
-import { togglePresentation, presentationKey, isPresentation } from './js/features/presentation.js';
+import { togglePresentation, presentationKey }                 from './js/features/presentation.js';
 import { initTemplates, openTemplateModal, renderTemplatePicker } from './js/features/templates.js';
 import { initGlobalSearch, openGlobalSearch }                   from './js/features/global-search.js';
 import { createGroup, ungroupSelected }                         from './js/canvas/groups.js';
@@ -2904,7 +2904,7 @@ function initSearch() {
     const cEl = document.getElementById('container');
     state.pan.x = -(n.x * state.zoom) + cEl.offsetWidth  / 2;
     state.pan.y = -(n.y * state.zoom) + cEl.offsetHeight / 2;
-    import('./js/canvas/transform.js').then(({ applyTransform }) => applyTransform());
+    applyTransform();
     if (count) count.textContent = `${searchMatchIdx + 1}/${searchMatches.length}`;
   }
 
@@ -3344,8 +3344,7 @@ function openFileFromSearch(groupId, fileId, nodeId) {
           const vh = (cont?.offsetHeight || window.innerHeight) / 2;
           state.pan.x = vw - (n.x + 60) * state.zoom;
           state.pan.y = vh - (n.y + 20) * state.zoom;
-          const { applyTransform } = window.__wcfTransform || {};
-          import('./js/canvas/transform.js').then(m => { m.applyTransform(); });
+          applyTransform();
           el.classList.add('wcf-search-match-active');
           setTimeout(() => el.classList.remove('wcf-search-match-active'), 2500);
         }
@@ -3476,9 +3475,8 @@ init();
      style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);
             backdrop-filter:blur(8px);z-index:350;
             align-items:center;justify-content:center">
-  <div style="background:var(--bg-surface);border:1px solid var(--border-md);
-              border-radius:18px;box-shadow:var(--shadow-menu);
-              width:520px;max-width:95vw;max-height:90vh;
+  <div class="mmd-import-dialog"
+       style="background:var(--bg-surface);border:1px solid var(--border-md);
               display:flex;flex-direction:column;overflow:hidden">
     <!-- Header -->
     <div style="display:flex;align-items:center;padding:16px 20px 14px;
@@ -3518,23 +3516,25 @@ init();
         <div style="flex:1;height:1px;background:var(--border)"></div>
       </div>
 
-      <!-- Textarea -->
-      <textarea id="grp-mmd-textarea" rows="12"
-                placeholder="flowchart TB&#10;    A([&quot;Start&quot;]) --> B[&quot;Proses&quot;]&#10;    B --> C{&quot;Kondisi?&quot;}&#10;    C -- Ya --> D[&quot;Hasil A&quot;]&#10;    C -- Tidak --> E[&quot;Hasil B&quot;]"
-                style="width:100%;padding:10px 12px;background:var(--bg-input);
-                       border:1px solid var(--border);border-radius:10px;
-                       color:var(--text-1);font-family:monospace;font-size:11px;
-                       line-height:1.6;resize:none;outline:none;min-height:200px;
-                       box-sizing:border-box;transition:border-color .15s"
-                onfocus="this.style.borderColor='rgba(139,92,246,.5)'"
-                onblur="this.style.borderColor='var(--border)'"></textarea>
-
-      <!-- Preview -->
-      <div id="grp-mmd-preview" style="display:none;flex-wrap:wrap;gap:6px;font-size:10px;align-items:center">
-        <span style="color:var(--text-4)">Terdeteksi:</span>
-        <span id="grp-mmd-prev-nodes" style="padding:2px 8px;border-radius:99px;background:rgba(139,92,246,.12);color:#c4b5fd;border:1px solid rgba(139,92,246,.25)"></span>
-        <span id="grp-mmd-prev-edges" style="padding:2px 8px;border-radius:99px;background:rgba(6,182,212,.12);color:#67e8f9;border:1px solid rgba(6,182,212,.25)"></span>
-        <span id="grp-mmd-prev-dir"   style="padding:2px 8px;border-radius:99px;background:var(--bg-glass-light);color:var(--text-3);border:1px solid var(--border)"></span>
+      <div class="mmd-import-workbench">
+        <section class="mmd-import-pane">
+          <div class="mmd-pane-heading"><span>Kode Mermaid</span><small>Input</small></div>
+          <textarea id="grp-mmd-textarea" rows="12"
+                    placeholder="flowchart TB&#10;    A([&quot;Start&quot;]) --> B[&quot;Proses&quot;]&#10;    B --> C{&quot;Kondisi?&quot;}&#10;    C -- Ya --> D[&quot;Hasil A&quot;]&#10;    C -- Tidak --> E[&quot;Hasil B&quot;]"
+                    class="modal-input"
+                    style="width:100%;color:var(--text-1);font-family:monospace;font-size:11px;
+                           line-height:1.6;resize:none;outline:none;box-sizing:border-box"></textarea>
+          <div id="grp-mmd-preview" class="mmd-import-stats" style="display:none">
+            <span>Terdeteksi</span>
+            <strong id="grp-mmd-prev-nodes"></strong>
+            <strong id="grp-mmd-prev-edges"></strong>
+            <strong id="grp-mmd-prev-dir"></strong>
+          </div>
+        </section>
+        <section class="mmd-import-pane is-preview">
+          <div class="mmd-pane-heading"><span>Preview diagram</span><small>Fit otomatis</small></div>
+          <div id="grp-mmd-diagram-preview" class="mmd-diagram-preview" aria-live="polite"></div>
+        </section>
       </div>
 
       <p id="grp-mmd-error" style="font-size:11px;color:#f87171;display:none"></p>
@@ -3561,7 +3561,7 @@ init();
 </div>
 
 <script type="module">
-import { parseMermaidToWCF, importMermaidText } from '/js/features/mermaid-import.js';
+import { parseMermaidToWCF, renderMermaidPreview, importMermaidText } from '/js/features/mermaid-import.js';
 
 const modal    = document.getElementById('grp-mermaid-import-modal');
 const textarea = document.getElementById('grp-mmd-textarea');
@@ -3572,12 +3572,14 @@ const prevN    = document.getElementById('grp-mmd-prev-nodes');
 const prevE    = document.getElementById('grp-mmd-prev-edges');
 const prevD    = document.getElementById('grp-mmd-prev-dir');
 const errEl    = document.getElementById('grp-mmd-error');
+const diagramEl = document.getElementById('grp-mmd-diagram-preview');
 
 function openModal() {
   textarea.value = '';
   fileLbl.textContent = 'Belum ada file dipilih';
   errEl.style.display = 'none';
   prevBox.style.display = 'none';
+  renderMermaidPreview(diagramEl, null);
   modal.style.display = 'flex';
   setTimeout(() => textarea.focus(), 80);
 }
@@ -3606,17 +3608,18 @@ fileBtn?.addEventListener('click', () => {
 function updatePreview() {
   const text = textarea.value.trim();
   errEl.style.display = 'none';
-  if (!text) { prevBox.style.display = 'none'; return; }
+  if (!text) { prevBox.style.display = 'none'; renderMermaidPreview(diagramEl, null); return; }
   try {
     const data = parseMermaidToWCF(text);
-    if (!data) { prevBox.style.display = 'none'; return; }
+    if (!data) { prevBox.style.display = 'none'; renderMermaidPreview(diagramEl, null); return; }
     const dirLine  = text.split('\n').find(l => /^(flowchart|graph)\s/i.test(l.trim())) || '';
     const dirMatch = dirLine.match(/\s+(TB|TD|LR|BT|RL)/i);
     prevN.textContent = `${Object.keys(data.nodes).length} node`;
     prevE.textContent = `${data.connections.length} koneksi`;
     prevD.textContent = `arah: ${dirMatch?.[1]?.toUpperCase() || 'TB'}`;
     prevBox.style.display = 'flex';
-  } catch { prevBox.style.display = 'none'; }
+    renderMermaidPreview(diagramEl, data);
+  } catch { prevBox.style.display = 'none'; renderMermaidPreview(diagramEl, null); }
 }
 textarea?.addEventListener('input', updatePreview);
 
