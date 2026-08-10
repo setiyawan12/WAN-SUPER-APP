@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   sendEmailVerification,
   sendPasswordResetEmail,
+  signInWithCredential,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -120,16 +121,19 @@ async function showAuthGate(services) {
 
     google.addEventListener('click', async () => {
       clearMessage();
-      if (!['http:', 'https:'].includes(window.location.protocol)) {
-        error.textContent = 'Login Google tersedia melalui versi web Mindmap.';
-        return;
-      }
       setBusy(true);
       google.textContent = 'Connecting to Google...';
       try {
         const provider = new GoogleAuthProvider();
-        provider.setCustomParameters({ prompt: 'select_account' });
-        const credential = await signInWithPopup(services.auth, provider);
+        let credential;
+        if (window.mindmapHost?.signInGoogle) {
+          const result = await window.mindmapHost.signInGoogle();
+          const googleCredential = GoogleAuthProvider.credential(result.idToken);
+          credential = await signInWithCredential(services.auth, googleCredential);
+        } else {
+          provider.setCustomParameters({ prompt: 'select_account' });
+          credential = await signInWithPopup(services.auth, provider);
+        }
         resolve(finishLogin(credential.user));
       } catch (authError) {
         error.textContent = messageFor(authError);

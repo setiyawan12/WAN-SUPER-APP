@@ -4,6 +4,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('mindmapHost', {
   getFirebaseConfig: () => ipcRenderer.invoke('mindmap:getConfig'),
+  signInGoogle: () => ipcRenderer.invoke('mindmap:signInGoogle'),
   reload: () => ipcRenderer.invoke('mindmap:reload'),
   showHub: () => ipcRenderer.invoke('super:showHub'),
   platform: process.platform,
