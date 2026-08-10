@@ -3,6 +3,8 @@ import { api, type ModelEntry } from "../api/client";
 import { ChatMarkdown } from "../components/ChatMarkdown";
 import { ModelPicker } from "../components/ModelPicker";
 import type { ChatStreamEvent } from "../wan";
+import { chatTransport } from "../transport/runtime";
+import type { ChatStreamHandle } from "../transport/chat";
 
 // Quick-chat view (HANDBOOK M6 — Tahap 9). The minimal chat rendered inside the
 // frameless mini window (main.tsx routes here on location.hash === "#quick").
@@ -25,7 +27,7 @@ export function QuickChat() {
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const offRef = useRef<(() => void) | null>(null);
+  const streamRef = useRef<ChatStreamHandle | null>(null);
   const reqRef = useRef<string | null>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,7 +41,7 @@ export function QuickChat() {
       })
       .catch(() => {});
     taRef.current?.focus();
-    return () => offRef.current?.();
+    return () => streamRef.current?.abort();
   }, []);
 
   useEffect(() => {
@@ -75,30 +77,37 @@ export function QuickChat() {
 
     const reqId = crypto.randomUUID();
     reqRef.current = reqId;
-    const off = window.wan.chat.onStream((ev: ChatStreamEvent) => {
+    const handle = chatTransport().startChat({ reqId, model: useModel, messages: history }, (ev: ChatStreamEvent) => {
       if (ev.reqId !== reqId) return;
       if (ev.type === "delta") {
         setMessages((m) => m.map((x) => (x.id === aid ? { ...x, content: x.content + ev.text } : x)));
       } else if (ev.type === "done" || ev.type === "aborted") {
-        off();
-        offRef.current = null;
+        streamRef.current = null;
         setBusy(false);
         setMessages((m) => m.map((x) => (x.id === aid ? { ...x, streaming: false } : x)));
       } else if (ev.type === "error") {
-        off();
-        offRef.current = null;
+        streamRef.current = null;
         setBusy(false);
         setMessages((m) => m.map((x) => (x.id === aid ? { ...x, streaming: false, error: ev.error } : x)));
       }
     });
-    offRef.current = off;
-    void window.wan.chat.start({ reqId, model: useModel, messages: history });
+    streamRef.current = handle;
+    void handle.done.catch((error: unknown) => {
+      if (reqRef.current !== reqId) return;
+      streamRef.current = null;
+      setBusy(false);
+      setMessages((items) => items.map((item) => (
+        item.id === aid
+          ? { ...item, streaming: false, error: error instanceof Error ? error.message : String(error) }
+          : item
+      )));
+    });
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Escape") {
       e.preventDefault();
-      if (busy && reqRef.current) void window.wan.chat.abort(reqRef.current);
+      if (busy) streamRef.current?.abort();
       else close();
     } else if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -157,7 +166,7 @@ export function QuickChat() {
           disabled={!model}
         />
         {busy ? (
-          <button className="btn danger chat-send" onClick={() => reqRef.current && window.wan.chat.abort(reqRef.current)}>
+          <button className="btn danger chat-send" onClick={() => streamRef.current?.abort()}>
             Stop
           </button>
         ) : (

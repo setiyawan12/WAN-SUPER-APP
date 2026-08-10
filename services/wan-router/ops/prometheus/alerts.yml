@@ -1,0 +1,116 @@
+groups:
+  - name: wan-router
+    rules:
+      - alert: WanRouterHighErrorRate
+        expr: |
+          sum(rate(wan_router_http_requests_total{route!="/metrics",status_class=~"5xx"}[5m]))
+          /
+          clamp_min(sum(rate(wan_router_http_requests_total{route!="/metrics"}[5m])), 0.001)
+          > 0.05
+        for: 10m
+        labels:
+          severity: page
+          owner: wan-router-oncall
+        annotations:
+          summary: WAN Router 5xx error rate exceeds 5%
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#high-error-rate
+
+      - alert: WanRouterProviderFailureSpike
+        expr: sum(rate(wan_router_provider_attempts_total{status="failed"}[5m])) > 0.2
+        for: 10m
+        labels:
+          severity: ticket
+          owner: wan-router-oncall
+        annotations:
+          summary: WAN Router provider failures are elevated
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#provider-failure-spike
+
+      - alert: WanRouterProviderRateLimitSpike
+        expr: sum(rate(wan_router_provider_attempts_total{code="provider_rate_limited"}[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: ticket
+          owner: wan-router-oncall
+        annotations:
+          summary: WAN Router upstream rate limits are elevated
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#provider-rate-limit
+
+      - alert: WanRouterAdmissionBudgetRejected
+        expr: increase(wan_router_admission_rejections_total{code="budget_exceeded"}[10m]) > 0
+        for: 0m
+        labels:
+          severity: ticket
+          owner: wan-router-oncall
+        annotations:
+          summary: A WAN Router workspace hit a hard budget block
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#budget-rejection
+
+      - alert: WanRouterKmsFailure
+        expr: increase(wan_router_kms_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: page
+          owner: wan-router-security
+        annotations:
+          summary: WAN Router KMS operation failed
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#kms-failure
+
+      - alert: WanRouterDatabaseUnavailable
+        expr: wan_router_dependency_up{dependency="postgres"} == 0
+        for: 2m
+        labels:
+          severity: page
+          owner: wan-router-oncall
+        annotations:
+          summary: WAN Router PostgreSQL health probe is failing
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#database-unavailable
+
+      - alert: WanRouterDatabasePoolWaiting
+        expr: wan_router_database_pool_connections{state="waiting"} > 0
+        for: 5m
+        labels:
+          severity: ticket
+          owner: wan-router-oncall
+        annotations:
+          summary: WAN Router PostgreSQL pool has waiting clients
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#database-pool-saturation
+
+      - alert: WanRouterStaleGeneration
+        expr: wan_router_stale_generations > 0
+        for: 5m
+        labels:
+          severity: page
+          owner: wan-router-oncall
+        annotations:
+          summary: WAN Router has pending generations beyond the reconciliation cutoff
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#stale-generations
+
+      - alert: WanRouterAuthorizationDenialSpike
+        expr: sum(rate(wan_router_authentication_failures_total[5m])) > 1
+        for: 10m
+        labels:
+          severity: ticket
+          owner: wan-router-security
+        annotations:
+          summary: WAN Router authentication or authorization denials are elevated
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#authorization-denial-spike
+
+      - alert: WanRouterAuditPipelineFailure
+        expr: increase(wan_router_audit_failures_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: page
+          owner: wan-router-security
+        annotations:
+          summary: WAN Router could not persist an audit event
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#audit-pipeline-failure
+
+      - alert: WanRouterCircuitOpen
+        expr: wan_router_circuit_open == 1
+        for: 5m
+        labels:
+          severity: ticket
+          owner: wan-router-oncall
+        annotations:
+          summary: A WAN Router provider circuit remains open
+          runbook_url: docs/OBSERVABILITY-RUNBOOK.md#circuit-open

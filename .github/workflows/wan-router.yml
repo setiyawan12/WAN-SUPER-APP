@@ -1,0 +1,49 @@
+name: WAN Router Gates
+
+on:
+  pull_request:
+    paths:
+      - "services/wan-router/**"
+      - ".github/workflows/wan-router.yml"
+  push:
+    branches: [main]
+    paths:
+      - "services/wan-router/**"
+      - ".github/workflows/wan-router.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: wan_router
+          POSTGRES_USER: wan_router
+          POSTGRES_PASSWORD: wan_router_dev
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U wan_router -d wan_router"
+          --health-interval 2s
+          --health-timeout 2s
+          --health-retries 20
+    defaults:
+      run:
+        working-directory: services/wan-router
+    env:
+      WAN_DATABASE_URL: postgres://wan_router:wan_router_dev@127.0.0.1:55432/wan_router
+      WAN_TEST_DATABASE_URL: postgres://wan_router:wan_router_dev@127.0.0.1:55432/wan_router
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/wan-router/package-lock.json
+      - run: npm ci
+      - run: npm run qa:verify

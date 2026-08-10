@@ -1,0 +1,46 @@
+name: Cliproxy Local Gates
+
+on:
+  pull_request:
+    paths:
+      - "modules/cliproxy/**"
+      - "scripts/cliproxy-local-*"
+      - "scripts/copy-assets.mjs"
+      - "scripts/vendor-sync.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "tsconfig.main.json"
+      - "tsconfig.cliproxy.json"
+      - "vite.config.cliproxy.ts"
+      - ".github/workflows/cliproxy-local.yml"
+  push:
+    branches: [main]
+    paths:
+      - "modules/cliproxy/**"
+      - "scripts/cliproxy-local-*"
+      - "scripts/copy-assets.mjs"
+      - "scripts/vendor-sync.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "tsconfig.json"
+      - "tsconfig.main.json"
+      - "tsconfig.cliproxy.json"
+      - "vite.config.cliproxy.ts"
+      - ".github/workflows/cliproxy-local.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run qa:cliproxy-local

@@ -5,6 +5,8 @@ import { ChatMarkdown } from "../components/ChatMarkdown";
 import { ModelPicker } from "../components/ModelPicker";
 import { extractArtifacts, ArtifactsPanel } from "../components/Artifacts";
 import { ratesFor, formatUsd, formatCompactNumber, estimateTokens, contextWindowForFamily, shortenPath } from "../lib/utils";
+import { chatTransport } from "../transport/runtime";
+import type { ChatStreamHandle } from "../transport/chat";
 import type {
   ChatStreamEvent,
   ChatUsage,
@@ -406,7 +408,7 @@ export function Chat() {
   const projectIdRef = useRef<string | null>(null);
   const createdAtRef = useRef(0);
   const reqRef = useRef<string | null>(null);
-  const offRef = useRef<(() => void) | null>(null);
+  const streamRef = useRef<ChatStreamHandle | null>(null);
   const modeRef = useRef<ComposerMode>("chat");
   const policyRef = useRef<CoworkPolicy>("safe");
   const maxToolRef = useRef(0);
@@ -720,8 +722,7 @@ export function Chat() {
   // Abort in-flight stream on unmount so main doesn't keep running after leave.
   useEffect(
     () => () => {
-      offRef.current?.();
-      if (reqRef.current) void window.wan.chat.abort(reqRef.current);
+      streamRef.current?.abort();
       if (copiedTimerRef.current) clearTimeout(copiedTimerRef.current);
     },
     []
@@ -769,13 +770,9 @@ export function Chat() {
   /** Abort stream; mark any in-flight assistant row complete; optionally persist first. */
   function abortInFlight(opts?: { save?: boolean }) {
     const convoId = activeIdRef.current;
-    const req = reqRef.current;
-    offRef.current?.();
-    offRef.current = null;
-    if (req) {
-      void window.wan.chat.abort(req);
-      reqRef.current = null;
-    }
+    streamRef.current?.abort();
+    streamRef.current = null;
+    reqRef.current = null;
     // Finalize streaming rows in the ref so a following save keeps partial text.
     const finalized = messagesRef.current.map((m) =>
       m.streaming ? { ...m, streaming: false } : m
@@ -836,8 +833,7 @@ export function Chat() {
     // Stale open (user clicked another chat / New while we were loading).
     if (seq !== openSeqRef.current) return;
     if (!c) return;
-    offRef.current?.();
-    offRef.current = null;
+    streamRef.current = null;
     activeIdRef.current = id;
     setActiveId(id);
     titleRef.current = c.title;
@@ -861,8 +857,7 @@ export function Chat() {
     if (busyRef.current) abortInFlight({ save: true });
     else if (activeIdRef.current && messagesRef.current.length) void saveConvo(activeIdRef.current);
     openSeqRef.current += 1;
-    offRef.current?.();
-    offRef.current = null;
+    streamRef.current = null;
     activeIdRef.current = null;
     setActiveId(null);
     titleRef.current = "";
@@ -1016,10 +1011,10 @@ export function Chat() {
   // Shared streaming core (send / regenerate). `history` is everything up to
   // and including the user turn we're answering; `aid` is the placeholder id.
   function streamInto(convoId: string, history: UiMessage[], aid: string, useModel: string) {
-    // Tear down any previous listener before attaching a new one (safety net if
+    // Abort any previous handle before attaching a new one (safety net if
     // busyRef was forced false without finishing the prior stream).
-    offRef.current?.();
-    offRef.current = null;
+    streamRef.current?.abort();
+    streamRef.current = null;
 
     const reqId = crypto.randomUUID();
     reqRef.current = reqId;
@@ -1053,14 +1048,33 @@ export function Chat() {
       setToolStatus(null);
       setApprovals([]);
       reqRef.current = null;
-      offRef.current = null;
+      streamRef.current = null;
       // Main may have auto-checkpointed on first mutating tool — enable Undo.
       if (coworkRef.current) void refreshCoworkState();
       // Persist only if this conversation is still open (user may have switched).
       if (activeIdRef.current === convoId) void saveConvo(convoId);
     };
 
-    const off = window.wan.chat.onStream((ev: ChatStreamEvent) => {
+    const m = modeRef.current;
+    const hasFolder = !!coworkRef.current;
+    // ask -> no tools; chat -> fetch_url; agent -> cowork when a folder exists.
+    const useTools = m !== "ask";
+    const coworkOn = m === "agent" && hasFolder;
+    if (m === "agent" && !hasFolder) {
+      toast.info("Agent mode needs an open project folder — tools limited until then");
+    }
+
+    const handle = chatTransport().startChat({
+      reqId,
+      model: useModel,
+      messages: buildApiMessages(history),
+      // Agent without folder -> chat tools only (fetch_url); keep UI mode as Agent.
+      mode: m === "agent" && !hasFolder ? "chat" : m,
+      useTools,
+      cowork: coworkOn,
+      policy: policyRef.current,
+      maxToolCalls: maxToolRef.current > 0 ? maxToolRef.current : undefined,
+    }, (ev: ChatStreamEvent) => {
       if (ev.reqId !== reqId || !isCurrent()) return;
       if (ev.type === "delta") {
         setMsgs((m) => patch(m, aid, (x) => ({ ...x, content: x.content + ev.text })));
@@ -1082,44 +1096,18 @@ export function Chat() {
       } else if (ev.type === "approval") {
         setApprovals((list) => [...list.filter((a) => a.id !== ev.request.id), ev.request]);
       } else if (ev.type === "done" || ev.type === "aborted") {
-        off();
         setMsgs((m) => patch(m, aid, (x) => ({ ...x, streaming: false })));
         finishAndSave();
       } else if (ev.type === "error") {
-        off();
         setMsgs((m) => patch(m, aid, (x) => ({ ...x, streaming: false, error: ev.error })));
         finishAndSave();
         toast.error(ev.error);
       }
     });
-    offRef.current = off;
-
-    const m = modeRef.current;
-    const hasFolder = !!coworkRef.current;
-    // ask → no tools; chat → fetch_url; agent → cowork when folder selected.
-    // Without a folder, agent falls back to chat tools (fetch_url) so the turn
-    // still works; UI already surfaces "folder needed".
-    const useTools = m !== "ask";
-    const coworkOn = m === "agent" && hasFolder;
-    if (m === "agent" && !hasFolder) {
-      toast.info("Agent mode needs an open project folder — tools limited until then");
-    }
-    void window.wan.chat
-      .start({
-        reqId,
-        model: useModel,
-        messages: buildApiMessages(history),
-        // Agent without folder → chat tools only (fetch_url); keep UI mode as Agent.
-        mode: m === "agent" && !hasFolder ? "chat" : m,
-        useTools,
-        cowork: coworkOn,
-        policy: policyRef.current,
-        maxToolCalls: maxToolRef.current > 0 ? maxToolRef.current : undefined,
-      })
-      .catch((err: unknown) => {
+    streamRef.current = handle;
+    void handle.done.catch((err: unknown) => {
         if (!isCurrent()) return;
-        off();
-        offRef.current = null;
+        streamRef.current = null;
         const msg = err instanceof Error ? err.message : String(err);
         setMsgs((list) => patch(list, aid, (x) => ({ ...x, streaming: false, error: msg })));
         finishAndSave();
@@ -1256,7 +1244,7 @@ export function Chat() {
   }
 
   function stop() {
-    if (reqRef.current) void window.wan.chat.abort(reqRef.current);
+    streamRef.current?.abort();
   }
 
   async function addFiles(files: FileList | File[]) {

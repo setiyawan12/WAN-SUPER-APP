@@ -81,10 +81,10 @@
       text-decoration: none;
     }
 
-    #share-canvas-wrap { position: fixed; inset: 56px 0 0; overflow: hidden; }
-    #container { position: absolute; inset: 0; overflow: hidden; cursor: grab; }
-    #container.grabbing { cursor: grabbing; }
-    #canvas {
+    body.is-public-view #share-canvas-wrap { position: fixed; inset: 56px 0 0; overflow: hidden; }
+    body.is-public-view #container { position: absolute; inset: 0; flex: none; overflow: hidden; cursor: grab; background: transparent; }
+    body.is-public-view #container.grabbing { cursor: grabbing; }
+    body.is-public-view #canvas {
       position: absolute;
       inset: 0;
       z-index: 1;
@@ -93,8 +93,8 @@
       will-change: transform;
       transition: transform .22s cubic-bezier(.2, .75, .25, 1);
     }
-    #canvas.is-panning { transition: none; }
-    #svg-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+    body.is-public-view #canvas.is-panning { transition: none; }
+    body.is-public-view #svg-lines { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
 
     #readonly-badge {
       position: fixed;

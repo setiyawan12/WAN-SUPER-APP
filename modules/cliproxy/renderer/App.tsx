@@ -15,6 +15,9 @@ import { TokenSaver } from "./pages/TokenSaver";
 import { Combos } from "./pages/Combos";
 import { Toasts, toast } from "./components/ui";
 import { QuotaBudget } from "./pages/QuotaBudget";
+import { runtimeCapabilities, type RuntimeCapabilities } from "./capabilities";
+import { desktopServices, hasDesktopServices } from "./services/desktop";
+import { runtimeKind } from "./transport/runtime";
 
 const PAGES = [
   { id: "overview", label: "Overview" },
@@ -24,19 +27,26 @@ const PAGES = [
   { id: "combos", label: "Combos" },
   { id: "usage", label: "Usage" },
   { id: "quota", label: "Quota & Budget" },
-  { id: "neuron", label: "Activity" },
-  { id: "vscode", label: "VS Code" },
-  { id: "jetbrains", label: "JetBrains" },
-  { id: "clitools", label: "CLI Tools" },
-  { id: "tokensaver", label: "Token Saver" },
-  { id: "logs", label: "Logs" },
-  { id: "config", label: "Config" },
+  { id: "neuron", label: "Activity", capability: "localAuthFiles" },
+  { id: "vscode", label: "VS Code", capability: "ideSync" },
+  { id: "jetbrains", label: "JetBrains", capability: "ideSync" },
+  { id: "clitools", label: "CLI Tools", capability: "cliToolConfig" },
+  { id: "tokensaver", label: "Token Saver", capability: "serverLifecycle" },
+  { id: "logs", label: "Logs", capability: "serverLifecycle" },
+  { id: "config", label: "Config", capability: "serverLifecycle" },
 ] as const;
 
 type PageId = (typeof PAGES)[number]["id"];
 
 function isPageId(value: unknown): value is PageId {
   return PAGES.some((p) => p.id === value);
+}
+
+function pageIsAvailable(
+  page: (typeof PAGES)[number],
+  capabilities: RuntimeCapabilities,
+): boolean {
+  return !("capability" in page) || capabilities[page.capability];
 }
 
 // Inline stroke icons (no icon-library dependency). 18px, currentColor.
@@ -94,15 +104,21 @@ interface HealthLike {
 }
 
 export function App() {
+  const kind = runtimeKind();
+  const capabilities = runtimeCapabilities();
+  const pages = PAGES.filter((entry) => pageIsAvailable(entry, capabilities));
   const [page, setPage] = useState<PageId>("overview");
   const [health, setHealth] = useState<HealthLike | null>(null);
 
   useEffect(() => {
-    void window.wan.context.hasSuperApp().then((hasContext) => {
+    if (!hasDesktopServices()) return;
+    const desktop = desktopServices();
+    void desktop.context.hasSuperApp().then((hasContext) => {
       if (hasContext) setPage("chat");
     }).catch(() => undefined);
-    void window.wan.health().then((h) => setHealth(h as HealthLike));
-    const off = window.wan.onEvent((ev) => {
+    if (kind !== "desktop-local") return;
+    void desktop.health().then((h) => setHealth(h as HealthLike));
+    const off = desktop.onEvent((ev) => {
       if (ev.type === "health") setHealth(ev.payload as HealthLike);
       if (ev.type === "quota-budget-alert") {
         const alert = ev.payload as { title?: string; message?: string; severity?: string };
@@ -112,13 +128,15 @@ export function App() {
       }
     });
     return off;
-  }, []);
+  }, [kind]);
 
-  const label = PAGES.find((p) => p.id === page)?.label ?? "";
+  const label = pages.find((entry) => entry.id === page)?.label ?? "";
 
   let footClass = "foot-dot";
-  let footText = "Connecting…";
-  if (health) {
+  let footText = kind === "desktop-local" ? "Connecting…" : "Cloud runtime";
+  if (kind !== "desktop-local") {
+    footClass = "foot-dot ok";
+  } else if (health) {
     if (!health.reachable) {
       footClass = "foot-dot bad";
       footText = "Server offline";
@@ -167,7 +185,7 @@ export function App() {
           )}
 
         <nav className="side-nav">
-          {PAGES.map((p) => (
+          {pages.map((p) => (
             <button
               key={p.id}
               className={page === p.id ? "active" : ""}
@@ -184,7 +202,7 @@ export function App() {
           <span className="sidebar-foot-icon"><Radio size={14} /></span>
           <span className={footClass} />
           <span className="sidebar-foot-copy">
-            <strong>Local gateway</strong>
+            <strong>{kind === "desktop-local" ? "Local gateway" : "WAN Cloud"}</strong>
             <span>{footText}</span>
           </span>
           <Cpu size={14} className="sidebar-foot-cpu" />
@@ -192,7 +210,13 @@ export function App() {
       </aside>
 
       <main className="app-main" key={page} data-page={page} aria-label={label}>
-        {page === "overview" && <Overview onNavigate={(p) => isPageId(p) && setPage(p)} />}
+        {page === "overview" && (
+          <Overview
+            onNavigate={(nextPage) => {
+              if (isPageId(nextPage) && pages.some((entry) => entry.id === nextPage)) setPage(nextPage);
+            }}
+          />
+        )}
         {page === "chat" && <Chat />}
         {page === "providers" && <Providers />}
         {page === "models" && <Models />}

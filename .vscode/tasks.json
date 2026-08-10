@@ -22,6 +22,65 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "WAN Router Restore Persistence Check 2 (temporary)",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"services/wan-router",
+				"run",
+				"backup:rehearse"
+			],
+			"options": {
+				"env": {
+					"WAN_TEST_DATABASE_URL": "postgres://wan_router:wan_router_dev@127.0.0.1:55432/wan_router"
+				}
+			},
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN Router Restore Cleanup File (temporary)",
+			"type": "shell",
+			"command": "node",
+			"args": [
+				"services/wan-router/scripts/restore-status.tmp.mjs"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Stop WAN Router Restore Tasks (temporary)",
+			"type": "shell",
+			"command": "pkill",
+			"args": [
+				"-f",
+				"services/wan-router/scripts/(backup-restore-rehearsal|restore-status\\.tmp)\\.mjs"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "Check generation history patch",
+			"type": "shell",
+			"command": "git",
+			"args": [
+				"diff",
+				"--check",
+				"--",
+				"modules/cliproxy/web/api.ts",
+				"modules/cliproxy/web/GenerationsView.tsx",
+				"modules/cliproxy/web/App.tsx",
+				"modules/cliproxy/web/styles.css"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }

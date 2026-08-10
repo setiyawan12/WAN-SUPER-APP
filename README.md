@@ -28,6 +28,7 @@ dan WAN Mindmap berpadu dalam satu aplikasi native yang elegan.
 - [Fitur Utama](#fitur-utama)
 - [Requirements](#requirements)
 - [Instalasi & Menjalankan](#instalasi--menjalankan)
+- [WAN Router Cloud Lokal](#wan-router-cloud-lokal)
 - [Scripts](#scripts)
 - [Arsitektur Singkat](#arsitektur-singkat)
 - [Struktur Direktori](#struktur-direktori)
@@ -59,6 +60,11 @@ Arsitektur lengkap ada di **[HANDBOOK-WAN-SUPER-APP.md](./HANDBOOK-WAN-SUPER-APP
 
 Target arsitektur dan relasi tugas **WAN Cliproxy Local + WAN Router Cloud** ada
 di **[modules/cliproxy/HANDBOOK-WAN-ROUTER-CLOUD.md](./modules/cliproxy/HANDBOOK-WAN-ROUTER-CLOUD.md)**.
+
+Foundation development Router Cloud sekarang tersedia sebagai service mock
+terisolasi dan web console Firebase. Foundation tersebut belum production MVP;
+lihat status checkpoint di handbook dan petunjuk di
+**[services/wan-router/README.md](./services/wan-router/README.md)**.
 
 ---
 
@@ -117,6 +123,162 @@ npm run dev
 
 ---
 
+## WAN Router Cloud Lokal
+
+Tutorial ini menjalankan alur development lengkap:
+
+```text
+Browser :5178 → WAN Router :8080 → CLIProxyAPI :8317 → provider AI
+                         ├── Firebase Auth Emulator :9099
+                         └── PostgreSQL :55432
+```
+
+> Konfigurasi ini khusus development lokal, bukan deployment production. Biarkan
+> proses pada setiap terminal tetap berjalan selama dashboard digunakan.
+
+### Prasyarat
+
+- Node.js `22.12+` dan dependency proyek sudah terpasang.
+- Docker Desktop aktif.
+- Firebase CLI tersedia (`firebase --version`).
+- Minimal satu akun provider sudah login di CLIProxyAPI.
+
+Jika baru pertama kali menyiapkan repository:
+
+```bash
+cd wan-super-app
+npm install
+npm run router:install
+
+# Hanya jika Firebase CLI belum tersedia
+npm install -g firebase-tools
+```
+
+### 1. Jalankan WAN Super App dan CLIProxyAPI
+
+**Terminal 1:**
+
+```bash
+npm run dev
+```
+
+Electron akan membuka WAN Super App. Pengaturan default menyalakan CLIProxyAPI
+secara otomatis. Pastikan halaman Overview menunjukkan server online dan akun
+provider sudah tersedia.
+
+| Service | Alamat lokal |
+|---------|--------------|
+| Desktop backend | `http://127.0.0.1:4317` |
+| CLIProxyAPI | `http://127.0.0.1:8317` |
+
+### 2. Siapkan PostgreSQL dan env Router
+
+Command berikut bersifat one-shot; jalankan dari root repository:
+
+```bash
+docker compose -f services/wan-router/docker-compose.yml up -d --wait
+npm --prefix services/wan-router run env:local:cliproxy
+```
+
+Generator env membaca proxy key dari
+`~/.wan-super-app/cliproxyapi/renn-copilot-keys.json`, lalu membuat
+`services/wan-router/.env.local`. File tersebut memiliki permission `0600` dan
+diabaikan Git. Jangan menyalin proxy key ke source code atau commit.
+
+Pada setup pertama atau setelah ada migration baru, build dan terapkan schema:
+
+```bash
+cd services/wan-router
+npm run build
+node --env-file=.env.local dist/src/data/migrate.js
+cd ../..
+```
+
+Migration tidak perlu dijalankan ulang pada setiap startup jika schema tidak
+berubah.
+
+### 3. Jalankan Firebase Auth Emulator
+
+**Terminal 2:**
+
+```bash
+firebase emulators:start --only auth --project demo-wan-super-app
+```
+
+Gunakan `--only auth` karena Firebase Firestore emulator juga memakai port
+`8080`, sedangkan port tersebut diperlukan WAN Router.
+
+| Service | Alamat lokal |
+|---------|--------------|
+| Auth emulator | `http://127.0.0.1:9099` |
+| Emulator UI | `http://127.0.0.1:4000` |
+
+### 4. Jalankan WAN Router
+
+**Terminal 3:**
+
+```bash
+npm run router:build
+npm --prefix services/wan-router run start:local:cliproxy
+```
+
+Router membaca `services/wan-router/.env.local`, melakukan autentikasi melalui
+Firebase emulator, dan meneruskan model/chat ke CLIProxyAPI lokal. Gateway akan
+tersedia di `http://127.0.0.1:8080`.
+
+### 5. Jalankan dashboard web
+
+**Terminal 4:**
+
+```bash
+VITE_WAN_ROUTER_ORIGIN='http://127.0.0.1:8080' \
+VITE_FIREBASE_AUTH_EMULATOR_HOST='http://127.0.0.1:9099' \
+VITE_FIREBASE_CONFIG='{"apiKey":"demo-wan-router-key","authDomain":"demo-wan-super-app.firebaseapp.com","projectId":"demo-wan-super-app","appId":"1:123456789:web:wan-router-local"}' \
+npm run dev:cliproxy-web
+```
+
+Buka **http://127.0.0.1:5178/**, buat akun development pada Auth emulator,
+pilih salah satu model live CLIProxyAPI, lalu kirim chat.
+
+### Startup berikutnya
+
+Setelah setup pertama selesai, urutan hariannya adalah:
+
+1. Jalankan `npm run dev` untuk Electron dan CLIProxyAPI.
+2. Jalankan PostgreSQL dengan `docker compose ... up -d --wait`.
+3. Jalankan Firebase Auth emulator di Terminal 2.
+4. Jalankan WAN Router dengan `start:local:cliproxy` di Terminal 3.
+5. Jalankan dashboard web di Terminal 4.
+
+Generate ulang env jika proxy key CLIProxyAPI berubah:
+
+```bash
+npm --prefix services/wan-router run env:local:cliproxy
+```
+
+Setelah itu restart WAN Router agar key baru dimuat.
+
+### Menghentikan stack
+
+Tekan `Ctrl+C` pada proses Electron, Firebase emulator, WAN Router, dan Vite.
+Hentikan PostgreSQL dengan:
+
+```bash
+docker compose -f services/wan-router/docker-compose.yml down
+```
+
+### Troubleshooting cepat
+
+| Gejala | Tindakan |
+|--------|----------|
+| `WAN_CLIPROXY_API_KEY` tidak ditemukan | Jalankan Electron/CLIProxyAPI sekali, lalu ulangi `env:local:cliproxy` |
+| Dashboard tidak menampilkan model | Pastikan CLIProxyAPI online dan minimal satu akun provider sudah login |
+| Gateway mengembalikan `401`/`502` setelah key berubah | Generate ulang `.env.local`, lalu restart WAN Router |
+| Port `8080` sudah dipakai Firebase | Jalankan emulator dengan `--only auth`, bukan seluruh emulator suite |
+| Web berhenti pada konfigurasi Firebase | Pastikan ketiga variabel `VITE_*` diberikan saat menjalankan Vite |
+
+---
+
 ## Scripts
 
 | Script | Fungsi |
@@ -125,6 +287,18 @@ npm run dev
 | `npm run dev` | Vite dual + Electron dengan HMR |
 | `npm start` | Build lalu jalankan Electron |
 | `npm run typecheck` | Type-check tanpa emit (main + cliproxy) |
+| `npm run build:cliproxy-web` | Build web console WAN Router Cloud dengan env runtime eksplisit |
+| `npm run dev:cliproxy-web` | Jalankan web console WAN Router Cloud pada port `5178` |
+| `npm run test:cliproxy-transport` | Uji parser SSE terfragmentasi untuk cloud transport |
+| `npm run qa:cliproxy-local` | Build dan uji Local backend, desktop helpers, renderer, loopback/CORS, preload, serta named IPC pada Electron tersembunyi |
+| `npm run router:install` | Pasang dependency service WAN Router terisolasi |
+| `npm run router:test` | Build dan jalankan contract/security test mock gateway |
+| `npm run router:migrate` | Terapkan migration PostgreSQL Router sebagai job terpisah |
+| `npm run router:reconcile` | Finalisasi generation/attempt pending dan release reservation yatim |
+| `npm run router:test:postgres` | Uji tenant isolation dan WAN API key terhadap PostgreSQL nyata |
+| `npm run router:start` | Jalankan gateway setelah env auth/router disiapkan |
+| `npm --prefix services/wan-router run env:local:cliproxy` | Generate `.env.local` dari proxy key CLIProxyAPI lokal |
+| `npm --prefix services/wan-router run start:local:cliproxy` | Jalankan WAN Router dengan `.env.local` dan relay CLIProxyAPI |
 | `npm run dist` | Bundling installer via `electron-builder` |
 | `npm run firebase:emulators` | Jalankan Auth, Firestore, RTDB, Functions, dan Hosting emulator |
 | `npm run firebase:test:rules` | Uji permission personal, share, dan grup pada emulator |

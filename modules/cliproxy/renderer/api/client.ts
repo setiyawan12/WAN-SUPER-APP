@@ -1,21 +1,15 @@
-// Desktop port of the extension's webview client. The `api` object below is
-// unchanged from the extension -- only this request() helper's TRANSPORT
-// differs: Electron IPC (window.wan.request) instead of fetch()+CORS to an
-// HTTP backend (handbook Tahap 5.1). All response shapes are identical, so the
-// six dashboard pages are untouched.
-import type { WanBridge } from "../wan";
-
-function bridge(): WanBridge {
-  return (window as unknown as { wan: WanBridge }).wan;
-}
+// Desktop port of the extension's webview client. Response shapes stay
+// unchanged while runtime-specific I/O is owned by the transport layer.
+import { cliproxyTransport } from "../transport/runtime";
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = (init?.headers || {}) as Record<string, string>;
-  const res = await bridge().request({
+  const res = await cliproxyTransport().request({
     method: (init?.method as string) || "GET",
     path,
     body: init?.body as string | undefined,
     contentType: headers["Content-Type"],
+    signal: init?.signal ?? undefined,
   });
   const data = res.text ? safeJson(res.text) : null;
   if (!res.ok) {
@@ -443,7 +437,7 @@ export const api = {
       body: JSON.stringify({ level }),
     }),
   verifyVision: async (modelId: string) => {
-    const res = await bridge().request({
+    const res = await cliproxyTransport().request({
       method: "POST",
       path: `/models/${encodeURIComponent(modelId)}/verify-vision`,
     });
@@ -559,7 +553,7 @@ export const api = {
 
   getConfigYaml: () => request<string>("/config.yaml"),
   putConfigYaml: async (yamlText: string) => {
-    const res = await bridge().request({
+    const res = await cliproxyTransport().request({
       method: "PUT",
       path: "/config.yaml",
       body: yamlText,

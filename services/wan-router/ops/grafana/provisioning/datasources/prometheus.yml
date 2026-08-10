@@ -1,0 +1,10 @@
+apiVersion: 1
+
+datasources:
+  - name: WAN Router Prometheus
+    uid: wan-router-prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false

@@ -1,13 +1,78 @@
-# Handbook: WAN Cliproxy Local + WAN Router Cloud
+# Handbook: WAN Cliproxy Local + WAN Router Cloud + Remote CLIProxyAPI
 
 Panduan arsitektur dan relasi tugas untuk mempertahankan **WAN Cliproxy Local**
 di WAN Super App sekaligus menambahkan **WAN Router Cloud** yang dapat digunakan
 dari browser dan client API seperti layanan AI gateway.
 
 > Status dokumen: **TARGET DESIGN**. Cliproxy desktop yang ada adalah kondisi
-> saat ini. WAN Router Cloud, web dashboard, API key WAN, BYOK cloud, dan billing
-> yang dibahas di sini belum dianggap tersedia sampai task dan acceptance gate
-> terkait dinyatakan lulus.
+> saat ini. WAN Router Cloud, web dashboard, API key WAN, koneksi ke remote
+> CLIProxyAPI, provider tambahan, dan billing yang dibahas di sini belum dianggap
+> tersedia sampai task dan acceptance gate terkait dinyatakan lulus.
+
+> Checkpoint repository 2026-08-08: foundation development berikut sudah ada,
+> tetapi **belum merupakan WAN Router Cloud MVP atau deployment production**:
+>
+> - transport request/chat untuk Local IPC dan Cloud HTTP, plus runtime capability;
+> - service terpisah `services/wan-router` dengan Firebase ID-token verification,
+>   static auth khusus dev, request ID, normalized error, exact-origin CORS, dan
+>   deterministic mock provider;
+> - contract `GET /v1/models` dan stream/non-stream
+>   `POST /v1/chat/completions`, termasuk cancellation dan internal log `499`;
+> - PostgreSQL migration untuk user, workspace, membership, dan WAN API key;
+> - WAN API key create/list/revoke/verify dengan plaintext one-time, HMAC digest,
+>   scope enforcement, immediate revoke, dan negative cross-tenant tests;
+> - provider credential create/list/update/verify/delete dengan ciphertext-only
+>   storage, tenant scope, masked response, per-record data key, local envelope
+>   khusus development, serta adapter Google Cloud KMS dengan AAD dan CRC32C;
+> - `CliproxyRemoteAdapter` sebagai mode live utama dengan domain dan proxy API
+>   key server-side, live `/v1/models`, model-ID pass-through, stream/non-stream
+>   chat, normalized tool-call delta stream/non-stream, final usage, timeout,
+>   cancellation, normalized error, dan circuit breaker melalui dynamic route
+>   wildcard;
+> - canonical model catalog development untuk provider langsung tambahan;
+> - opt-in provider OpenAI resmi melalui `OpenAICompatibleAdapter`, encrypted
+>   tenant BYOK selection, credential verification, stream/non-stream Chat
+>   Completions, final usage, timeout, cancellation, bounded fragmented SSE,
+>   `[DONE]`, dan normalized upstream error tanpa raw provider body. Adapter ini
+>   adalah provider tambahan, bukan upstream utama produk;
+> - fixed-priority routing, fallback transient sebelum output, no fallback
+>   setelah delta/usage pertama, BYOK credential fallback, dan in-memory
+>   provider circuit breaker dengan cooldown;
+> - PostgreSQL generation, provider attempt, first-token timestamp, token usage
+>   ledger, idempotent finalization, dan stale pending reconciliation job;
+> - structured generation lifecycle log exact-once untuk success, failure, dan
+>   cancellation dengan generation/request/workspace/API-key ID, model,
+>   latency, TTFT, token usage, estimated flag, stream flag, dan error code tanpa
+>   prompt, completion, tool arguments, atau secret;
+> - authenticated Prometheus metrics dengan bounded labels untuk HTTP,
+>   generation, TTFT, throughput, active stream, provider attempt, fallback,
+>   circuit, admission, auth, KMS, audit, PostgreSQL pool/health, dan stale
+>   generation;
+> - PostgreSQL `audit_events` append-only dan idempotent untuk API key, provider
+>   credential, dan generation lifecycle, plus Firebase-only tenant-scoped
+>   `GET /api/audit-events`;
+> - secret scan release gate, CI WAN Router, 12-panel Grafana dashboard, 11
+>   Prometheus alert dengan owner/severity/runbook, Alertmanager rehearsal, dan
+>   Terraform Cloud Monitoring yang telah lulus schema validation;
+> - atomic PostgreSQL admission reservation dengan workspace-wide concurrency,
+>   daily token quota/budget, per-credential request rate, hard token/request,
+>   settlement/release, dan orphan reservation cleanup;
+> - web console development untuk Firebase login, Chat, Models, API Keys,
+>   logout, dan responsive desktop/mobile.
+> - gate repository `qa:cliproxy-local` untuk build main/renderer, 38 fixture
+>   Local, backend loopback/CORS/storage smoke, serta hidden Electron
+>   preload -> named IPC -> backend tanpa login cloud.
+>
+> Belum tersedia: live remote CLIProxyAPI/staging verification,
+> Redis-distributed limits, persisted routing policy/circuit state, immutable
+> provider price snapshot, Cloud Run deployment, Cloud Monitoring staging apply
+> dengan notification channel nyata, staging/canary, atau release
+> gate MVP. `KEY-01`, `BYO-01`, `MOD-01`, `PRV-01`, `PRV-02`, `STR-01`,
+> `RTE-01`, `USE-01`, `QTA-01`, dan `OBS-01` sudah mempunyai implementation serta fixture
+> lokal, tetapi belum `done`. Gate yang masih terbuka mencakup staging, Terms/provider
+> review, observability production activation, API-key pepper di Secret Manager,
+> least-privilege KMS IAM, live KMS/provider integration test, Redis/load test,
+> rotation/delete rehearsal, runbook, dan rollback.
 
 Dokumen ini menggunakan empat label:
 
@@ -49,11 +114,14 @@ WAN Cliproxy
 │   ├── dapat digunakan dari web, desktop, server, atau mobile
 │   ├── Firebase Auth untuk dashboard
 │   ├── WAN API key untuk client eksternal
-│   ├── provider key resmi pengguna atau BYOK yang terenkripsi
-│   └── routing, fallback, usage, quota, dan audit di cloud
+│   ├── WAN Router meneruskan request ke domain CLIProxyAPI yang dikonfigurasi
+│   ├── proxy API key CLIProxyAPI hanya dimiliki WAN Router
+│   ├── provider dan OAuth utama tetap dikelola oleh CLIProxyAPI
+│   └── auth, routing, fallback, usage, quota, dan audit di WAN Router
 │
-└── Custom Endpoint
-    └── endpoint OpenAI-compatible milik pengguna sendiri
+└── Provider Tambahan
+  ├── OpenAI langsung melalui `OpenAICompatibleAdapter` (`NEXT`, opsional)
+  └── custom OpenAI-compatible endpoint (`NEXT`, opsional)
 ```
 
 Keputusan yang wajib dipertahankan:
@@ -62,7 +130,9 @@ Keputusan yang wajib dipertahankan:
 2. **Backend local tidak boleh langsung dipublikasikan ke internet.**
 3. **Cloud dibangun sebagai service baru**, bukan dengan membuka Express local
    pada `127.0.0.1:4317`.
-4. **MVP dimulai dari BYOK resmi**, bukan penjualan credits bersama.
+4. **Upstream utama MVP adalah remote CLIProxyAPI yang dikonfigurasi operator.**
+  Direct provider BYOK, termasuk OpenAI, adalah opsi tambahan dan bukan syarat
+  jalur utama.
 5. **Renderer memakai transport abstraction** agar halaman yang relevan dapat
    berjalan di Electron maupun browser.
 6. **Fitur desktop-only tetap desktop-only.** Web tidak berpura-pura mendukung
@@ -72,8 +142,8 @@ Keputusan yang wajib dipertahankan:
 8. **OAuth/auth files milik Cliproxy Local tidak otomatis di-upload.**
 9. **Cloud MVP menggunakan modular monolith**, bukan banyak microservice sejak
    hari pertama. Batas modul tetap jelas agar dapat dipisahkan saat perlu.
-10. **Shared credits dan billing adalah fase terpisah** setelah BYOK stabil,
-    legal review selesai, dan ledger telah diaudit.
+10. **Shared credits dan billing adalah fase terpisah** setelah relay remote
+  CLIProxyAPI stabil, legal review selesai, dan ledger telah diaudit.
 
 ---
 
@@ -83,7 +153,11 @@ Keputusan yang wajib dipertahankan:
 
 - Pengguna dapat login ke web dashboard dengan akun WAN.
 - Pengguna dapat membuat dan mencabut WAN API key.
-- Pengguna dapat menyimpan provider API key resmi secara terenkripsi.
+- Operator dapat menyetel domain dan proxy API key remote CLIProxyAPI tanpa
+  mengeksposnya kepada client.
+- WAN Router mengambil model live dan meneruskan chat ke remote CLIProxyAPI.
+- Pengguna dapat menyimpan provider API key resmi secara terenkripsi hanya bila
+  adapter provider langsung diaktifkan sebagai opsi tambahan.
 - Client dapat memanggil `POST /v1/chat/completions` dengan format
   OpenAI-compatible.
 - Streaming SSE, cancellation, usage, error normalization, dan basic fallback
@@ -100,6 +174,7 @@ Keputusan yang wajib dipertahankan:
 - Menjalankan Cowork atau terminal komputer dari browser.
 - Menyalin auth files/OAuth subscription lokal ke cloud.
 - Menjalankan binary CLIProxyAPI desktop di Firebase Hosting atau Functions.
+- Menjadikan OpenAI atau provider langsung lain sebagai tujuan utama WAN Router.
 - Menjual credits inference kepada publik.
 - Menyediakan ratusan provider sekaligus.
 - Auto-router berbasis machine learning.
@@ -169,10 +244,21 @@ flowchart TB
         Auth[Firebase Authentication]
         Gateway[Cloud Run Gateway]
         Router[Routing Engine]
+      RemoteAdapter[CliproxyRemoteAdapter]
         Usage[Usage and Quota]
         DB[(PostgreSQL)]
         Cache[(Redis)]
         KMS[Cloud KMS]
+    end
+
+    subgraph ConfiguredUpstream[Configured Remote Upstream]
+      RemoteProxy[CLIProxyAPI HTTPS Domain]
+      RemoteProviders[Providers and OAuth Accounts]
+    end
+
+    subgraph OptionalDirect[Optional Direct Providers]
+      OpenAIAdapter[OpenAICompatibleAdapter]
+      OpenAI[OpenAI API]
     end
 
     Desktop --> LocalTransport
@@ -188,9 +274,11 @@ flowchart TB
 
     Gateway --> Router
     Gateway --> Usage
-    Router --> ProviderA[Provider A]
-    Router --> ProviderB[Provider B]
-    Router --> ProviderC[Provider C]
+    Router --> RemoteAdapter
+    RemoteAdapter -->|CLIProxyAPI proxy key| RemoteProxy
+    RemoteProxy --> RemoteProviders
+    Router -. explicit optional route .-> OpenAIAdapter
+    OpenAIAdapter -. tenant BYOK .-> OpenAI
     Gateway --> DB
     Gateway --> Cache
     Gateway --> KMS
@@ -202,7 +290,7 @@ Pisahkan dua jenis pekerjaan walaupun MVP masih satu Cloud Run service:
 
 | Plane | Fungsi | Auth |
 |-------|--------|------|
-| Control plane | Profile, provider key, WAN API key, policy, budget, usage UI | Firebase ID token |
+| Control plane | Profile, WAN API key, policy, budget, usage UI; optional direct-provider key | Firebase ID token |
 | Data plane | `/v1/models`, `/v1/chat/completions`, streaming | WAN API key atau first-party session |
 
 Alasan pemisahan:
@@ -217,11 +305,12 @@ Alasan pemisahan:
 | Data | Local | Cloud |
 |------|-------|-------|
 | OAuth/auth files | File lokal CLIProxyAPI | Tidak disalin |
-| Provider API key | Config/auth lokal | Ciphertext terenkripsi KMS |
-| Model live | CLIProxyAPI `/v1/models` | Catalog dan endpoint cloud |
+| Provider/OAuth credential | Config/auth lokal | Dikelola remote CLIProxyAPI; direct-provider BYOK hanya opsi tambahan |
+| CLIProxyAPI proxy key | Config local | Secret Manager/KMS, server-only, tidak pernah dikirim ke client |
+| Model live | CLIProxyAPI `/v1/models` | Remote CLIProxyAPI `/v1/models` sebagai sumber utama |
 | Usage | Usage store lokal | Generation dan usage ledger cloud |
 | Conversation | File userData lokal | Pilihan produk; metadata/cloud sync terpisah |
-| Routing | Config/model combo lokal | Routing policy per workspace |
+| Routing | Config/model combo lokal | WAN policy memilih upstream; routing provider internal tetap milik CLIProxyAPI |
 | Budget | Local state | Budget per API key/workspace |
 
 UI harus menunjukkan asal data, misalnya `LOCAL` atau `WAN CLOUD`. Jangan
@@ -237,7 +326,7 @@ quota, atau biaya yang sedang digunakan.
 | Chat | Ya | Ya | Ya |
 | Model catalog | Local models | Cloud models | Cloud models |
 | Usage | Local usage | Cloud usage | Cloud usage |
-| Provider management | Local auth/config | Cloud BYOK | Cloud BYOK |
+| Provider management | Local auth/config | Remote CLIProxyAPI; direct BYOK opsional | Remote CLIProxyAPI; direct BYOK opsional |
 | Model combo/routing policy | Local combo | Cloud policy | Cloud policy |
 | Quota/budget | Local | Cloud | Cloud |
 | Install/start/stop binary | Ya | Tidak relevan | Tidak |
@@ -539,6 +628,8 @@ PATCH  /api/provider-credentials/:id
 DELETE /api/provider-credentials/:id
 POST   /api/provider-credentials/:id/verify
 
+GET    /api/audit-events
+
 GET    /api/routing-policies
 POST   /api/routing-policies
 PATCH  /api/routing-policies/:id
@@ -550,6 +641,12 @@ GET    /api/budgets
 PUT    /api/budgets/:id
 ```
 
+Operations endpoint, bukan control/data API client:
+
+```text
+GET /metrics   dedicated collector Bearer token; tidak menerima WAN/Firebase token
+```
+
 ### 9.4 `GET /v1/models`
 
 Minimum response:
@@ -559,7 +656,7 @@ Minimum response:
   "object": "list",
   "data": [
     {
-      "id": "anthropic/claude-example",
+      "id": "claude-example",
       "object": "model",
       "created": 0,
       "owned_by": "anthropic"
@@ -574,13 +671,16 @@ control endpoint tersendiri agar format OpenAI-compatible tetap sederhana.
 Konvensi model ID:
 
 ```text
-<provider>/<model>
+<CLIProxyAPI model ID verbatim>   jalur utama
+<provider>/<model>                direct-provider opsional
 wan/combo/<slug>       NEXT
 wan/auto               FUTURE
 ```
 
-Local model ID yang sudah ada tidak perlu diubah. UI memakai adapter untuk
-menampilkan ID sesuai runtime.
+WAN Router tidak menambah prefix, mengganti alias, atau menulis ulang model ID
+yang ditemukan dari remote CLIProxyAPI. Namespace provider hanya berlaku untuk
+adapter direct-provider yang memang memiliki canonical mapping sendiri. UI
+memakai adapter untuk menampilkan ID sesuai runtime.
 
 ### 9.5 `POST /v1/chat/completions`
 
@@ -677,29 +777,33 @@ atau detail tenant lain.
 
 ---
 
-## 10. Provider Adapter dan Routing
+## 10. Upstream Adapter dan Routing
 
-### 10.1 Provider Adapter
+### 10.1 Upstream Adapter
 
-Semua provider diubah ke kontrak internal yang sama:
+Semua upstream diubah ke kontrak internal yang sama:
 
 ```ts
 export interface ProviderAdapter {
   readonly id: string;
-  listModels(context: ProviderContext): Promise<ProviderModel[]>;
+  listModels(): Promise<ProviderModel[]>;
   chat(
     request: NormalizedChatRequest,
     context: ProviderContext,
   ): AsyncIterable<NormalizedChatEvent>;
-  normalizeError(error: unknown): NormalizedProviderError;
 }
 ```
 
-MVP sebaiknya mulai dengan dua jenis adapter:
+Urutan adapter yang wajib dipertahankan:
 
-1. `OpenAICompatibleAdapter` untuk endpoint resmi yang kompatibel.
-2. Satu adapter native untuk provider yang formatnya berbeda dan benar-benar
-   dibutuhkan.
+1. `CliproxyRemoteAdapter` adalah adapter live pertama dan upstream utama. Ia
+  memanggil domain CLIProxyAPI yang disetel operator melalui `GET /v1/models`
+  dan `POST /v1/chat/completions`.
+2. `OpenAICompatibleAdapter` tetap tersedia untuk OpenAI langsung atau endpoint
+  resmi kompatibel, tetapi hanya melalui konfigurasi/routing eksplisit sebagai
+  provider tambahan.
+3. Adapter native lain ditambahkan hanya bila format provider berbeda dan ada
+  kebutuhan produk yang nyata.
 
 Aturan adapter:
 
@@ -710,6 +814,52 @@ Aturan adapter:
 - mengubah usage ke unit internal;
 - mempunyai fixture test streaming yang terfragmentasi;
 - menyatakan capability, bukan menebak dari nama model saja.
+
+Aturan khusus `CliproxyRemoteAdapter`:
+
+- base URL berasal dari konfigurasi deployment, bukan request tenant;
+- production wajib HTTPS; loopback HTTP hanya boleh untuk development/test;
+- `Authorization: Bearer <CLIProxyAPI proxy-api-key>` dibuat server-side;
+- WAN API key dan Firebase ID token tidak pernah diteruskan ke CLIProxyAPI;
+- model ID dari `/v1/models` dipertahankan verbatim saat chat diteruskan;
+- response model list, SSE, usage, cancellation, dan normalized error melewati
+  guard ukuran/timeout WAN Router;
+- provider/OAuth credential di belakang CLIProxyAPI tidak disalin ke database
+  WAN Router.
+
+Checkpoint repository setelah koreksi runtime 2026-08-08:
+
+- runtime development default tetap `mock`; mode live utama
+  `WAN_PROVIDER_MODE=cliproxy` memakai `WAN_CLIPROXY_BASE_URL` dan
+  `WAN_CLIPROXY_API_KEY` yang hanya tersedia server-side;
+- `CliproxyRemoteAdapter` mengambil model live, mempertahankan model ID verbatim,
+  meneruskan stream/non-stream chat, memaksa final usage untuk stream, membatasi
+  response, meneruskan cancellation, dan menormalisasi error tanpa raw body;
+- `FixedRoutingProvider` menerima wildcard model untuk upstream dengan katalog
+  dinamis tanpa melepas priority dan circuit breaker;
+- endpoint runtime dikunci ke API resmi `https://api.openai.com/v1/`; custom
+  direct-provider base URL tetap `NEXT` dan tidak dapat diaktifkan lewat env;
+- katalog development saat ini mengekspos `openai/gpt-4.1` dan
+  `openai/gpt-4.1-mini`, lalu memetakan ke upstream ID tanpa mengubah canonical
+  ID pada response WAN;
+- kontrak internal menormalisasi tool-call delta stream/non-stream, meneruskan
+  `tools` dan `tool_choice`, menggabungkan argumen berdasarkan `index`, menolak
+  call incomplete/malformed, dan menghentikan fallback setelah delta tool
+  pertama; capability katalog live tetap konservatif karena response standar
+  `/v1/models` tidak membuktikan dukungan tools per model;
+- credential dipilih tenant-side berdasarkan provider, exact model filter,
+  status aktif, dan priority; plaintext hanya dipinjam selama callback upstream;
+- fixture lokal remote mencakup live model discovery, duplicate filtering,
+  model pass-through, pemisahan WAN key/proxy key, text dan tool-call
+  stream/non-stream, fragmented SSE, malformed/incomplete tool-call rejection,
+  no-fallback setelah tool output, `[DONE]`, final usage, cancellation, unsafe
+  URL rejection, attempt ledger, dan log redaction;
+- fixture OpenAI tambahan tetap mencakup timeout, invalid/missing response,
+  `429`, disabled model, canonical mapping, encrypted BYOK, tenant scope,
+  pre-stream HTTP status, bounded event size, dan slow-client backpressure;
+- `PRV-01`/`MOD-01` belum `done` sampai live remote CLIProxyAPI staging,
+  production metrics/audit, secret injection/rotation, dan rollback gate lulus.
+  `PRV-02` tetap jalur tambahan dan tidak memblokir CLIProxy Relay MVP.
 
 ### 10.2 Candidate Selection
 
@@ -763,6 +913,24 @@ Belum perlu pada MVP:
 | Stream gagal setelah token pertama | Tidak otomatis |
 | User cancel | Tidak |
 | Budget atau policy WAN menolak | Tidak |
+
+Checkpoint repository 2026-08-08:
+
+- `FixedRoutingProvider` menjalankan kandidat berdasar priority tetap dan model
+  allowlist;
+- fallback hanya untuk `429`/normalized `5xx` sebelum delta atau usage pertama;
+  event internal readiness belum dianggap output sehingga koneksi upstream yang
+  gagal sebelum token masih dapat fallback;
+- request error, cancellation, dan attempt-persistence failure tidak di-retry;
+- setelah output pertama, error dipropagasikan dan provider lain tidak dipanggil;
+- credential BYOK dalam provider yang sama juga dicoba berdasarkan priority dan
+  exact model filter; `401/403` menandai revision credential terkait invalid,
+  tanpa dapat mengubah secret yang sudah dirotasi;
+- circuit breaker provider in-memory membuka setelah threshold dan pulih setelah
+  cooldown; config tersedia tetapi persistence/distributed state masih terbuka;
+- fixture mencakup priority, transient matrix, no-retry-after-output, readiness,
+  credential fallback, invalidation, rotation race, circuit open/skip/recovery,
+  dan cancellation.
 
 ### 10.5 Circuit Breaker
 
@@ -840,6 +1008,20 @@ Provider secret
   -> wrap data key with Cloud KMS
   -> store ciphertext + wrapped key + KMS version
 ```
+
+Checkpoint repository 2026-08-08:
+
+- `LocalEnvelopeCipher` tersedia hanya untuk development dan test;
+- `KmsEnvelopeCipher` memisahkan enkripsi payload dari pembungkus data key;
+- adapter Google Cloud KMS mengirim workspace/credential/provider context sebagai
+  AAD, memverifikasi CRC32C request/response, dan menyimpan resource name versi
+  KMS yang benar-benar digunakan;
+- runtime memilih mode secara eksplisit melalui `WAN_ENVELOPE_MODE=local` atau
+  `WAN_ENVELOPE_MODE=gcp-kms`; mode KMS tidak menerima fallback master key lokal;
+- test offline mencakup tenant-bound context, tamper rejection, key-version
+  rotation, checksum corruption, masked response, dan delete tenant-scoped;
+- acceptance `BYO-01` tetap terbuka sampai IAM, live KMS, audit log, staging,
+  rotation/delete rehearsal, runbook, dan rollback gate lulus.
 
 Minimum metadata:
 
@@ -1014,15 +1196,41 @@ Budget mempunyai action:
 Budget check harus atomic terhadap request admission. Counter dashboard yang
 eventually consistent tidak boleh menjadi satu-satunya pengaman biaya.
 
+Checkpoint repository 2026-08-08:
+
+- migration membuat `generations`, `provider_attempts`, `usage_ledger`, dan
+  `admission_reservations` tanpa menyimpan prompt/completion;
+- generation serta attempt mencatat request/model/provider/credential metadata,
+  first token, final status, actual/estimated usage, dan normalized error code;
+- successful generation menulis tiga token-ledger dimension secara atomik dan
+  idempotent; failed/cancelled generation tidak mengarang usage;
+- job `router:reconcile` menutup generation/attempt pending serta reservation
+  yatim melewati cutoff default lima menit;
+- admission memakai PostgreSQL advisory transaction lock per workspace. Hard
+  concurrency, daily token quota, dan optional integer micro-USD budget berlaku
+  lintas API key; request/minute tetap per credential;
+- request tanpa output limit mendapat `max_completion_tokens` default eksplisit;
+  reservation menghitung seluruh normalized request bytes plus output ceiling;
+- success settle actual usage, estimated usage mempertahankan bound konservatif,
+  sedangkan failure/cancel release reservation;
+- fixture parallel lulus untuk 12 request HTTP dan 20 connection PostgreSQL
+  tanpa melewati hard concurrency;
+- `USE-01`/`QTA-01` tetap terbuka sampai price snapshot immutable, Redis/load
+  multi-instance, production metrics/alerts, backup/restore, dan staging gate.
+
 ---
 
 ## 14. Billing dan Credits
 
-### 14.1 MVP: BYOK Only
+### 14.1 MVP: Remote CLIProxyAPI Relay
 
 Pada MVP:
 
-- provider menagih langsung akun provider pengguna;
+- WAN Router menyimpan hanya domain dan proxy API key CLIProxyAPI untuk jalur
+  utama; provider/OAuth credential tetap berada di CLIProxyAPI;
+- biaya upstream mengikuti akun/provider yang dikonfigurasi pada CLIProxyAPI;
+- direct-provider BYOK boleh tersedia sebagai opsi tambahan, tetapi tidak
+  memblokir rilis relay utama;
 - WAN mencatat usage dan estimated cost untuk visibility;
 - WAN belum menjual inference credits;
 - tidak ada saldo yang dapat menjadi negatif;
@@ -1079,7 +1287,8 @@ Pengguna harus mengetahui saat berpindah:
 
 ```text
 LOCAL     prompt diproses melalui runtime lokal dan provider terpilih
-WAN CLOUD prompt melewati WAN Router Cloud dan provider terpilih
+WAN CLOUD prompt melewati WAN Router Cloud lalu remote CLIProxyAPI
+DIRECT    prompt melewati WAN Router Cloud lalu provider tambahan yang dipilih
 ```
 
 Cloud fallback dari Local tidak boleh otomatis aktif.
@@ -1093,6 +1302,7 @@ Cloud fallback dari Local tidak boleh otomatis aktif.
 | Threat | Control wajib |
 |--------|---------------|
 | WAN API key dicuri | One-time display, hash/HMAC, scopes, rotation, revoke, anomaly detection |
+| CLIProxyAPI proxy key bocor | Secret Manager, server-only injection, redaction, rotation, upstream scope restriction |
 | Provider key bocor | KMS envelope encryption, redaction, least privilege, short plaintext lifetime |
 | Cross-tenant access | Server-resolved tenant, scoped query/cache, negative integration tests |
 | SSRF custom endpoint | HTTPS allow policy, deny private/link-local/metadata IP, DNS re-check, redirect validation |
@@ -1200,6 +1410,9 @@ Contoh target:
 ```text
 WAN_ENV=staging
 WAN_PUBLIC_API_ORIGIN=https://api-staging.<wan-domain>
+WAN_PROVIDER_MODE=cliproxy
+WAN_CLIPROXY_BASE_URL=https://cliproxy-staging.<wan-domain>/v1
+WAN_CLIPROXY_API_KEY=<Secret Manager reference>
 WAN_FIREBASE_PROJECT_ID=...
 WAN_DATABASE_URL=<Secret Manager reference>
 WAN_REDIS_URL=<Secret Manager reference>
@@ -1239,14 +1452,16 @@ flowchart TD
     SEC01 --> AUT01[AUT-01 Firebase Auth Verification]
     API01 --> AUT01
     AUT01 --> KEY01[KEY-01 WAN API Keys]
-    SEC01 --> BYO01[BYO-01 KMS BYOK Vault]
-    KEY01 --> BYO01
-
-    API01 --> MOD01[MOD-01 Cloud Model Catalog]
-    BYO01 --> PRV01[PRV-01 Provider Adapter]
-    MOD01 --> PRV01
+    SEC01 --> PRV01[PRV-01 CliproxyRemoteAdapter]
+    API01 --> PRV01
+    PRV01 --> MOD01[MOD-01 Remote Live Model Discovery]
     PRV01 --> STR01[STR-01 SSE Streaming]
     PRV01 --> RTE01[RTE-01 Routing and Fallback]
+
+    SEC01 --> BYO01[BYO-01 Optional Direct-Provider Vault]
+    KEY01 --> BYO01
+    BYO01 --> PRV02[PRV-02 Optional Direct Provider Adapter]
+    PRV02 -. optional route .-> RTE01
 
     KEY01 --> USE01[USE-01 Generation and Usage]
     STR01 --> USE01
@@ -1263,7 +1478,7 @@ flowchart TD
     WEB02 --> QA01
     TRN02 --> QA01
     QA01 --> OPS01[OPS-01 Staging and Canary]
-    OPS01 --> REL01[REL-01 BYOK MVP Release]
+    OPS01 --> REL01[REL-01 CLIProxy Relay MVP Release]
     REL01 --> BIL01[BIL-01 Shared Credits Future]
 ```
 
@@ -1279,9 +1494,10 @@ flowchart TD
 | API-01 | CLOUD | CON-01 | Cloud Run modular-monolith skeleton | Health, request ID, validation, graceful shutdown lulus |
 | AUT-01 | CLOUD/SECURITY | API-01, SEC-01 | Firebase ID token verification | Expired, wrong audience, disabled user, cross-tenant test ditolak |
 | KEY-01 | CLOUD/SECURITY | AUT-01 | WAN API key create/list/revoke/verify | Plaintext one-time; DB tanpa plaintext; scope dan revoke langsung efektif |
-| BYO-01 | CLOUD/SECURITY | KEY-01, SEC-01 | KMS-encrypted provider credential | Ciphertext at rest; log redaction; rotation/delete test lulus |
-| MOD-01 | CLOUD | API-01 | Canonical cloud model catalog | Stable ID, capability, status, owner, filter test lulus |
-| PRV-01 | CLOUD | MOD-01, BYO-01 | Provider adapter pertama | Stream/non-stream, usage, timeout, cancellation, error fixture lulus |
+| PRV-01 | CLOUD/SECURITY | API-01, SEC-01 | `CliproxyRemoteAdapter` utama | Live models, model pass-through, server-only proxy key, stream/non-stream, timeout, cancellation, error fixture lulus |
+| MOD-01 | CLOUD | PRV-01 | Remote CLIProxyAPI live model catalog | ID upstream dipertahankan; refresh, malformed response, dan duplicate filter test lulus |
+| BYO-01 | CLOUD/SECURITY | KEY-01, SEC-01 | KMS-encrypted direct-provider credential (`NEXT`) | Ciphertext at rest; log redaction; rotation/delete test lulus |
+| PRV-02 | CLOUD | BYO-01 | Optional direct-provider adapter (`NEXT`) | Tidak menjadi default; routing eksplisit; contract fixture lulus |
 | STR-01 | CLOUD | PRV-01 | OpenAI-compatible SSE | Fragmentation, `[DONE]`, usage final, abort, slow-client test lulus |
 | RTE-01 | CLOUD | PRV-01 | Fixed routing, fallback, circuit breaker | Fallback matrix dan no-retry-after-first-token lulus |
 | USE-01 | DATA | KEY-01, STR-01, RTE-01 | Generation, attempt, usage records | No lost final state; duplicate/retry reconciliation test lulus |
@@ -1291,8 +1507,44 @@ flowchart TD
 | OBS-01 | OPS/CLOUD | API-01, USE-01 | Metrics, structured logs, audit, alerts | Secret/prompt redaction scan lulus; dashboard dan alert aktif |
 | QA-01 | QA/SECURITY | Semua MVP | Contract, security, tenant, E2E, load test suite | Semua release gate hijau; tidak ada P0/P1/High/Critical terbuka |
 | OPS-01 | OPS | QA-01 | Staging, migration, canary, rollback | Deploy dan rollback rehearsal berhasil |
-| REL-01 | Semua | OPS-01 | BYOK MVP release | Canary stabil; runbook on-call; Local regression nol |
+| REL-01 | Semua | OPS-01 | CLIProxy Relay MVP release | Canary stabil; remote CLIProxyAPI runbook; Local regression nol |
 | BIL-01 | DATA/LEGAL/SECURITY | REL-01 | Shared credits | Dikerjakan hanya setelah billing gate Section 14.2 |
+
+Checkpoint `OBS-01` 2026-08-08: implementation, CI validation, PostgreSQL
+integration, local dashboard, Prometheus scrape, dan synthetic alert fire/resolve
+sudah lulus. Status belum `done` karena Cloud Monitoring belum dapat diterapkan
+ke staging dan notification channel nyata belum dapat diuji tanpa project/IAM
+GCP operator.
+
+Checkpoint `QA-01` 2026-08-08: repository mempunyai satu entrypoint
+`npm run qa:verify` yang juga dipakai CI. Gate ini menolak test database yang
+hilang agar fixture PostgreSQL tidak dapat berubah menjadi skip diam-diam,
+memblokir environment production serta database non-loopback tanpa opt-in, lalu
+menjalankan build, migration, seluruh unit/contract/HTTP/PostgreSQL fixture,
+secret scan, observability validation, Compose validation, Prometheus rule dan
+alert rehearsal, Terraform validation, serta dependency audit High/Critical.
+Rehearsal migration terisolasi juga menerapkan schema pra-`006`, menanam data
+kontrak revision lama, menerapkan enam migration forward, membuktikan revision
+pra-audit masih dapat membaca/menulis setelah `006`, memverifikasi audit
+immutable, dan menjalankan migrator ulang secara idempotent. Rehearsal lokal
+lulus 91/91 tanpa skip, 11 alert, dan 12 panel. `QA-01` belum `done` karena live
+remote CLIProxyAPI/KMS staging, Redis/load multi-instance, desktop Local
+packaged-app/manual workflow regression penuh, Cloud SQL PITR/failover, canary,
+dan rollback staging masih terbuka.
+
+Checkpoint `TRN-02`/Local regression 2026-08-08: audit menemukan backend desktop
+sebelumnya memanggil `app.listen(port)` tanpa host eksplisit. Karena backend ini
+tidak mempunyai multi-user auth dan memiliki route management sensitif, runtime
+sekarang bind eksplisit ke IPv4 loopback `127.0.0.1`; origin browser yang tidak
+diizinkan mendapat normalized `403`, dan timer usage poller tidak menahan proses
+shutdown. Patch ini diterapkan ulang oleh `vendor:sync` agar sync sibling tidak
+mengembalikan wildcard bind. Gate `npm run qa:cliproxy-local` dan workflow macOS
+menjalankan build main/renderer/assets, 13 backend fixture, 23 Cowork/IDE/tool
+fixture, 2 transport fixture, backend smoke terisolasi, serta hidden Electron
+smoke melalui preload dan named IPC tanpa Firebase login. Gate repository lulus.
+`TRN-02` belum `done` sampai packaged installer dan workflow manual Local
+(binary lifecycle, Models, Providers, Usage, Chat, Config, IDE sync, Cowork
+approval) diuji pada target release.
 
 ### 18.3 Aturan Status Task
 
@@ -1324,7 +1576,8 @@ Hasil:
 - kontrak dan scope dibekukan;
 - data classification selesai;
 - tidak ada code cloud publik;
-- provider MVP dipilih berdasarkan API resmi dan kebutuhan nyata.
+- remote CLIProxyAPI ditetapkan sebagai upstream utama; provider langsung
+  ditetapkan sebagai opsi tambahan.
 
 Exit gate:
 
@@ -1363,7 +1616,6 @@ Task:
 
 ```text
 API-01 -> AUT-01 -> KEY-01
-API-01 -> MOD-01
 ```
 
 Gunakan deterministic mock provider untuk:
@@ -1383,25 +1635,39 @@ Exit gate:
 - API key dan tenant test lulus;
 - belum menyimpan provider secret.
 
-### Phase 3 - Secure BYOK dan Provider Pertama
+### Phase 3 - Remote CLIProxyAPI sebagai Upstream Utama
 
 Task:
 
 ```text
-BYO-01 -> PRV-01 -> STR-01
+PRV-01 -> MOD-01
+PRV-01 -> STR-01
 PRV-01 -> RTE-01
 ```
 
-Mulai dari provider paling dibutuhkan. Jangan mengintegrasikan banyak provider
-sekaligus.
+Implementasikan satu domain CLIProxyAPI terkonfigurasi lebih dulu. Jangan
+memecah provider di belakangnya menjadi adapter WAN Router yang terpisah.
 
 Exit gate:
 
-- encrypted storage dan key rotation lulus;
-- request streaming real provider lulus di staging;
+- proxy API key hanya tersedia server-side dan rotation test lulus;
+- model live berasal dari remote CLIProxyAPI;
+- request streaming melalui remote CLIProxyAPI lulus di staging;
 - secret tidak muncul di log/error;
 - fallback sebelum first token lulus;
 - cancellation menghentikan upstream.
+
+### Phase 3B - Direct Provider Tambahan (`NEXT`)
+
+Task:
+
+```text
+BYO-01 -> PRV-02
+```
+
+OpenAI langsung dan provider lain hanya ditambahkan sebagai kandidat routing
+eksplisit. Kegagalan atau belum selesainya fase ini tidak memblokir CLIProxy
+Relay MVP.
 
 ### Phase 4 - Usage, Limits, dan Web
 
@@ -1522,7 +1788,8 @@ Desktop:
 Web:
 
 - signup/login/logout/reset session;
-- add/verify/delete provider credential;
+- melihat status remote CLIProxyAPI tanpa pernah menerima proxy API key;
+- add/verify/delete direct-provider credential hanya bila fitur opsional aktif;
 - create/revoke WAN API key;
 - model selection dan chat stream;
 - stop generation;
@@ -1546,17 +1813,32 @@ Web:
 
 ### 20.7 Release Gate
 
+Gate repository yang sama dengan CI:
+
+```sh
+WAN_TEST_DATABASE_URL='postgres://wan_router:wan_router_dev@127.0.0.1:55432/wan_router' \
+  npm --prefix services/wan-router run qa:verify
+```
+
+Command ini hanya membuktikan gate yang dapat dijalankan dari repository. Item
+staging, load multi-instance, packaged desktop workflow, backup/restore, canary,
+dan rollback deployment tetap wajib diverifikasi terpisah sebelum checklist
+berikut dapat ditutup. "Backward" pada gate repository berarti rollback
+revision aplikasi di atas schema additive, bukan destructive down migration.
+
 ```text
 [ ] Unit test pass
 [ ] Contract test pass
 [ ] Integration test pass
 [ ] Cross-tenant negative test pass
-[ ] Desktop Local regression pass
+[x] Desktop Local repository regression pass
+[ ] Packaged desktop Local workflow regression pass
 [ ] Web E2E pass
 [ ] Streaming fragmentation/cancel pass
 [ ] Security scan pass
 [ ] Load target pass
-[ ] Migration forward/backward rehearsal pass
+[x] Migration forward/application-rollback rehearsal pass (repository)
+[x] PostgreSQL logical backup/restore rehearsal pass (repository)
 [ ] Rollback rehearsal pass
 [ ] No P0/P1 or High/Critical security issue open
 ```
@@ -1596,6 +1878,37 @@ database URL
 KMS plaintext/decrypted payload
 ```
 
+Checkpoint repository 2026-08-08:
+
+- request dan control-plane key/credential event sudah memakai structured log;
+- setiap generation yang masuk ke lifecycle inference memancarkan tepat satu
+  `generation_finalized` setelah final state tersimpan, termasuk success,
+  failure, dan cancellation;
+- field generation dibatasi ke ID internal, status, model, stream flag,
+  latency, TTFT, usage, estimated flag, dan normalized error code;
+- `/metrics` memakai token collector terpisah minimal 32 byte. WAN API key,
+  Firebase token, dan request tanpa auth ditolak; label tidak memuat workspace,
+  API key, request/model ID, prompt, completion, atau tool arguments;
+- migration `006_audit_events.sql` menambah audit append-only, event-key
+  idempotency, tenant scope, dan trigger immutable. Retention hanya melalui
+  transaksi migration-owner yang men-disable trigger secara eksplisit;
+- audit mencakup API-key create/revoke, provider credential
+  create/update/delete/verify, serta generation success/failure/cancel;
+- `GET /api/audit-events` hanya menerima Firebase principal dengan
+  `usage:read`, membatasi tenant dari auth context, dan tidak mempunyai secret
+  atau raw-body field;
+- secret scanner mendeteksi credential high-confidence tanpa mencetak nilainya
+  dan memindai source runtime, server build, serta artefak operations;
+- local rehearsal membuktikan PostgreSQL migration, 91/91 test tanpa skip,
+  Prometheus target `UP`, generation metric ter-scrape, audit persisted,
+  Grafana dashboard ter-provision, 11 alert rule sehat, dan synthetic alert
+  fire/resolve melalui Alertmanager;
+- Terraform Cloud Monitoring untuk dashboard, log-based metrics, KMS/audit/5xx
+  alert telah lulus `fmt` dan provider schema validation. Apply staging,
+  notification delivery, log-retention/sink IAM, dan live log-sink secret scan
+  masih terbuka karena project, IAM, dan notification channel GCP tidak tersedia
+  di environment ini; karena itu `OBS-01` belum `done`.
+
 ### 21.2 Metrics
 
 - request rate;
@@ -1612,6 +1925,11 @@ KMS plaintext/decrypted payload
 - DB pool and Redis health;
 - key verification failure;
 - KMS decrypt failure.
+
+Prometheus tidak memakai workspace/API-key/model sebagai label untuk mencegah
+cardinality dan metadata leakage. Dimensi tenant/model tetap tersedia melalui
+PostgreSQL generation/usage ledger, tenant-scoped control API, dan structured
+logs berizin.
 
 ### 21.3 Initial SLO
 
@@ -1638,6 +1956,12 @@ Contoh target awal yang harus disesuaikan setelah staging load test:
 - audit pipeline berhenti.
 
 Alert wajib memiliki owner, severity, dan runbook link.
+
+Repository menyediakan 11 rule dengan `promtool` fixture untuk database down,
+stale generation, KMS failure, dan audit pipeline failure. Local rehearsal telah
+memicu dan menyelesaikan synthetic alert. Threshold final dan notification
+delivery wajib dikalibrasi/diuji kembali di staging sebelum `OBS-01` menjadi
+`done`.
 
 ---
 
@@ -1730,6 +2054,18 @@ dan cost anomaly.
 - old and new app revision dapat berjalan bersamaan selama rollout;
 - migration job idempotent;
 - rollback application tidak bergantung pada schema yang sudah dihapus.
+
+Checkpoint repository 2026-08-08: `npm run migration:rehearse` memakai schema
+sementara, menerapkan `001`-`005`, menanam kontrak data revision lama, menjalankan
+migrator current untuk `006`, memverifikasi operasi lama dan audit immutable,
+lalu menjalankan migrator sekali lagi tanpa duplikasi. Rehearsal ini lulus dan
+selalu menghapus schema sementara pada cleanup. `npm run backup:rehearse` juga
+membuat dua database disposable, menghasilkan custom-format PostgreSQL 17 dump,
+restore transactional, memverifikasi tenant, API key digest, credential
+ciphertext, generation/attempt/usage/reservation, audit metadata, foreign key,
+trigger immutable, dan migrator idempotent, lalu menghapus kedua database.
+Cloud SQL PITR/retention/IAM, regional failover, RTO/RPO, dan rollback revision
+staging tetap bagian `OPS-01`.
 
 ### 23.4 Desktop Compatibility
 
@@ -1889,10 +2225,16 @@ Pertahankan:
 Tambahkan:
   Web/Desktop/External Client
     -> WAN Router Cloud
-    -> auth + API key + KMS BYOK
-    -> model routing + fallback
-    -> provider resmi
+    -> auth + WAN API key
+    -> CliproxyRemoteAdapter
+    -> domain CLIProxyAPI terkonfigurasi + proxy API key server-side
+    -> provider/OAuth yang dikelola CLIProxyAPI
     -> usage + quota + audit
+
+Opsional setelah jalur utama:
+  WAN Router Cloud
+    -> KMS BYOK
+    -> OpenAICompatibleAdapter atau provider langsung lain
 
 Jangan lakukan:
   expose backend local
@@ -1908,11 +2250,11 @@ Urutan aman:
     -> transport abstraction tanpa regression
     -> cloud mock API
     -> auth and API key
-    -> encrypted BYOK
-    -> provider and streaming
+    -> remote CLIProxyAPI adapter + live models + streaming
     -> routing and usage
     -> web dashboard
     -> security/load/rollback
-    -> BYOK MVP release
+    -> CLIProxy Relay MVP release
+    -> optional direct-provider BYOK
     -> shared credits hanya setelah gate terpisah
 ```

@@ -1,0 +1,105 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Request rate",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+      "targets": [{ "expr": "sum(rate(wan_router_http_requests_total{route!=\"/metrics\"}[5m]))", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "5xx rate",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+      "targets": [{ "expr": "sum(rate(wan_router_http_requests_total{status_class=\"5xx\"}[5m]))", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "Active streams",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+      "targets": [{ "expr": "wan_router_active_streams", "refId": "A" }]
+    },
+    {
+      "type": "stat",
+      "title": "PostgreSQL up",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+      "targets": [{ "expr": "wan_router_dependency_up{dependency=\"postgres\"}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "HTTP latency p50 / p90 / p99",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(wan_router_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.90, sum by (le) (rate(wan_router_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p90", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(wan_router_http_request_duration_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "TTFT p50 / p90 / p99",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 4 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(wan_router_generation_ttft_seconds_bucket[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.90, sum by (le) (rate(wan_router_generation_ttft_seconds_bucket[5m])))", "legendFormat": "p90", "refId": "B" },
+        { "expr": "histogram_quantile(0.99, sum by (le) (rate(wan_router_generation_ttft_seconds_bucket[5m])))", "legendFormat": "p99", "refId": "C" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Generation outcomes",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 12 },
+      "targets": [{ "expr": "sum by (status) (rate(wan_router_generation_total[5m]))", "legendFormat": "{{status}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Provider attempts",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 12 },
+      "targets": [{ "expr": "sum by (provider, status) (rate(wan_router_provider_attempts_total{status!=\"started\"}[5m]))", "legendFormat": "{{provider}} {{status}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Output tokens / second",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 12 },
+      "targets": [{ "expr": "histogram_quantile(0.50, sum by (le, stream) (rate(wan_router_output_tokens_per_second_bucket[5m])))", "legendFormat": "stream={{stream}}", "refId": "A" }]
+    },
+    {
+      "type": "timeseries",
+      "title": "Fallback and circuit state",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 20 },
+      "targets": [
+        { "expr": "sum by (result) (rate(wan_router_fallback_total[5m]))", "legendFormat": "fallback {{result}}", "refId": "A" },
+        { "expr": "wan_router_circuit_open", "legendFormat": "circuit {{candidate}}", "refId": "B" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Security and audit failures",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 20 },
+      "targets": [
+        { "expr": "sum(rate(wan_router_authentication_failures_total[5m]))", "legendFormat": "auth denials", "refId": "A" },
+        { "expr": "sum(rate(wan_router_kms_failures_total[5m]))", "legendFormat": "KMS failures", "refId": "B" },
+        { "expr": "sum(rate(wan_router_audit_failures_total[5m]))", "legendFormat": "audit failures", "refId": "C" }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Database and stale generations",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 20 },
+      "targets": [
+        { "expr": "wan_router_database_pool_connections", "legendFormat": "pool {{state}}", "refId": "A" },
+        { "expr": "wan_router_stale_generations", "legendFormat": "stale generations", "refId": "B" }
+      ]
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": ["wan-router", "obs-01"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "WAN Router Operations",
+  "uid": "wan-router-operations",
+  "version": 1
+}

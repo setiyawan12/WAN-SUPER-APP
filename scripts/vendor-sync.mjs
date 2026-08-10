@@ -5,7 +5,7 @@
 import { execSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { mkdirSync, existsSync, cpSync } from "node:fs";
+import { mkdirSync, existsSync, cpSync, readFileSync, writeFileSync } from "node:fs";
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const mono = path.dirname(root);
@@ -15,6 +15,30 @@ function rsync(src, dest, extra = "") {
   const cmd = `rsync -a --delete --exclude node_modules --exclude dist --exclude out --exclude build --exclude graphify-out --exclude .git ${extra} "${src}/" "${dest}/"`;
   console.log(cmd);
   execSync(cmd, { stdio: "inherit" });
+}
+
+function replaceRequired(file, original, replacement) {
+  const text = readFileSync(file, "utf8");
+  if (text.includes(replacement)) return;
+  if (!text.includes(original)) {
+    throw new Error(`Cannot re-apply required Super App patch in ${file}`);
+  }
+  writeFileSync(file, text.replace(original, replacement), "utf8");
+}
+
+function enforceCliproxyLocalSecurity() {
+  const backend = path.join(root, "modules/cliproxy/main/backend");
+  replaceRequired(
+    path.join(backend, "index.js"),
+    `app.get("/", (req, res) => res.json({ name: "renn-copilot-backend", status: "ok" }));\n\napp.listen(settings.port, () => {`,
+    `app.get("/", (req, res) => res.json({ name: "renn-copilot-backend", status: "ok" }));\n\napp.use((err, _req, res, next) => {\n  if (err instanceof Error && err.message === "Not allowed by CORS") {\n    res.status(403).json({ error: "Origin not allowed" });\n    return;\n  }\n  next(err);\n});\n\nexport const backendServer = app.listen(settings.port, "127.0.0.1", () => {`,
+  );
+  replaceRequired(
+    path.join(backend, "usage-poller.js"),
+    `  setInterval(() => drainOnce().catch(() => {}), POLL_INTERVAL_MS);`,
+    `  const timer = setInterval(() => drainOnce().catch(() => {}), POLL_INTERVAL_MS);\n  timer.unref?.();`,
+  );
+  console.log("[vendor-sync] re-applied Cliproxy loopback/CORS/runtime cleanup patch");
 }
 
 const clipSrc = path.join(mono, "wan-cliproxyapi");
@@ -30,6 +54,7 @@ rsync(netSrc, path.join(root, "vendor/wan-net"));
 
 // Working modules (preserve adapter/ patches by only syncing source trees)
 rsync(path.join(clipSrc, "src/main"), path.join(root, "modules/cliproxy/main"), "--exclude super-boot.ts");
+enforceCliproxyLocalSecurity();
 // Re-apply super-boot is local — not in vendor. Don't delete adapter.
 rsync(path.join(clipSrc, "src/preload"), path.join(root, "modules/cliproxy/preload"));
 rsync(path.join(clipSrc, "src/renderer"), path.join(root, "modules/cliproxy/renderer"));

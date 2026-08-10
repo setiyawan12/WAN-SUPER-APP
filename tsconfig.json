@@ -15,6 +15,7 @@
   "include": [
     "src/hub-renderer/**/*",
       "modules/cliproxy/renderer/**/*",
+      "modules/cliproxy/web/**/*",
       "modules/ssh/ui/src/**/*"
   ],
   "exclude": [

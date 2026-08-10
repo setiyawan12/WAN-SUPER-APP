@@ -45,7 +45,15 @@ app.use("/api", router);
 
 app.get("/", (req, res) => res.json({ name: "renn-copilot-backend", status: "ok" }));
 
-app.listen(settings.port, () => {
+app.use((err, _req, res, next) => {
+  if (err instanceof Error && err.message === "Not allowed by CORS") {
+    res.status(403).json({ error: "Origin not allowed" });
+    return;
+  }
+  next(err);
+});
+
+export const backendServer = app.listen(settings.port, "127.0.0.1", () => {
   console.log(`renn-copilot backend listening on http://127.0.0.1:${settings.port}`);
   console.log(`CLIProxyAPI home: ${settings.cliproxyHome}`);
 });

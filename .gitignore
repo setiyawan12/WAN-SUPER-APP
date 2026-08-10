@@ -30,3 +30,11 @@ firebase/functions/.secret.local
 
 # graphify knowledge-graph output (local tool)
 graphify-out/
+
+# Terraform provider/cache state; keep .terraform.lock.hcl committed
+**/.terraform/
+*.tfstate
+*.tfstate.*
+
+# WAN Router local runtime secrets
+services/wan-router/.env.local

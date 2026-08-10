@@ -49,5 +49,6 @@ export function startUsagePoller() {
   if (started) return;
   started = true;
   drainOnce().catch(() => {});
-  setInterval(() => drainOnce().catch(() => {}), POLL_INTERVAL_MS);
+  const timer = setInterval(() => drainOnce().catch(() => {}), POLL_INTERVAL_MS);
+  timer.unref?.();
 }

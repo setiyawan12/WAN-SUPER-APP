@@ -93,9 +93,10 @@ export function fitPublicContent({ animate = true } = {}) {
       return;
     }
 
+    const wrap = document.getElementById('share-canvas-wrap');
     const padding = innerWidth <= 700 ? 28 : 56;
-    const viewportWidth = Math.max(1, container.clientWidth);
-    const viewportHeight = Math.max(1, container.clientHeight);
+    const viewportWidth = Math.max(1, container.clientWidth || wrap?.clientWidth || innerWidth);
+    const viewportHeight = Math.max(1, container.clientHeight || wrap?.clientHeight || (innerHeight - 56));
     const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
     const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
     const scaleX = Math.max(1, viewportWidth - padding * 2) / contentWidth;

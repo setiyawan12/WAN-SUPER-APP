@@ -1,0 +1,57 @@
+rule_files:
+  - alerts.yml
+
+evaluation_interval: 1m
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: wan_router_dependency_up{dependency="postgres"}
+        values: 0x10
+      - series: wan_router_audit_failures_total{action="generation.succeeded"}
+        values: 0 0 0 1 1 1 1 1 1 1
+      - series: wan_router_kms_failures_total{operation="decrypt",code="kms_operation_failed"}
+        values: 0 0 0 1 1 1 1 1 1 1
+      - series: wan_router_stale_generations
+        values: 1x10
+    alert_rule_test:
+      - eval_time: 3m
+        alertname: WanRouterDatabaseUnavailable
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              owner: wan-router-oncall
+              dependency: postgres
+            exp_annotations:
+              summary: WAN Router PostgreSQL health probe is failing
+              runbook_url: docs/OBSERVABILITY-RUNBOOK.md#database-unavailable
+      - eval_time: 4m
+        alertname: WanRouterAuditPipelineFailure
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              owner: wan-router-security
+              action: generation.succeeded
+            exp_annotations:
+              summary: WAN Router could not persist an audit event
+              runbook_url: docs/OBSERVABILITY-RUNBOOK.md#audit-pipeline-failure
+      - eval_time: 4m
+        alertname: WanRouterKmsFailure
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              owner: wan-router-security
+              operation: decrypt
+              code: kms_operation_failed
+            exp_annotations:
+              summary: WAN Router KMS operation failed
+              runbook_url: docs/OBSERVABILITY-RUNBOOK.md#kms-failure
+      - eval_time: 6m
+        alertname: WanRouterStaleGeneration
+        exp_alerts:
+          - exp_labels:
+              severity: page
+              owner: wan-router-oncall
+            exp_annotations:
+              summary: WAN Router has pending generations beyond the reconciliation cutoff
+              runbook_url: docs/OBSERVABILITY-RUNBOOK.md#stale-generations
