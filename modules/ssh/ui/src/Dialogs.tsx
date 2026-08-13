@@ -3,6 +3,7 @@ import {
   Check,
   Cloud,
   Copy,
+  FileInput,
   Fingerprint,
   FolderPlus,
   KeyRound,
@@ -13,6 +14,7 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
+  ScrollText,
   Trash2,
   UserRound,
   Wifi,
@@ -85,6 +87,10 @@ export function VaultScreen({ state, error, onUnlock, onCreate, onBiometric }: {
 
 type HostTab = "connection" | "authentication" | "routing" | "advanced";
 
+function isInlineIdentity(identity: Identity): boolean {
+  return identity.label === `${identity.username}@inline`;
+}
+
 export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
   initial: Host | null;
   catalog: Catalog;
@@ -93,6 +99,9 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
   onDelete: (id: string) => Promise<void>;
 }) {
   const confirm = useConfirm();
+  const savedIdentities = catalog.identities.filter((identity) => !isInlineIdentity(identity));
+  const initialSavedIdentityId = initial?.identityId && savedIdentities.some((identity) => identity.id === initial.identityId) ? initial.identityId : "";
+  const inlineIdentityId = initial?.identityId && !initialSavedIdentityId ? initial.identityId : null;
   const [tab, setTab] = useState<HostTab>("connection");
   const [label, setLabel] = useState(initial?.label ?? "");
   const [address, setAddress] = useState(initial?.address ?? "");
@@ -102,7 +111,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
   const [groupId, setGroupId] = useState(initial?.groupId ?? "");
   const [environment, setEnvironment] = useState<Host["environment"]>(initial?.environment ?? "none");
   const [favorite, setFavorite] = useState(initial?.favorite ?? false);
-  const [identityId, setIdentityId] = useState(initial?.identityId ?? "");
+  const [identityId, setIdentityId] = useState(initialSavedIdentityId);
   const [username, setUsername] = useState(initial?.effectiveUsername ?? "");
   const [password, setPassword] = useState("");
   const [keyId, setKeyId] = useState(initial?.keyId ?? "");
@@ -131,7 +140,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
     port: port.trim() ? Number(port) : null,
     groupId: groupId || null,
     protocol: "ssh",
-    identityId: identityId || null,
+    identityId: identityId || inlineIdentityId,
     username: identityId ? undefined : username || undefined,
     password: identityId ? undefined : password || undefined,
     keyId: keyId || null,
@@ -211,7 +220,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
           <label className="toggle-row"><input type="checkbox" checked={favorite} onChange={(event) => setFavorite(event.target.checked)} /><span><strong>Favorite</strong><small>Pin this host above groups.</small></span></label>
         </div>}
         {tab === "authentication" && <div className="form-grid">
-          <Field label="Saved identity" hint="Identity can be reused across multiple hosts."><select value={identityId} onChange={(event) => setIdentityId(event.target.value)}><option value="">Inline credential</option>{catalog.identities.map((identity) => <option key={identity.id} value={identity.id}>{identity.label} ({identity.username})</option>)}</select></Field>
+          <Field label="Saved identity" hint="Identity can be reused across multiple hosts."><select value={identityId} onChange={(event) => setIdentityId(event.target.value)}><option value="">Inline credential</option>{savedIdentities.map((identity) => <option key={identity.id} value={identity.id}>{identity.label} ({identity.username})</option>)}</select></Field>
           <Field label="SSH key"><select value={keyId} onChange={(event) => setKeyId(event.target.value)}><option value="">No explicit key</option>{catalog.keys.map((key) => <option key={key.id} value={key.id}>{key.label} ({key.algorithm})</option>)}</select></Field>
           {!identityId && <>
             <Field label="Username"><input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="root" /></Field>
@@ -221,7 +230,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
           </>}
         </div>}
         {tab === "routing" && <div className="form-grid">
-          <Field label="Jump host" hint="One bastion hop is supported."><select value={jumpHostId} onChange={(event) => setJumpHostId(event.target.value)}><option value="">Direct connection</option>{catalog.hosts.filter((host) => host.id !== initial?.id).map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}</select></Field>
+          <Field label="Jump host" hint="Chains of up to five bastions are supported."><select value={jumpHostId} onChange={(event) => setJumpHostId(event.target.value)}><option value="">Direct connection</option>{catalog.hosts.filter((host) => host.id !== initial?.id).map((host) => <option key={host.id} value={host.id}>{host.label}</option>)}</select></Field>
           <Field label="Keepalive seconds"><input type="number" min="0" max="3600" value={keepAliveInterval} onChange={(event) => setKeepAliveInterval(event.target.value)} /></Field>
           <label className="toggle-row"><input type="checkbox" checked={autoReconnect} onChange={(event) => setAutoReconnect(event.target.checked)} /><span><strong>Automatic reconnect</strong><small>Retry with bounded exponential backoff.</small></span></label>
           {autoReconnect && <Field label="Reconnect attempts"><input type="number" min="0" max="10" value={reconnectLimit} onChange={(event) => setReconnectLimit(event.target.value)} /></Field>}
@@ -372,7 +381,7 @@ export function AuthPromptDialog({ prompt, onAnswer }: { prompt: any; onAnswer: 
   </Modal>;
 }
 
-type SettingsTab = "security" | "identities" | "keys" | "known-hosts" | "sync" | "storage";
+type SettingsTab = "security" | "identities" | "keys" | "known-hosts" | "openssh" | "audit" | "sync" | "storage";
 
 export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: { catalog: Catalog; onCatalogChange: () => Promise<void>; onClose: () => void; onToast: (message: string, tone?: "default" | "danger") => void }) {
   const [tab, setTab] = useState<SettingsTab>("security");
@@ -380,16 +389,18 @@ export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: {
   const [knownHosts, setKnownHosts] = useState<any[]>([]);
   const [sync, setSync] = useState<any>(null);
   const [storage, setStorage] = useState<any>(null);
+  const [audit, setAudit] = useState<any[]>([]);
   const [identityDraft, setIdentityDraft] = useState<any>(null);
   const [keyMode, setKeyMode] = useState<"generate" | "import" | null>(null);
   const [busy, setBusy] = useState(false);
 
   const reload = async () => {
-    const [nextSettings, nextKnownHosts, nextSync, nextStorage] = await Promise.all([
-      api.vault.settings(), api.knownHosts.list(), api.sync.status(), api.storage.status()
+    const [nextSettings, nextKnownHosts, nextAudit, nextSync, nextStorage] = await Promise.all([
+      api.vault.settings(), api.knownHosts.list(), api.audit.list(100), api.sync.status(), api.storage.status()
     ]);
     setSettings(nextSettings);
     setKnownHosts(nextKnownHosts);
+    setAudit(nextAudit);
     setSync(nextSync);
     setStorage(nextStorage);
   };
@@ -399,6 +410,8 @@ export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: {
     { id: "identities", label: "Identities", icon: <UserRound size={15} /> },
     { id: "keys", label: "SSH Keys", icon: <KeyRound size={15} /> },
     { id: "known-hosts", label: "Known Hosts", icon: <Server size={15} /> },
+    { id: "openssh", label: "OpenSSH", icon: <FileInput size={15} /> },
+    { id: "audit", label: "Audit", icon: <ScrollText size={15} /> },
     { id: "sync", label: "Cloud Sync", icon: <Cloud size={15} /> },
     { id: "storage", label: "Storage", icon: <Laptop size={15} /> }
   ];
@@ -411,6 +424,8 @@ export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: {
         {tab === "identities" && <IdentitySettings identities={catalog.identities} keys={catalog.keys} draft={identityDraft} setDraft={setIdentityDraft} onChange={async () => { await onCatalogChange(); setIdentityDraft(null); }} />}
         {tab === "keys" && <KeySettings keys={catalog.keys} hosts={catalog.hosts} mode={keyMode} setMode={setKeyMode} onChange={onCatalogChange} onToast={onToast} />}
         {tab === "known-hosts" && <div className="manager-list">{knownHosts.map((entry) => <div className="manager-row" key={entry.id}><Server size={16} /><span className="manager-copy"><strong>{entry.hostPattern}</strong><code>{entry.fingerprint}</code><small>{entry.vaultId === "personal" ? "Cloud workspace" : "Local only"}</small></span><IconButton className="danger" label="Revoke trust" onClick={async () => { await api.knownHosts.remove(entry.id); await reload(); }}><Trash2 size={14} /></IconButton></div>)}{!knownHosts.length && <div className="empty-list">No trusted host keys</div>}</div>}
+        {tab === "openssh" && <div className="settings-stack"><section className="settings-section"><h3>Import ~/.ssh/config</h3><p className="settings-help">Imports concrete Host entries, user, port, agent forwarding, and ProxyJump chains. Wildcards and Match exec are not executed. Private keys referenced by IdentityFile must be imported separately.</p><button className="button primary" disabled={busy} onClick={async () => { setBusy(true); try { const result = await api.openSsh.importConfig(); if (!result.canceled) { await onCatalogChange(); await reload(); const skipped = result.identityFilesSkipped?.length ? ` · ${result.identityFilesSkipped.length} key path(s) skipped` : ""; onToast(`${result.imported} imported, ${result.updated} updated${skipped}`); } } catch (error) { onToast(error instanceof Error ? error.message : String(error), "danger"); } finally { setBusy(false); } }}><FileInput size={16} /> Import config</button></section></div>}
+        {tab === "audit" && <div className="manager-list">{audit.map((entry) => <div className="manager-row" key={entry.id}><ScrollText size={16} /><span className="manager-copy"><strong>{entry.action}</strong><code>{entry.outcome}</code><small>{new Date(entry.timestamp).toLocaleString()} · {Object.keys(entry.detail ?? {}).length ? JSON.stringify(entry.detail) : "No detail"}</small></span></div>)}{!audit.length && <div className="empty-list">No audited actions</div>}</div>}
         {tab === "sync" && <SyncSettings status={sync} busy={busy} setBusy={setBusy} reload={reload} onToast={onToast} />}
         {tab === "storage" && storage && <div className="settings-section"><h3>Local database</h3><dl className="detail-list"><div><dt>Schema</dt><dd>v{storage.schemaVersion}</dd></div><div><dt>Backups</dt><dd>{storage.backups?.length ?? 0} rotating copies</dd></div><div><dt>Recovery</dt><dd>{storage.needed ? "Action recorded" : "Healthy"}</dd></div></dl>{storage.message && <div className="security-note warning"><ShieldAlert size={17} /><span>{storage.message}</span></div>}{storage.needed && <button className="button" onClick={async () => { await api.storage.acknowledgeRecovery(); await reload(); }}>Acknowledge</button>}<p className="settings-help">Database writes are atomic, synced to disk, permissioned to the current user, and backed up before replacement.</p></div>}
       </div>

@@ -20,6 +20,7 @@ export class VaultCore {
   autoLockTimer: any;
   autoLockMs = VAULT.autoLockMs;
   /** Dipanggil VaultCore.lock() untuk menutup semua sesi aktif. */
+  onBeforeLock?: () => void;
   onLock?: () => void;
 
   constructor(meta: any) {
@@ -97,6 +98,7 @@ export class VaultCore {
     this.resetAutoLock();
   }
   lock() {
+    this.onBeforeLock?.();
     wipe(this.vaultKey);
     this.vaultKey = null;
     this.state = "locked";

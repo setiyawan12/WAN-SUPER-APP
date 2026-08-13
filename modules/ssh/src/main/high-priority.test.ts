@@ -4,14 +4,20 @@ import fs from "node:fs";
 import * as node_path from "node:path";
 import test from "node:test";
 import * as ssh2 from "ssh2";
+import { AuditService } from "./audit.js";
 import { RealtimeDbTransport, vaultMetaPath } from "./firebase.js";
 import { generateKey } from "./keys.js";
 import { knownHostPattern } from "./knownhosts.js";
+import { HostService } from "./hosts.js";
+import { resolveJumpChain } from "./jumps.js";
+import { OpenSshImportService, parseOpenSshConfig, resolveOpenSshParents } from "./openssh.js";
 import { RecordingManager, redactTerminalText } from "./recording.js";
-import { resolveEffective } from "./repo.js";
+import { itemRepo, resolveEffective } from "./repo.js";
 import { SshManager, SshSession } from "./ssh.js";
-import { clearSyncedData, createRestoredPayload, createTombstonePayload, normalizeStoreData, replaceSyncedOutbox } from "./store.js";
+import { clearSyncedData, createRestoredPayload, createTombstonePayload, initDbForTest, normalizeStoreData, replaceSyncedOutbox, settingsStore } from "./store.js";
 import { SyncEngine } from "./sync.js";
+import { TransferManager } from "./transfer.js";
+import { TunnelManager } from "./tunnels.js";
 import { VaultCore } from "./vault.js";
 
 class MemoryMetaStore {
@@ -337,6 +343,94 @@ test("effective host settings inherit group port and environment variables", () 
   assert.deepEqual(effective.envVars, { REGION: "ap-southeast-3", ROLE: "api" });
 });
 
+test("OpenSSH parser imports concrete hosts and preserves ProxyJump order without executing Match exec", () => {
+  const parsed = parseOpenSshConfig(`
+Host edge
+  HostName edge.example.com
+  User ops
+  Port 2201
+
+Host app
+  HostName 10.0.0.8
+  ProxyJump edge,inner
+  ForwardAgent yes
+
+Host *.internal
+  ProxyJump should-not-import
+
+Host *
+  User fallback
+  IdentityFile ~/.ssh/id_ed25519
+
+Match exec "touch /tmp/wan-ssh-should-not-run"
+  User attacker
+`);
+  const byAlias = new Map(parsed.candidates.map((candidate) => [candidate.alias, candidate]));
+
+  assert.equal(byAlias.get("edge")?.address, "edge.example.com");
+  assert.equal(byAlias.get("edge")?.username, "ops");
+  assert.equal(byAlias.get("edge")?.port, 2201);
+  assert.deepEqual(byAlias.get("app")?.proxyJumps, ["edge", "inner"]);
+  assert.equal(byAlias.get("app")?.agentForwarding, true);
+  assert.deepEqual(byAlias.get("app")?.identityFiles, ["~/.ssh/id_ed25519"]);
+  assert.equal(byAlias.has("*.internal"), false);
+  assert.equal(byAlias.has("should-not-import"), false);
+  assert.equal(byAlias.has("inner"), true);
+  assert.equal(fs.existsSync("/tmp/wan-ssh-should-not-run"), false);
+
+  const wildcardFirst = parseOpenSshConfig(`
+Host *
+  User fallback
+Host edge
+  User ops
+`);
+  assert.equal(wildcardFirst.candidates.find((candidate) => candidate.alias === "edge")?.username, "fallback");
+});
+
+test("OpenSSH import persists a validated multi-hop chain", () => {
+  initDbForTest();
+  const hosts = new HostService({ encryptField: () => null, decryptString: () => "" } as any, () => "uid-test");
+  const service = new OpenSshImportService(hosts);
+
+  const result = service.import(`
+Host edge
+  HostName edge.example.com
+Host inner
+  HostName 10.0.0.2
+Host app
+  HostName 10.0.0.3
+  ProxyJump edge,inner
+`);
+
+  const byAlias = new Map(itemRepo.listByTypeAll("host").map((host: any) => [host.openSshAlias, host]));
+  const app = byAlias.get("app");
+  assert.equal(result.imported, 3);
+  assert.equal(app.jumpHostId, byAlias.get("inner").id);
+  assert.equal(byAlias.get("inner").jumpHostId, byAlias.get("edge").id);
+  assert.equal(byAlias.get("edge").jumpHostId, null);
+  assert.deepEqual(resolveJumpChain(app, (id) => itemRepo.get(id)).map((host) => host.openSshAlias), ["edge", "inner"]);
+});
+
+test("OpenSSH parent resolver rejects conflicting shared jump chains", () => {
+  const candidate = (alias: string, proxyJumps: string[]) => ({
+    alias,
+    label: alias,
+    address: alias,
+    port: null,
+    username: null,
+    agentForwarding: false,
+    proxyJumps,
+    identityFiles: []
+  });
+  assert.throws(() => resolveOpenSshParents([
+    candidate("edge-a", []),
+    candidate("edge-b", []),
+    candidate("inner", []),
+    candidate("app-a", ["edge-a", "inner"]),
+    candidate("app-b", ["edge-b", "inner"])
+  ]), /bertentangan/);
+});
+
 test("SSH config honors disabled keepalive, effective port, environment, and target verifier port", () => {
   const session = new SshSession(
     { id: "target", address: "target.test", port: 2202, vaultId: "local", keepAliveInterval: 0 },
@@ -400,6 +494,118 @@ test("recording redacts common secrets and excludes input unless explicitly enab
   manager.captureInput("session-with-input", "echo hello");
   const withInput: any = manager.stop("session-with-input");
   assert.equal(withInput.lines.some((line: string) => line.includes("echo hello")), true);
+});
+
+test("audit log encrypts entries and redacts sensitive detail", async () => {
+  initDbForTest();
+  const meta = new MemoryMetaStore();
+  const vault = new VaultCore(meta);
+  await vault.create("master-password");
+  const audit = new AuditService(vault);
+
+  audit.record("host:save", { hostId: "host-1", password: "secret", nested: { apiKey: "token-value" } });
+
+  const raw = settingsStore.get("encryptedAuditLog", []);
+  assert.equal(raw.length, 1);
+  assert.equal(JSON.stringify(raw).includes("secret"), false);
+  assert.equal(JSON.stringify(raw).includes("token-value"), false);
+  assert.deepEqual(audit.list(), [{
+    id: raw[0].id,
+    timestamp: raw[0].timestamp,
+    action: "host:save",
+    outcome: "success",
+    detail: { hostId: "host-1", password: "[REDACTED]", nested: { apiKey: "[REDACTED]" } }
+  }]);
+  vault.lock();
+});
+
+test("SFTP recursively removes directories without following symlinks", async () => {
+  const operations: string[] = [];
+  const directories: Record<string, any[]> = {
+    "/root": [
+      { filename: "file.txt", attrs: { mode: 0o100644 } },
+      { filename: "nested", attrs: { mode: 0o040755 } },
+      { filename: "link", attrs: { mode: 0o120777 } }
+    ],
+    "/root/nested": [{ filename: "child.txt", attrs: { mode: 0o100600 } }]
+  };
+  const sftp = {
+    readdir: (path: string, done: (error: Error | null, rows?: any[]) => void) => done(null, directories[path] ?? []),
+    unlink: (path: string, done: (error?: Error | null) => void) => { operations.push(`unlink:${path}`); done(null); },
+    rmdir: (path: string, done: (error?: Error | null) => void) => { operations.push(`rmdir:${path}`); done(null); },
+    end: () => undefined
+  };
+  const session = { id: "session-1", status: "connected", client: { sftp: (done: (error: Error | null, value?: any) => void) => done(null, sftp) } };
+  const ssh = {
+    getSession: () => session,
+    onSessionEnd: () => () => undefined,
+    onSessionReady: () => () => undefined
+  };
+  const manager = new TransferManager(ssh as any, () => undefined);
+
+  await manager.remove("session-1", "/root", true);
+
+  assert.deepEqual(operations, [
+    "unlink:/root/file.txt",
+    "unlink:/root/nested/child.txt",
+    "rmdir:/root/nested",
+    "unlink:/root/link",
+    "rmdir:/root"
+  ]);
+});
+
+test("recoverable disconnect pauses queued transfers and resumes them on session ready", () => {
+  let endListener: ((sessionId: string, event: any) => void) | null = null;
+  let readyListener: ((sessionId: string) => void) | null = null;
+  const session = { id: "session-1", status: "connected" };
+  const ssh = {
+    getSession: () => session,
+    onSessionEnd: (listener: typeof endListener) => { endListener = listener; return () => undefined; },
+    onSessionReady: (listener: typeof readyListener) => { readyListener = listener; return () => undefined; }
+  };
+  const manager = new TransferManager(ssh as any, () => undefined);
+  manager.maxConcurrent = 0;
+  const localPath = node_path.join(process.cwd(), `transfer-${node_crypto.randomUUID()}.tmp`);
+  fs.writeFileSync(localPath, "resume-me");
+  try {
+    const { transferId } = manager.upload("session-1", localPath, "/tmp/resume-me", true);
+    endListener?.("session-1", { reason: "transport-closed", reconnecting: true });
+    assert.equal(manager.jobs.get(transferId)?.state, "paused");
+
+    readyListener?.("session-1");
+    assert.equal(manager.jobs.get(transferId)?.state, "queued");
+    assert.deepEqual(manager.queue, [transferId]);
+  } finally {
+    fs.rmSync(localPath, { force: true });
+  }
+});
+
+test("dynamic tunnel keeps its identity and port across reconnect restore", async () => {
+  const session = { id: "session-1", status: "connected", client: {} };
+  const ssh = {
+    getSession: () => session,
+    onSessionEnd: () => () => undefined,
+    onSessionReady: () => () => undefined
+  };
+  const manager = new TunnelManager(ssh as any, () => undefined);
+  const original = await manager.start({
+    sessionId: "session-1",
+    kind: "dynamic",
+    bindAddress: "127.0.0.1",
+    bindPort: 0
+  });
+  try {
+    await manager.suspendSession("session-1");
+    assert.equal(manager.list("session-1")[0]?.state, "reconnecting");
+
+    await manager.restoreSession("session-1");
+    const restored = manager.list("session-1")[0];
+    assert.equal(restored?.id, original.id);
+    assert.equal(restored?.bindPort, original.bindPort);
+    assert.equal(restored?.state, "active");
+  } finally {
+    await manager.stopSession("session-1");
+  }
 });
 
 test("SSH session finish is idempotent, flushes output, wipes credentials, and closes transports", () => {

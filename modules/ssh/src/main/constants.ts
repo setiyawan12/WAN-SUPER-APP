@@ -23,6 +23,7 @@ export const SSH = {
   readyTimeoutMs: 2e4,
   keepAliveIntervalSec: 30,
   keepAliveCountMax: 3,
+  maxJumpHosts: 5,
   /** Batching output terminal (Bab 3 & 10): flush tiap frame / saat buffer besar. */
   flushIntervalMs: 16,
   flushChunkThreshold: 200

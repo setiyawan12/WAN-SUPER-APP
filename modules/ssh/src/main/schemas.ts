@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isLoopbackAddress } from "./security.js";
 
 export const PasswordSchema = z.string().min(1).max(1024);
 export const AutoLockSchema = z.number().int().min(60_000).max(24 * 60 * 60 * 1_000);
@@ -22,6 +23,7 @@ export const HostInputSchema = z.object({
   autoReconnect: z.boolean().optional(),
   reconnectLimit: z.number().int().min(0).max(10).optional(),
   keepAliveInterval: z.number().int().min(0).max(3600).optional(),
+  openSshAlias: z.string().min(1).max(255).optional(),
   password: z.string().max(1024).optional(),
   username: z.string().max(255).optional()
 });
@@ -97,7 +99,7 @@ export const TransferDownloadSchema = z.object({
 const TunnelBaseSchema = z.object({
   sessionId: z.string().uuid(),
   label: z.string().max(200).optional(),
-  bindAddress: z.string().min(1).max(255).optional(),
+  bindAddress: z.string().min(1).max(255).refine(isLoopbackAddress, "Tunnel hanya boleh bind ke loopback").optional(),
   bindPort: z.number().int().min(0).max(65535).optional()
 });
 export const TunnelStartSchema = z.discriminatedUnion("kind", [
@@ -143,6 +145,7 @@ export const RecordingStartSchema = z.object({
   rows: z.number().int().min(1).max(1e3),
   includeInput: z.boolean().optional()
 });
+export const AuditListLimitSchema = z.number().int().min(1).max(500);
 export const IdSchema = z.string().uuid();
 export const RevealPasswordSchema = z.object({
   id: z.string().uuid(),

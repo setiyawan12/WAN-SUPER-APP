@@ -24,6 +24,7 @@ export type Host = {
   effectivePort: number | null;
   hasCredential: boolean;
   groupPath: string[];
+  openSshAlias?: string | null;
 };
 
 export type Group = {
@@ -88,7 +89,7 @@ export type TransferJob = {
   direction: "upload" | "download";
   source: string;
   destination: string;
-  state: "queued" | "running" | "completed" | "failed" | "canceled";
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "canceled";
   transferred: number;
   total: number;
   error?: string;
@@ -103,7 +104,7 @@ export type Tunnel = {
   bindPort: number;
   targetHost?: string;
   targetPort?: number;
-  state: "active" | "stopping" | "error";
+  state: "active" | "reconnecting" | "stopping" | "error";
   error?: string;
 };
 

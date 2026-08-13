@@ -121,7 +121,7 @@ function FilesView({ session, transfers, onCancelTransfer, onRetryTransfer, onTo
                 <span className="transfer-name">{job.direction === "upload" ? job.source.split("/").at(-1) : job.destination.split("/").at(-1)}</span>
                 <span>{Math.round(progress)}%</span>
                 <div className="progress"><span style={{ width: `${progress}%` }} /></div>
-                {(job.state === "queued" || job.state === "running") && <IconButton label="Batalkan" onClick={() => void onCancelTransfer(job.id)}><X size={13} /></IconButton>}
+                {(job.state === "queued" || job.state === "running" || job.state === "paused") && <IconButton label="Batalkan" onClick={() => void onCancelTransfer(job.id)}><X size={13} /></IconButton>}
                 {(job.state === "failed" || job.state === "canceled") && <IconButton label="Coba lagi" onClick={() => void onRetryTransfer(job.id)}><RefreshCw size={13} /></IconButton>}
               </div>
             );

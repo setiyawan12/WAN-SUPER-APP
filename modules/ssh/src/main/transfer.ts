@@ -14,7 +14,7 @@ type TransferJob = {
   source: string;
   destination: string;
   resume: boolean;
-  state: "queued" | "running" | "completed" | "failed" | "canceled";
+  state: "queued" | "running" | "paused" | "completed" | "failed" | "canceled";
   transferred: number;
   total: number;
   cancel: (() => void) | null;
@@ -31,11 +31,29 @@ function validateRemotePath(value: string) {
   return value;
 }
 
+function validateRemovableRemotePath(value: string) {
+  const normalized = node_path.posix.normalize(validateRemotePath(value));
+  if (normalized === "/" || normalized === "." || normalized === "..") throw new Error("Root remote tidak boleh dihapus");
+  return normalized;
+}
+
 function fileType(mode = 0) {
   const kind = mode & 0o170000;
   if (kind === 0o040000) return "directory";
   if (kind === 0o120000) return "symlink";
   return "file";
+}
+
+async function removeRemoteTree(sftp: any, remotePath: string, depth = 0): Promise<void> {
+  if (depth > 128) throw new Error("Batas kedalaman folder remote terlampaui");
+  const rows = await callbackPromise<any[]>((done) => sftp.readdir(remotePath, done));
+  for (const row of rows) {
+    if (row.filename === "." || row.filename === "..") continue;
+    const childPath = node_path.posix.join(remotePath, row.filename);
+    if (fileType(row.attrs?.mode) === "directory") await removeRemoteTree(sftp, childPath, depth + 1);
+    else await callbackPromise<void>((done) => sftp.unlink(childPath, done));
+  }
+  await callbackPromise<void>((done) => sftp.rmdir(remotePath, done));
 }
 
 export class TransferManager {
@@ -53,7 +71,8 @@ export class TransferManager {
   constructor(ssh: SshManager, emit: EmitFn) {
     this.ssh = ssh;
     this.emit = emit;
-    this.ssh.onSessionEnd((sessionId) => this.cancelSession(sessionId));
+    this.ssh.onSessionEnd((sessionId, event) => event.reconnecting ? this.pauseSession(sessionId) : this.cancelSession(sessionId));
+    this.ssh.onSessionReady((sessionId) => this.resumeSession(sessionId));
   }
 
   requireSession(sessionId: string) {
@@ -155,9 +174,9 @@ export class TransferManager {
   async remove(sessionId: string, remotePath: string, directory: boolean) {
     const sftp = await this.openSftp(this.requireSession(sessionId));
     try {
-      await callbackPromise<void>((done) => directory
-        ? sftp.rmdir(validateRemotePath(remotePath), done)
-        : sftp.unlink(validateRemotePath(remotePath), done));
+      const path = validateRemovableRemotePath(remotePath);
+      if (directory) await removeRemoteTree(sftp, path);
+      else await callbackPromise<void>((done) => sftp.unlink(path, done));
     } finally {
       sftp.end();
     }
@@ -238,6 +257,31 @@ export class TransferManager {
     this.sftpChannels.delete(sessionId);
   }
 
+  pauseSession(sessionId: string) {
+    for (const job of this.jobs.values()) {
+      if (job.sessionId !== sessionId || (job.state !== "queued" && job.state !== "running")) continue;
+      job.state = "paused";
+      this.queue = this.queue.filter((id) => id !== job.id);
+      job.cancel?.();
+      this.publish(job);
+    }
+    const waiters = this.sftpWaiters.get(sessionId);
+    if (waiters) for (const resolve of waiters.splice(0)) resolve();
+    this.sftpWaiters.delete(sessionId);
+    this.sftpChannels.delete(sessionId);
+  }
+
+  resumeSession(sessionId: string) {
+    for (const job of this.jobs.values()) {
+      if (job.sessionId !== sessionId || job.state !== "paused") continue;
+      job.state = "queued";
+      job.cancel = null;
+      if (!this.queue.includes(job.id)) this.queue.push(job.id);
+      this.publish(job);
+    }
+    this.pump();
+  }
+
   publish(job: TransferJob, error?: string) {
     const { cancel: _cancel, ...payload } = job;
     this.emit("transfer:progress", { ...payload, error });
@@ -252,10 +296,10 @@ export class TransferManager {
       job.state = "running";
       this.publish(job);
       void this.run(job).then(() => {
-        if (job.state !== "canceled") job.state = "completed";
+        if (job.state !== "canceled" && job.state !== "paused") job.state = "completed";
         this.publish(job);
       }).catch((error) => {
-        if (job.state !== "canceled") {
+        if (job.state !== "canceled" && job.state !== "paused") {
           job.state = "failed";
           this.publish(job, error instanceof Error ? error.message : String(error));
         }
@@ -293,15 +337,19 @@ export class TransferManager {
       if (job.direction === "download") {
         const attrs = await callbackPromise<any>((done) => sftp.stat(job.source, done));
         job.total = attrs.size ?? 0;
+        const partialDestination = `${job.destination}.wann-part`;
         let offset = 0;
-        if (job.resume && node_fs.existsSync(job.destination)) {
-          offset = node_fs.statSync(job.destination).size;
+        if (job.resume && node_fs.existsSync(partialDestination)) {
+          offset = node_fs.statSync(partialDestination).size;
           if (offset > job.total) offset = 0;
         }
         job.transferred = offset;
-        if (offset === job.total && job.total > 0) return;
+        if (offset === job.total && job.total > 0) {
+          node_fs.renameSync(partialDestination, job.destination);
+          return;
+        }
         input = sftp.createReadStream(job.source, offset > 0 ? { start: offset } : undefined);
-        output = node_fs.createWriteStream(job.destination, { flags: offset > 0 ? "a" : "w", mode: 0o600 });
+        output = node_fs.createWriteStream(partialDestination, { flags: offset > 0 ? "a" : "w", mode: 0o600 });
       } else {
         const local = node_fs.statSync(job.source);
         job.total = local.size;
@@ -330,6 +378,7 @@ export class TransferManager {
       };
       await pipeline(input, output);
       job.transferred = job.total;
+      if (job.direction === "download") node_fs.renameSync(`${job.destination}.wann-part`, job.destination);
     } finally {
       input?.off("data", update);
       sftp.end();

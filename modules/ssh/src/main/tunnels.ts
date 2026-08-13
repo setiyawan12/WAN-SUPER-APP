@@ -14,7 +14,7 @@ type TunnelView = {
   bindPort: number;
   targetHost?: string;
   targetPort?: number;
-  state: "active" | "stopping" | "error";
+  state: "active" | "reconnecting" | "stopping" | "error";
   error?: string;
 };
 
@@ -151,7 +151,8 @@ export class TunnelManager {
   constructor(ssh: SshManager, emit: EmitFn) {
     this.ssh = ssh;
     this.emit = emit;
-    this.ssh.onSessionEnd((sessionId) => void this.stopSession(sessionId));
+    this.ssh.onSessionEnd((sessionId, event) => void (event.reconnecting ? this.suspendSession(sessionId) : this.stopSession(sessionId)));
+    this.ssh.onSessionReady((sessionId) => void this.restoreSession(sessionId));
   }
 
   requireSession(sessionId: string) {
@@ -177,7 +178,7 @@ export class TunnelManager {
     return this.startDynamic(session, input);
   }
 
-  async startLocal(session: SshSession, input: any) {
+  async startLocal(session: SshSession, input: any, id?: string) {
     const sockets = new Set<node_net.Socket>();
     const server = node_net.createServer((socket) => {
       sockets.add(socket);
@@ -206,7 +207,7 @@ export class TunnelManager {
       targetHost: input.targetHost,
       targetPort: input.targetPort,
       stop: () => closeServer(server, sockets)
-    });
+    }, id);
   }
 
   ensureRemoteHandler(session: SshSession) {
@@ -235,7 +236,7 @@ export class TunnelManager {
     this.remoteHandlers.set(session.id, handler);
   }
 
-  async startRemote(session: SshSession, input: any) {
+  async startRemote(session: SshSession, input: any, id?: string) {
     const bindAddress = input.bindAddress || "127.0.0.1";
     const requestedPort = input.bindPort ?? 0;
     const bindPort = await callbackPromise<number>((done) => session.client.forwardIn(bindAddress, requestedPort, done));
@@ -251,10 +252,10 @@ export class TunnelManager {
       stop: async () => {
         await callbackPromise<void>((done) => session.client.unforwardIn(bindAddress, bindPort, done));
       }
-    });
+    }, id);
   }
 
-  async startDynamic(session: SshSession, input: any) {
+  async startDynamic(session: SshSession, input: any, id?: string) {
     const sockets = new Set<node_net.Socket>();
     const server = node_net.createServer((socket) => {
       sockets.add(socket);
@@ -270,18 +271,55 @@ export class TunnelManager {
       bindAddress,
       bindPort,
       stop: () => closeServer(server, sockets)
-    });
+    }, id);
   }
 
-  add(input: Omit<TunnelRecord, "id" | "state">) {
+  add(input: Omit<TunnelRecord, "id" | "state">, id: string = node_crypto.randomUUID()) {
     const tunnel: TunnelRecord = {
-      id: node_crypto.randomUUID(),
+      id,
       state: "active",
       ...input
     };
     this.tunnels.set(tunnel.id, tunnel);
     this.publish();
     return this.list(tunnel.sessionId).find((view) => view.id === tunnel.id)!;
+  }
+
+  async suspendSession(sessionId: string) {
+    const records = [...this.tunnels.values()].filter((tunnel) => tunnel.sessionId === sessionId);
+    for (const tunnel of records) tunnel.state = "reconnecting";
+    this.publish();
+    await Promise.allSettled(records.map(async (tunnel) => {
+      if (tunnel.kind !== "remote") await tunnel.stop();
+      tunnel.stop = async () => undefined;
+    }));
+    this.cleanupRemoteHandler(sessionId, true);
+  }
+
+  async restoreSession(sessionId: string) {
+    const session = this.requireSession(sessionId);
+    const records = [...this.tunnels.values()].filter((tunnel) => tunnel.sessionId === sessionId && tunnel.state === "reconnecting");
+    for (const tunnel of records) {
+      const input = {
+        sessionId,
+        kind: tunnel.kind,
+        label: tunnel.label,
+        bindAddress: tunnel.bindAddress,
+        bindPort: tunnel.bindPort,
+        targetHost: tunnel.targetHost,
+        targetPort: tunnel.targetPort
+      };
+      try {
+        if (tunnel.kind === "local") await this.startLocal(session, input, tunnel.id);
+        else if (tunnel.kind === "remote") await this.startRemote(session, input, tunnel.id);
+        else await this.startDynamic(session, input, tunnel.id);
+      } catch (error) {
+        tunnel.state = "error";
+        tunnel.error = error instanceof Error ? error.message : String(error);
+        this.tunnels.set(tunnel.id, tunnel);
+        this.publish();
+      }
+    }
   }
 
   async stop(id: string) {

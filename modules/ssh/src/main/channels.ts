@@ -91,6 +91,12 @@ export const CH = {
   diagnostics: {
     run: "diagnostics:run"
   },
+  openSsh: {
+    importConfig: "openssh:importConfig"
+  },
+  audit: {
+    list: "audit:list"
+  },
   recording: {
     status: "recording:status",
     start: "recording:start",

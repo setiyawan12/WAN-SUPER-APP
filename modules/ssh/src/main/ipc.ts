@@ -1,11 +1,12 @@
 import * as node_fs from "node:fs";
-import { ipcMain, BrowserWindow, dialog } from "electron";
+import { ipcMain as electronIpcMain, BrowserWindow, dialog } from "electron";
 import { logger } from "./constants.js";
 import { jsonStore } from "./store.js";
 import { CH } from "./channels.js";
 import { firebaseConfigPath } from "./firebase.js";
 import { knownHosts } from "./knownhosts.js";
 import { requireCtx } from "./runtime.js";
+import { isTrustedIpcSender } from "./security.js";
 import {
   PasswordSchema,
   AutoLockSchema,
@@ -33,7 +34,50 @@ import {
   , SnippetInputSchema
   , SnippetRunSchema
   , RecordingStartSchema
+  , AuditListLimitSchema
 } from "./schemas.js";
+
+const AUDITED_CHANNELS = new Set<string>([
+  CH.vault.create, CH.vault.unlock, CH.vault.lock, CH.vault.changePassword, CH.vault.enableBiometric,
+  CH.hosts.revealPassword, CH.hosts.save, CH.hosts.remove, CH.hosts.restoreDeleted,
+  CH.knownHosts.remove, CH.groups.save, CH.groups.remove, CH.identities.save, CH.identities.remove,
+  CH.sync.pushAll, CH.sync.signIn, CH.sync.signInGoogle, CH.sync.signOut, CH.sync.importConfig,
+  CH.keys.generate, CH.keys.importPem, CH.keys.pushToHost, CH.keys.remove,
+  CH.snippets.save, CH.snippets.remove, CH.snippets.run,
+  CH.session.open, CH.session.reconnect, CH.session.close, CH.session.answerHostKey,
+  CH.transfer.upload, CH.transfer.download, CH.transfer.mkdir, CH.transfer.rename, CH.transfer.remove, CH.transfer.retry, CH.transfer.cancel,
+  CH.tunnels.start, CH.tunnels.stop,
+  CH.openSsh.importConfig,
+  CH.recording.start, CH.recording.stop, CH.recording.discard
+]);
+
+function assertTrustedSender(event: any) {
+  if (!isTrustedIpcSender(event.sender, requireCtx().sender)) throw new Error("IPC sender ditolak");
+}
+
+const ipcMain = {
+  handle(channel: string, listener: (event: any, ...args: any[]) => any) {
+    electronIpcMain.handle(channel, async (event, ...args) => {
+      assertTrustedSender(event);
+      try {
+        const result = await listener(event, ...args);
+        if (AUDITED_CHANNELS.has(channel)) requireCtx().audit.record(channel);
+        return result;
+      } catch (error) {
+        if (AUDITED_CHANNELS.has(channel)) {
+          requireCtx().audit.record(channel, { error: error instanceof Error ? error.message : String(error) }, "failure");
+        }
+        throw error;
+      }
+    });
+  },
+  on(channel: string, listener: (event: any, ...args: any[]) => void) {
+    electronIpcMain.on(channel, (event, ...args) => {
+      if (!isTrustedIpcSender(event.sender, requireCtx().sender)) return;
+      listener(event, ...args);
+    });
+  }
+};
 
 /**
  * IPC selalu membaca `ctx` global (bukan closure register pertama).
@@ -76,6 +120,22 @@ export function registerIpc() {
   });
   ipcMain.handle(CH.hosts.testConnection, (_e, raw) => requireCtx().ssh.testConnection(IdSchema.parse(raw)));
   ipcMain.handle(CH.diagnostics.run, (_e, raw) => requireCtx().diagnostics.run(IdSchema.parse(raw)));
+  ipcMain.handle(CH.openSsh.importConfig, async () => {
+    const win = BrowserWindow.getFocusedWindow();
+    const options: any = {
+      title: "Import OpenSSH config",
+      defaultPath: require("node:path").join(require("node:os").homedir(), ".ssh", "config"),
+      properties: ["openFile"]
+    };
+    const result = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
+    if (result.canceled || !result.filePaths[0]) return { canceled: true, imported: 0, updated: 0, warnings: [] };
+    const stat = node_fs.statSync(result.filePaths[0]);
+    if (!stat.isFile() || stat.size > 2 * 1024 * 1024) throw new Error("OpenSSH config harus berupa file berukuran maksimal 2 MiB");
+    const outcome = requireCtx().openSsh.import(node_fs.readFileSync(result.filePaths[0]));
+    requireCtx().emit(CH.evt.storeChanged, void 0);
+    return { canceled: false, ...outcome };
+  });
+  ipcMain.handle(CH.audit.list, (_e, raw) => requireCtx().audit.list(raw === undefined ? 100 : AuditListLimitSchema.parse(raw)));
   ipcMain.handle(CH.knownHosts.list, () => knownHosts.list());
   ipcMain.handle(CH.knownHosts.remove, (_e, raw) => knownHosts.remove(IdSchema.parse(raw)));
   ipcMain.handle(CH.storage.status, () => jsonStore.storageStatus());

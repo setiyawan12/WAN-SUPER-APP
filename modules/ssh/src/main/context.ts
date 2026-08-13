@@ -14,6 +14,8 @@ import { LocalSessionManager } from "./local.js";
 import { SnippetService } from "./snippets.js";
 import { RecordingManager } from "./recording.js";
 import { DiagnosticsService } from "./diagnostics.js";
+import { AuditService } from "./audit.js";
+import { OpenSshImportService } from "./openssh.js";
 
 export class AppContext {
   vault: VaultCore;
@@ -27,6 +29,8 @@ export class AppContext {
   snippets: SnippetService;
   recording: RecordingManager;
   diagnostics: DiagnosticsService;
+  audit: AuditService;
+  openSsh: OpenSshImportService;
   sync: SyncEngine;
   syncTransport: RealtimeDbTransport;
   sender: any = null;
@@ -36,9 +40,11 @@ export class AppContext {
   constructor() {
     this.vault = new VaultCore(metaStore);
     this.vault.setAutoLockMs(settingsStore.get("autoLockMs", VAULT.autoLockMs));
+    this.audit = new AuditService(this.vault);
     const uidFn = () => this.uid;
     const emit = (channel: string, payload: any) => this.emit(channel, payload);
     this.hosts = new HostService(this.vault, uidFn);
+    this.openSsh = new OpenSshImportService(this.hosts);
     this.identities = new IdentityService(this.vault, uidFn);
     this.ssh = new SshManager(this.vault, uidFn, emit);
     this.keys = new KeyService(this.vault, uidFn);
@@ -52,7 +58,7 @@ export class AppContext {
     this.sync = new SyncEngine(
       syncStore,
       this.syncTransport,
-      (state, pending) => this.emit(CH.evt.syncState, { state, pending }),
+      (state: string, pending: number) => this.emit(CH.evt.syncState, { state, pending }),
       [VAULT.personalVaultId],
       () => this.emit(CH.evt.storeChanged, void 0),
       () => {
@@ -81,6 +87,9 @@ export class AppContext {
       this.local.closeAll("vault-locked");
       this.recording.discardAll();
       this.emit(CH.evt.vaultLocked, void 0);
+    };
+    this.vault.onBeforeLock = () => {
+      this.audit.record("vault:lock");
     };
     // Pulihkan sesi cloud (bila ada) agar tidak sign-in ulang tiap buka app.
     if (this.syncTransport.isConfigured()) {

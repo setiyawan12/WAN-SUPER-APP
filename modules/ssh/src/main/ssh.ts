@@ -5,10 +5,12 @@ import { SshError, VaultError, mapSshError } from "./errors.js";
 import { wipe } from "./crypto.js";
 import { itemRepo, resolveEffective } from "./repo.js";
 import { fingerprintOf, knownHostPattern, knownHosts } from "./knownhosts.js";
+import { resolveJumpChain } from "./jumps.js";
 import type { VaultCore } from "./vault.js";
 
 type EmitFn = (channel: string, payload: any) => void;
 type SessionEndFn = (sessionId: string, reason: string) => void;
+export type SessionEndEvent = { reason: string; reconnecting: boolean };
 
 export class SshSession {
   host: any;
@@ -223,7 +225,8 @@ export class SshManager {
   emit: EmitFn;
   sessions = new Map<string, SshSession>();
   reconnectTimers = new Map<string, NodeJS.Timeout>();
-  sessionEndListeners = new Set<(sessionId: string) => void>();
+  sessionEndListeners = new Set<(sessionId: string, event: SessionEndEvent) => void>();
+  sessionReadyListeners = new Set<(sessionId: string) => void>();
 
   constructor(vault: VaultCore, ownerUid: () => string, emit: EmitFn) {
     this.vault = vault;
@@ -273,7 +276,7 @@ export class SshManager {
     const creds = this.resolveCredentials(host);
     const effectiveHost = { ...host, port: creds.port };
     const session = new SshSession(effectiveHost, creds, this.ownerUid(), this.emit, (sessionId, reason) => {
-      this.handleSessionEnd(sessionId, reason);
+      this.handleSessionEnd(sessionId, reason, session);
     });
     this.sessions.set(session.id, session);
     try {
@@ -291,42 +294,45 @@ export class SshManager {
     return { sessionId: session.id };
   }
   async connectSession(session: SshSession, cols: number, rows: number, runStartupSnippet = true) {
-    const jumpHostId = session.host.jumpHostId;
-    if (!jumpHostId) {
+    const jumpHosts = resolveJumpChain(session.host, (id) => itemRepo.get(id));
+    if (!jumpHosts.length) {
       await session.connect(cols, rows);
       if (runStartupSnippet) this.runStartupSnippet(session);
       return;
     }
-    if (jumpHostId === session.host.id) throw new SshError("UNKNOWN", "Jump host tidak boleh menunjuk ke host yang sama");
-    const jumpHost = itemRepo.get(jumpHostId);
-    if (!jumpHost || jumpHost.type !== "host") throw new SshError("UNKNOWN", "Jump host tidak ditemukan");
-    if (jumpHost.jumpHostId) throw new SshError("UNKNOWN", "Jump host bertingkat belum didukung; pilih bastion tanpa jump host lain");
-    const jumpCreds = this.resolveCredentials(jumpHost);
-    const effectiveJumpHost = { ...jumpHost, port: jumpCreds.port };
-    const jumpClient = new ssh2.Client();
-    session.bindInteractiveAuth(jumpClient);
-    try {
-      await session.awaitReady(jumpClient, session.connectionConfig(effectiveJumpHost, jumpCreds));
-      const socket = await new Promise<any>((resolve, reject) => {
-        jumpClient.forwardOut(
-          "127.0.0.1",
-          0,
-          session.host.address,
-          session.host.port ?? SSH.defaultPort,
-          (error: Error | undefined, stream: any) => error ? reject(error) : resolve(stream)
-        );
-      });
-      session.auxiliaryClients.push(jumpClient);
-      await session.connect(cols, rows, socket);
-      if (runStartupSnippet) this.runStartupSnippet(session);
-    } catch (error) {
-      jumpClient.end();
-      throw error;
-    } finally {
-      wipe(jumpCreds.privateKey);
-      jumpCreds.password = void 0;
-      jumpCreds.passphrase = void 0;
+    let socket: any;
+    for (let index = 0; index < jumpHosts.length; index += 1) {
+      const jumpHost = jumpHosts[index];
+      const jumpCreds = this.resolveCredentials(jumpHost);
+      const effectiveJumpHost = { ...jumpHost, port: jumpCreds.port };
+      const jumpClient = new ssh2.Client();
+      session.bindInteractiveAuth(jumpClient);
+      try {
+        await session.awaitReady(jumpClient, session.connectionConfig(effectiveJumpHost, jumpCreds, socket));
+        session.auxiliaryClients.push(jumpClient);
+        const nextHost = jumpHosts[index + 1] ?? session.host;
+        const nextEffective = resolveEffective(nextHost, (id) => itemRepo.get(id));
+        const nextPort = nextEffective.port ?? nextHost.port ?? SSH.defaultPort;
+        socket = await new Promise<any>((resolve, reject) => {
+          jumpClient.forwardOut(
+            "127.0.0.1",
+            0,
+            nextHost.address,
+            nextPort,
+            (error: Error | undefined, stream: any) => error ? reject(error) : resolve(stream)
+          );
+        });
+      } catch (error) {
+        jumpClient.end();
+        throw error;
+      } finally {
+        wipe(jumpCreds.privateKey);
+        jumpCreds.password = void 0;
+        jumpCreds.passphrase = void 0;
+      }
     }
+    await session.connect(cols, rows, socket);
+    if (runStartupSnippet) this.runStartupSnippet(session);
   }
   runStartupSnippet(session: SshSession) {
     if (!session.host.startupSnippetId) return;
@@ -348,16 +354,24 @@ export class SshManager {
   getSession(sessionId: string) {
     return this.sessions.get(sessionId) ?? null;
   }
-  onSessionEnd(listener: (sessionId: string) => void) {
+  onSessionEnd(listener: (sessionId: string, event: SessionEndEvent) => void) {
     this.sessionEndListeners.add(listener);
     return () => this.sessionEndListeners.delete(listener);
   }
-  handleSessionEnd(sessionId: string, reason: string) {
-    for (const listener of this.sessionEndListeners) listener(sessionId);
-    const session = this.sessions.get(sessionId);
-    if (!session || reason === "user-closed" || reason === "vault-locked") return;
+  onSessionReady(listener: (sessionId: string) => void) {
+    this.sessionReadyListeners.add(listener);
+    return () => this.sessionReadyListeners.delete(listener);
+  }
+  handleSessionEnd(sessionId: string, reason: string, endedSession?: SshSession) {
+    const session = this.sessions.get(sessionId) ?? endedSession;
+    if (!session) return;
     const limit = session.host.reconnectLimit ?? 3;
-    if (!session.host.autoReconnect || session.reconnectAttempt >= limit) {
+    const reconnecting = reason !== "user-closed"
+      && reason !== "vault-locked"
+      && session.host.autoReconnect
+      && session.reconnectAttempt < limit;
+    for (const listener of this.sessionEndListeners) listener(sessionId, { reason, reconnecting });
+    if (!reconnecting) {
       // Reconnect exhausted or disabled — remove stale session from map.
       this.sessions.delete(sessionId);
       return;
@@ -386,6 +400,7 @@ export class SshManager {
       session.endTransport();
       await this.connectSession(session, cols, rows);
       this.markConnected(host.id);
+      for (const listener of this.sessionReadyListeners) listener(sessionId);
       return { sessionId };
     } catch (error) {
       wipe(creds.privateKey);

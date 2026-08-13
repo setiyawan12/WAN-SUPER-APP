@@ -1,5 +1,6 @@
 import { VAULT, logger } from "./constants.js";
 import { VaultError } from "./errors.js";
+import { resolveJumpChain } from "./jumps.js";
 import { itemRepo, resolveEffective } from "./repo.js";
 import type { VaultCore } from "./vault.js";
 
@@ -34,6 +35,7 @@ export class HostService {
       reconnectLimit: h.reconnectLimit,
       keepAliveInterval: h.keepAliveInterval,
       lastConnectedAt: h.lastConnectedAt,
+      openSshAlias: h.openSshAlias ?? null,
       effectiveUsername: eff.username,
       effectivePort: eff.port,
       hasCredential,
@@ -112,8 +114,10 @@ export class HostService {
       charset: existing?.charset ?? "utf-8",
       notes: existing?.notes ?? null,
       favorite: input.favorite ?? existing?.favorite ?? false,
-      lastConnectedAt: existing?.lastConnectedAt ?? null
+      lastConnectedAt: existing?.lastConnectedAt ?? null,
+      openSshAlias: input.openSshAlias ?? existing?.openSshAlias ?? null
     };
+    resolveJumpChain(host, (hostId) => hostId === id ? host : itemRepo.get(hostId));
     itemRepo.upsert(host);
     return id;
   }

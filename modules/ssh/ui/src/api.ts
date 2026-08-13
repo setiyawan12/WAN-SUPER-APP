@@ -110,6 +110,8 @@ const mockApi: any = {
   transfer: { home: async () => "/home/deploy", list: async () => [], upload: async () => [], uploadDropped: async () => [], download: async () => null, mkdir: async () => undefined, rename: async () => undefined, remove: async () => undefined, jobs: async () => [], retry: async () => true, cancel: async () => true },
   tunnels: { list: async () => [], start: async (input: any) => ({ ...input, id: crypto.randomUUID(), state: "active", bindPort: input.bindPort || 8080 }), stop: async () => true },
   diagnostics: { run: async () => ({ hostId, address: "api.internal.example", port: 22, ok: true, checkedAt: Date.now(), phases: [{ name: "resolve", ok: true, durationMs: 7, detail: "10.0.0.12" }, { name: "tcp", ok: true, durationMs: 18, detail: "TCP ready" }, { name: "ssh", ok: true, durationMs: 43, detail: "Authentication ready" }] }) },
+  openSsh: { importConfig: async () => ({ canceled: false, imported: 2, updated: 0, identityFilesSkipped: ["~/.ssh/id_ed25519"], warnings: ["Demo import completed"] }) },
+  audit: { list: async () => [] },
   recording: { status: async () => null, start: async (input: any) => ({ ...input, startedAt: Date.now() }), stop: async () => ({ saved: true }), discard: async () => true },
   on: {
     termOutput: noop,
@@ -127,5 +129,6 @@ const mockApi: any = {
 
 const preloadWindow = window as Window & { api?: any };
 
-export const isMockApi = !preloadWindow.api;
-export const api: any = preloadWindow.api ?? mockApi;
+export const bridgeUnavailable = !preloadWindow.api && !import.meta.env.DEV;
+export const isMockApi = !preloadWindow.api && import.meta.env.DEV;
+export const api: any = preloadWindow.api ?? (isMockApi ? mockApi : undefined);

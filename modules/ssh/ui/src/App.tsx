@@ -26,7 +26,7 @@ import {
   WifiOff,
   X
 } from "lucide-react";
-import { api, isMockApi } from "./api";
+import { api, bridgeUnavailable, isMockApi } from "./api";
 import { AuthPromptDialog, CommandPalette, GroupDialog, HostDialog, HostKeyDialog, SettingsDialog, VaultScreen } from "./Dialogs";
 import { Inspector } from "./Inspector";
 import { ResourceExplorer } from "./ResourceExplorer";
@@ -69,6 +69,25 @@ function hostPayload(host: Host, patch: Partial<Host> = {}) {
 }
 
 export default function App() {
+  if (bridgeUnavailable) {
+    return (
+      <div className="vault-screen">
+        <div className="vault-panel">
+          <div className="vault-brand"><span>W</span><div><strong>WANN SSH</strong><small>Secure operations workspace</small></div></div>
+          <div className="vault-title-block">
+            <small>Runtime unavailable</small>
+            <h1>Secure bridge failed to load</h1>
+            <p>Close this window and reopen the SSH module. No demo data has been loaded.</p>
+          </div>
+          <div className="security-note"><WifiOff size={17} /><span>The Electron preload API is required in production.</span></div>
+        </div>
+      </div>
+    );
+  }
+  return <SshApp />;
+}
+
+function SshApp() {
   const [vaultState, setVaultState] = useState<VaultState>("loading");
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);

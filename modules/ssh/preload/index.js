@@ -70,6 +70,8 @@ const CH = {
   },
   tunnels: { list: "tunnels:list", start: "tunnels:start", stop: "tunnels:stop" },
   diagnostics: { run: "diagnostics:run" },
+  openSsh: { importConfig: "openssh:importConfig" },
+  audit: { list: "audit:list" },
   recording: { status: "recording:status", start: "recording:start", stop: "recording:stop", discard: "recording:discard" },
   evt: {
     termOutput: "term:output",
@@ -175,6 +177,8 @@ contextBridge.exposeInMainWorld("api", {
   },
   tunnels: { list: (sessionId) => invoke(CH.tunnels.list, sessionId), start: (input) => invoke(CH.tunnels.start, input), stop: (id) => invoke(CH.tunnels.stop, id) },
   diagnostics: { run: (hostId) => invoke(CH.diagnostics.run, hostId) },
+  openSsh: { importConfig: () => invoke(CH.openSsh.importConfig) },
+  audit: { list: (limit) => invoke(CH.audit.list, limit) },
   recording: {
     status: (sessionId) => invoke(CH.recording.status, sessionId),
     start: (input) => invoke(CH.recording.start, input),
