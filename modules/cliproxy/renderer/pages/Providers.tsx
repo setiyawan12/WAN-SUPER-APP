@@ -8,7 +8,7 @@ import { maskKey } from "../lib/utils";
 import { Modal, ModalHeader, MaskedEmail } from "../components/Modal";
 import { postOpenExternal } from "../vscodeApi";
 import { PageHeader, CardHead, CommandSummary } from "../components/shared";
-import { Skeleton } from "../components/ui";
+import { Skeleton, toast } from "../components/ui";
 
 const psv = { width: 18, height: 18, viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round", strokeLinejoin: "round" } as const;
 const IconDatabase = (
@@ -942,6 +942,14 @@ function CustomProviderModalContent({
   const [group, setGroup] = useState("");
   const [modelIds, setModelIds] = useState("");
   const [saving, setSaving] = useState(false);
+  const [probe, setProbe] = useState<{ state: "idle" | "testing" | "success" | "error"; message: string }>({
+    state: "idle",
+    message: "",
+  });
+
+  function resetProbe() {
+    setProbe((current) => current.state === "idle" ? current : { state: "idle", message: "" });
+  }
 
   async function addEntry() {
     if (!name.trim() || !baseUrl.trim() || !apiKey.trim() || !group.trim()) return;
@@ -950,14 +958,24 @@ function CustomProviderModalContent({
       .map((m) => m.trim())
       .filter(Boolean)
       .map((m) => ({ name: m }));
-    const entry: OpenAiCompatEntry = {
-      name: name.trim(),
-      "base-url": baseUrl.trim(),
-      "api-key-entries": [{ "api-key": apiKey.trim() }],
-      ...(models.length ? { models } : {}),
-    };
+    if (!models.length) {
+      setProbe({ state: "error", message: "Enter at least one model ID so the endpoint can be tested." });
+      return;
+    }
     setSaving(true);
+    setProbe({ state: "testing", message: `Testing ${models[0].name}...` });
     try {
+      const tested = await api.testOpenAiCompat({
+        baseUrl: baseUrl.trim(),
+        apiKey: apiKey.trim(),
+        modelId: models[0].name,
+      });
+      const entry: OpenAiCompatEntry = {
+        name: name.trim(),
+        "base-url": tested.baseUrl,
+        "api-key-entries": [{ "api-key": apiKey.trim() }],
+        models,
+      };
       await api.setOpenAiCompat([...items, entry]);
       onAssignGroup(entry.name, group.trim());
       setName("");
@@ -965,6 +983,12 @@ function CustomProviderModalContent({
       setApiKey("");
       setGroup("");
       setModelIds("");
+      setProbe({ state: "success", message: `Connected with ${tested.model} in ${tested.latencyMs}ms.` });
+      toast.success(`${entry.name} connected and saved`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Connection test failed.";
+      setProbe({ state: "error", message });
+      toast.error(`Custom provider: ${message}`);
     } finally {
       setSaving(false);
       mutate(undefined, true);
@@ -1029,20 +1053,21 @@ function CustomProviderModalContent({
       ))}
       <div className="field" style={{ border: "1px dashed var(--vscode-panel-border)", borderRadius: 4, padding: 10, gap: 8 }}>
         <div className="field">
-          <label className="field-label">Name</label>
-          <input className="text-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="glm" />
+          <label className="field-label" htmlFor="custom-provider-name">Name</label>
+          <input id="custom-provider-name" className="text-input" value={name} onChange={(e) => { setName(e.target.value); resetProbe(); }} placeholder="glm" />
         </div>
         <div className="field">
-          <label className="field-label">Base URL</label>
-          <input className="text-input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://api.example.com/v1" />
+          <label className="field-label" htmlFor="custom-provider-base-url">Base URL</label>
+          <input id="custom-provider-base-url" className="text-input" value={baseUrl} onChange={(e) => { setBaseUrl(e.target.value); resetProbe(); }} placeholder="https://api.example.com/v1" />
+          <p className="card-desc">Use the API root ending in /v1. A pasted /models or /chat/completions suffix is removed automatically.</p>
         </div>
         <div className="field">
-          <label className="field-label">API key</label>
-          <input className="text-input" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
+          <label className="field-label" htmlFor="custom-provider-api-key">API key</label>
+          <input id="custom-provider-api-key" className="text-input" type="password" autoComplete="off" value={apiKey} onChange={(e) => { setApiKey(e.target.value); resetProbe(); }} placeholder="sk-..." />
         </div>
         <div className="field">
-          <label className="field-label">Group</label>
-          <input className="text-input" value={group} onChange={(e) => setGroup(e.target.value)} placeholder="antigravity / claude / codex / or a new group" list="custom-provider-groups" />
+          <label className="field-label" htmlFor="custom-provider-group">Group</label>
+          <input id="custom-provider-group" className="text-input" value={group} onChange={(e) => { setGroup(e.target.value); resetProbe(); }} placeholder="antigravity / claude / codex / or a new group" list="custom-provider-groups" />
           <datalist id="custom-provider-groups">
             {groupOptions.map((g) => (
               <option key={g} value={g} />
@@ -1050,12 +1075,18 @@ function CustomProviderModalContent({
           </datalist>
         </div>
         <div className="field">
-          <label className="field-label">Model IDs (comma-separated)</label>
-          <input className="text-input" value={modelIds} onChange={(e) => setModelIds(e.target.value)} placeholder="minimax-m3, glm-4-plus" />
-          <p className="card-desc">Without this, CLIProxyAPI doesn't know which models this endpoint serves -- they won't show up on the Models page.</p>
+          <label className="field-label" htmlFor="custom-provider-models">Model IDs (comma-separated)</label>
+          <input id="custom-provider-models" className="text-input" value={modelIds} onChange={(e) => { setModelIds(e.target.value); resetProbe(); }} placeholder="minimax-m3, glm-4-plus" />
+          <p className="card-desc">The first model is used for the connection test. All listed models are registered after it succeeds.</p>
         </div>
-        <button className="btn" style={{ alignSelf: "flex-start" }} disabled={saving || !name.trim() || !baseUrl.trim() || !apiKey.trim() || !group.trim()} onClick={addEntry}>
-          Add provider
+        {probe.state !== "idle" && (
+          <div role={probe.state === "error" ? "alert" : "status"} className={`badge ${probe.state === "error" ? "error" : probe.state === "success" ? "success" : "neutral"}`} style={{ alignSelf: "flex-start", whiteSpace: "normal" }}>
+            {probe.state === "testing" && <span className="spinner" />}
+            {probe.message}
+          </div>
+        )}
+        <button className="btn" style={{ alignSelf: "flex-start" }} disabled={saving || !name.trim() || !baseUrl.trim() || !apiKey.trim() || !group.trim() || !modelIds.split(",").some((model) => model.trim())} onClick={addEntry}>
+          {saving ? "Testing connection..." : "Test & add provider"}
         </button>
       </div>
     </>

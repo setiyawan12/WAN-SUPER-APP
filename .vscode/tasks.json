@@ -81,6 +81,117 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "WAN SSH Web QA",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"qa:ssh-web"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH OPS Validate",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"ssh-gateway:ops:verify",
+				"&&",
+				"npm",
+				"--prefix",
+				"services/wan-ssh-gateway",
+				"test",
+				"&&",
+				"npm",
+				"run",
+				"build:ssh-web"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH Web Up",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"ssh-web:up"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH Web Status",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"ssh-web:ps"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH Diagnose Runtime",
+			"type": "shell",
+			"command": "zsh",
+			"args": [
+				"-lc",
+				"curl -fsS -m 5 http://127.0.0.1:5179/healthz && printf '\\n---READY---\\n' && curl -fsS -m 5 http://127.0.0.1:5179/readyz && printf '\\n---CONTAINERS---\\n' && docker ps --filter name=wan-ssh-gateway --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH Docker State",
+			"type": "shell",
+			"command": "zsh",
+			"args": [
+				"-lc",
+				"docker version; printf '\\n---PS ALL---\\n'; docker ps -a --filter name=wan-ssh-gateway --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'; printf '\\n---RUNTIME---\\n'; ls -la services/wan-ssh-gateway/.runtime 2>/dev/null || true"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH Local Gateway",
+			"type": "shell",
+			"command": "zsh",
+			"args": [
+				"-lc",
+				"npm --prefix services/wan-ssh-gateway run build && WAN_SSH_BIND_HOST=127.0.0.1 WAN_SSH_PORT=8788 WAN_SSH_ALLOWED_ORIGINS=http://127.0.0.1:5179 WAN_SSH_LOG_LEVEL=info npm --prefix services/wan-ssh-gateway start"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "WAN SSH Local Web",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"run",
+				"dev:ssh-web",
+				"--",
+				"--host",
+				"127.0.0.1",
+				"--port",
+				"5179",
+				"--strictPort"
+			],
+			"isBackground": true,
+			"problemMatcher": [],
+			"group": "test"
 		}
 	]
 }

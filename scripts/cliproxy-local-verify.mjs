@@ -29,6 +29,7 @@ try {
     "--test",
     "modules/cliproxy/main/model-combos.test.js",
     "modules/cliproxy/main/model-combos-proxy.test.js",
+    "modules/cliproxy/main/openai-compat.test.js",
     "modules/cliproxy/main/quota-budget.test.js",
   ]);
   run("Compile desktop helper fixtures", tscCommand, [

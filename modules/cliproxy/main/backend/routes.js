@@ -19,6 +19,7 @@ import { settings, proxyBaseUrl } from "./settings.js";
 import { getUsageSummary, getUsageByCredential, getUsageByCredentialWindows } from "./usage-store.js";
 import { getCodexUsage } from "./codex-usage.js";
 import { proxyChatCompletions } from "./chat-proxy.js";
+import { testOpenAiCompatibleProvider } from "./openai-compat.js";
 import { listCliTools, applyCliTool, resetCliTool } from "./cli-tools.js";
 import { getTokenSaver, setTokenSaver } from "./token-saver.js";
 import {
@@ -915,6 +916,17 @@ router.get(
 // CLIProxyAPI's PUT here replaces the *entire* array, so the dashboard always
 // sends back the full desired list (read full list, edit client-side, PUT
 // whole list) rather than diffing single entries server-side.
+router.post(
+  "/api-providers/openai-compat/test",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    res.json(await testOpenAiCompatibleProvider({
+      baseUrl: req.body?.baseUrl,
+      apiKey: req.body?.apiKey,
+      modelId: req.body?.modelId,
+    }));
+  })
+);
 router.get(
   "/api-providers/openai-compat",
   asyncHandler(async (req, res) => res.json({ items: normalizeList(await management.getOpenAiCompatibility()) }))

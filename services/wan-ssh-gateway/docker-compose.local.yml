@@ -1,0 +1,94 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    env_file:
+      - .env.local
+    environment:
+      WAN_SSH_TRUSTED_PROXY_CIDRS: ${WAN_SSH_DOCKER_SUBNET:-172.30.0.0/24}
+    expose:
+      - "8788"
+    networks:
+      - wan-ssh-local
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8788/healthz').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../..
+      dockerfile: services/wan-ssh-gateway/docker/web.Dockerfile
+    depends_on:
+      gateway:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5179:8080"
+    networks:
+      - wan-ssh-local
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+      - /var/cache/nginx:size=16m
+      - /var/run:size=1m
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  ssh-target:
+    profiles: ["fixture"]
+    build:
+      context: docker/ssh-target
+      dockerfile: Dockerfile
+    volumes:
+      - type: bind
+        source: ${WAN_SSH_FIXTURE_DIR:?WAN_SSH_FIXTURE_DIR is required}/id_ed25519.pub
+        target: /run/fixture/id_ed25519.pub
+        read_only: true
+      - type: bind
+        source: ${WAN_SSH_FIXTURE_DIR:?WAN_SSH_FIXTURE_DIR is required}/password.hash
+        target: /run/fixture/password.hash
+        read_only: true
+    expose:
+      - "22"
+    networks:
+      - wan-ssh-local
+    cap_drop:
+      - ALL
+    cap_add:
+      - SETGID
+      - SETUID
+      - CHOWN
+      - DAC_OVERRIDE
+      - SYS_CHROOT
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z -w 2 127.0.0.1 22"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+networks:
+  wan-ssh-local:
+    ipam:
+      config:
+        - subnet: ${WAN_SSH_DOCKER_SUBNET:-172.30.0.0/24}

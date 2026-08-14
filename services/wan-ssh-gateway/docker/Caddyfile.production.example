@@ -1,0 +1,42 @@
+# Example production edge. Replace ssh.example.com and pin Caddy after syntax review.
+ssh.example.com {
+  encode zstd gzip
+
+  header {
+    Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' wss://ssh.example.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    X-Content-Type-Options "nosniff"
+    Referrer-Policy "no-referrer"
+    Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+    Cross-Origin-Opener-Policy "same-origin"
+  }
+
+  handle /v1/ws {
+    reverse_proxy gateway:8788 {
+      header_up X-Forwarded-For {remote_host}
+      header_up X-Real-IP {remote_host}
+      transport http {
+        read_timeout 1h
+        write_timeout 1h
+      }
+    }
+  }
+
+  handle /healthz {
+    reverse_proxy gateway:8788
+  }
+
+  handle /readyz {
+    reverse_proxy gateway:8788
+  }
+
+  handle /runtime-config.json {
+    reverse_proxy gateway:8788
+  }
+
+  handle {
+    root * /srv/wan-ssh-web
+    try_files {path} /index.html
+    file_server
+  }
+}

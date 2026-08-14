@@ -38,3 +38,9 @@ graphify-out/
 
 # WAN Router local runtime secrets
 services/wan-router/.env.local
+
+# WAN SSH Web local runtime
+services/wan-ssh-gateway/.env.local
+services/wan-ssh-gateway/.runtime/
+services/wan-ssh-gateway/dist/
+firebase/hosting/ssh/

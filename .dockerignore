@@ -1,0 +1,17 @@
+.git
+**/node_modules
+**/.tmp
+**/.runtime
+**/.env
+**/.env.*
+!**/.env.*.example
+**/id_rsa*
+**/id_ed25519*
+**/*.pem
+**/*.key
+out
+firebase/hosting/ssh
+modules/ssh/renderer
+graphify-out
+vendor
+services/wan-ssh-gateway/dist

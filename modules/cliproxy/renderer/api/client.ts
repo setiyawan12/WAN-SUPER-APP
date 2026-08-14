@@ -229,6 +229,13 @@ export interface OpenAiCompatEntry {
   [key: string]: unknown;
 }
 
+export interface OpenAiCompatTestResult {
+  ok: true;
+  baseUrl: string;
+  model: string;
+  latencyMs: number;
+}
+
 // --- CLI Tools -------------------------------------------------------------
 export interface CliToolSlot {
   key: string;
@@ -477,6 +484,11 @@ export const api = {
     }),
 
   getOpenAiCompat: () => request<{ items: OpenAiCompatEntry[] }>("/api-providers/openai-compat"),
+  testOpenAiCompat: (input: { baseUrl: string; apiKey: string; modelId: string }) =>
+    request<OpenAiCompatTestResult>("/api-providers/openai-compat/test", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   setOpenAiCompat: (items: OpenAiCompatEntry[]) =>
     request<{ items: OpenAiCompatEntry[] }>("/api-providers/openai-compat", {
       method: "PUT",

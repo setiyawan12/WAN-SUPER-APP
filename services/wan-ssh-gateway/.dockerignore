@@ -1,0 +1,16 @@
+.git
+node_modules
+dist
+.tmp
+.runtime
+.env
+.env.*
+!.env.*.example
+id_rsa*
+id_ed25519*
+*.pem
+*.key
+test
+scripts
+docker
+docker-compose*.yml

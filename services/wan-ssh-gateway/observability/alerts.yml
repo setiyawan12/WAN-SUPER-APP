@@ -1,0 +1,37 @@
+groups:
+  - name: wan-ssh-gateway
+    rules:
+      - alert: WanSshGatewayNotReady
+        expr: wan_ssh_process_ready == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: WAN SSH gateway is not ready
+      - alert: WanSshAuthenticationFailures
+        expr: sum(rate(wan_ssh_ws_auth_total{result="failure"}[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: WAN SSH authentication failures are elevated
+      - alert: WanSshSessionOpenFailures
+        expr: sum(rate(wan_ssh_sessions_open_total{result="failure"}[5m])) > 0.5
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: WAN SSH session open failures are elevated
+      - alert: WanSshSessionCapacityHigh
+        expr: wan_ssh_sessions_limit > 0 and (wan_ssh_sessions_active / wan_ssh_sessions_limit) >= 0.8
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: WAN SSH active sessions are near the configured capacity
+      - alert: WanSshBackpressureDisconnects
+        expr: increase(wan_ssh_backpressure_total{action="close"}[10m]) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: WAN SSH clients were disconnected by backpressure protection

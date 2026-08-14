@@ -31,6 +31,7 @@ import { AuthPromptDialog, CommandPalette, GroupDialog, HostDialog, HostKeyDialo
 import { Inspector } from "./Inspector";
 import { ResourceExplorer } from "./ResourceExplorer";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
+import { ElectronRemoteTerminalTransport } from "./transport/electron";
 import type { Catalog, Host, Session, TransferJob, Tunnel } from "./types";
 import { EnvironmentBadge, IconButton, StatusDot, useConfirm } from "./ui";
 
@@ -38,6 +39,7 @@ type InspectorView = "files" | "tunnels" | "host" | "snippets";
 type VaultState = "loading" | "locked" | "no-vault" | "unlocked";
 
 const emptyCatalog: Catalog = { hosts: [], groups: [], identities: [], keys: [], snippets: [] };
+const terminalTransport = new ElectronRemoteTerminalTransport();
 
 function normalizeSessionState(value: string): Session["status"] {
   if (["connecting", "authenticating", "connected", "reconnecting", "disconnected", "error", "closed"].includes(value)) return value as Session["status"];
@@ -582,7 +584,7 @@ function SshApp() {
               }
               return <div key={id} className={`terminal-surface ${visible ? "visible" : "hidden"} ${focusedSessionId === id ? "focused" : ""}`} style={placement} onMouseDown={() => setFocusedSessionId(id)}>
                 {panes.length > 1 && <button className="pane-close" title="Tutup pane" onClick={(event) => { event.stopPropagation(); removeFromSplit(id); }}><X size={13} /></button>}
-                <TerminalPane ref={(handle) => { if (handle) terminalRefs.current.set(id, handle); else terminalRefs.current.delete(id); }} sessionId={id} visible={visible} active={focusedSessionId === id} label={session.label} />
+                <TerminalPane ref={(handle) => { if (handle) terminalRefs.current.set(id, handle); else terminalRefs.current.delete(id); }} sessionId={id} visible={visible} active={focusedSessionId === id} label={session.label} transport={terminalTransport} mockBanner={isMockApi} />
                 {session.status !== "connected" && session.status !== "connecting" && session.status !== "authenticating" && <div className="disconnect-banner"><WifiOff size={15} /><span>{session.message || session.reason || "Session disconnected"}</span>{!session.local && <button className="button compact" onClick={() => { setFocusedSessionId(id); void reconnect(); }}><RefreshCw size={14} /> Reconnect</button>}</div>}
               </div>;
             })}

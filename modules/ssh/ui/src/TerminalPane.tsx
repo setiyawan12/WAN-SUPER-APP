@@ -6,7 +6,7 @@ import { SearchAddon } from "@xterm/addon-search";
 import { Unicode11Addon } from "@xterm/addon-unicode11";
 import { WebglAddon } from "@xterm/addon-webgl";
 import "@xterm/xterm/css/xterm.css";
-import { api, isMockApi } from "./api";
+import type { RemoteTerminalTransport } from "./transport/contract";
 
 export type TerminalHandle = {
   focus: () => void;
@@ -25,6 +25,8 @@ type Props = {
   /** Pane sedang difokuskan — hanya satu pane yang aktif. */
   active: boolean;
   label: string;
+  transport: RemoteTerminalTransport;
+  mockBanner?: boolean;
 };
 
 const theme = {
@@ -44,7 +46,7 @@ const theme = {
   white: "#e7ebe6"
 };
 
-export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalPane({ sessionId, visible, active, label }, ref) {
+export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalPane({ sessionId, visible, active, label, transport, mockBanner = false }, ref) {
   const mountRef = useRef<HTMLDivElement>(null);
   const terminalRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
@@ -116,18 +118,18 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
       if (!visibleRef.current) return;
       try {
         fit.fit();
-        api.session.resize(sessionId, terminal.cols, terminal.rows);
+        transport.resize(sessionId, terminal.cols, terminal.rows);
       } catch {
       }
     };
     const frame = requestAnimationFrame(resize);
     const observer = new ResizeObserver(resize);
     observer.observe(mount);
-    const dataSubscription = terminal.onData((data) => api.session.write(sessionId, data));
-    const offOutput = api.on.termOutput((payload: any) => {
-      if (payload.sessionId === sessionId) terminal.write(payload.data);
+    const dataSubscription = terminal.onData((data) => transport.write(sessionId, data));
+    const offEvents = transport.onEvent((event) => {
+      if (event.type === "session.output" && event.sessionId === sessionId) terminal.write(event.data);
     });
-    if (isMockApi) {
+    if (mockBanner) {
       terminal.writeln(`\x1b[1;32m${label}\x1b[0m  connected`);
       terminal.writeln("Linux wan-node 6.8.0 #1 SMP");
       terminal.write("\r\n\x1b[38;5;108mdeploy@api-prod\x1b[0m:\x1b[38;5;110m~/services\x1b[0m$ ");
@@ -144,14 +146,14 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
       cancelAnimationFrame(frame);
       observer.disconnect();
       dataSubscription.dispose();
-      offOutput();
+      offEvents();
       window.removeEventListener("keydown", keyHandler);
       terminal.dispose();
       terminalRef.current = null;
       fitRef.current = null;
       searchRef.current = null;
     };
-  }, [label, sessionId]);
+  }, [label, sessionId, transport]);
 
   useEffect(() => {
     if (!visible) return;
@@ -162,7 +164,7 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
         try {
           fitRef.current?.fit();
           const t = terminalRef.current;
-          if (t) api.session.resize(sessionId, t.cols, t.rows);
+          if (t) transport.resize(sessionId, t.cols, t.rows);
         } catch {}
         if (activeRef.current) terminalRef.current?.focus();
       });
@@ -172,7 +174,7 @@ export const TerminalPane = forwardRef<TerminalHandle, Props>(function TerminalP
       cancelAnimationFrame(outer);
       cancelAnimationFrame(inner);
     };
-  }, [visible, active, sessionId]);
+  }, [visible, active, sessionId, transport]);
 
   const find = (previous = false) => {
     if (!query) return;

@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import fetch from "node-fetch";
-import { proxyBaseUrl } from "./settings.js";
+import yaml from "js-yaml";
+import { configPath, proxyBaseUrl } from "./settings.js";
 import { activityBus } from "./activity-bus.js";
 import { readState } from "./state.js";
 import { applyTokenSaver } from "./token-saver.js";
@@ -38,10 +40,62 @@ function providerFromModel(model) {
 // real /v1/chat/completions. Non-Claude models also use this hop now (Neuron
 // path-A LIVE for Grok/Gemini/GPT) but keep sampling params intact.
 const DEPRECATED_SAMPLING_PARAMS = ["top_p", "temperature", "top_k"];
+const SAMPLING_PARAM_REJECTION =
+  /unsupported value|does not support|only the default(?:\s*\([^)]*\))?\s+value is supported|deprecated for this model/i;
+let openAiCompatModelCache = { mtimeMs: -1, ids: new Set() };
+
+function openAiCompatModelIds() {
+  const filePath = configPath();
+  let stat;
+  try {
+    stat = fs.statSync(filePath);
+  } catch {
+    return new Set();
+  }
+  if (stat.mtimeMs === openAiCompatModelCache.mtimeMs) return openAiCompatModelCache.ids;
+
+  const ids = new Set();
+  try {
+    const config = yaml.load(fs.readFileSync(filePath, "utf8")) || {};
+    const providers = Array.isArray(config["openai-compatibility"])
+      ? config["openai-compatibility"]
+      : [];
+    for (const provider of providers) {
+      const models = Array.isArray(provider?.models) ? provider.models : [];
+      if (!models.length && provider?.name) ids.add(String(provider.name));
+      for (const model of models) {
+        if (model?.name) ids.add(String(model.name));
+        if (model?.alias) ids.add(String(model.alias));
+      }
+    }
+  } catch {
+    // A concurrent Management API write can briefly leave the file unreadable.
+  }
+  openAiCompatModelCache = { mtimeMs: stat.mtimeMs, ids };
+  return ids;
+}
+
+function isOpenAiCompatModel(model) {
+  const id = String(model || "").replace(/\([^)]*\)\s*$/, "");
+  return openAiCompatModelIds().has(id);
+}
+
+function shouldRetryWithoutSamplingParams(body, message) {
+  if (!SAMPLING_PARAM_REJECTION.test(message)) return false;
+  return DEPRECATED_SAMPLING_PARAMS.some(
+    (key) => Object.prototype.hasOwnProperty.call(body, key) && new RegExp(`\\b${key}\\b`, "i").test(message)
+  );
+}
+
+function stripSamplingParams(body) {
+  const stripped = { ...body };
+  for (const key of DEPRECATED_SAMPLING_PARAMS) delete stripped[key];
+  return stripped;
+}
 
 function prepareAttemptBody(baseBody, requestedModel, attemptModel, levelFromUrl) {
   const body = { ...baseBody, model: attemptModel };
-  if (/claude/i.test(attemptModel)) {
+  if (/claude/i.test(attemptModel) || isOpenAiCompatModel(attemptModel)) {
     for (const key of DEPRECATED_SAMPLING_PARAMS) delete body[key];
   }
 
@@ -131,33 +185,49 @@ export async function proxyChatCompletions(req, res) {
 
   let upstream = null;
   let bufferedError = "";
+  candidateLoop:
   for (let index = 0; index < candidates.length; index += 1) {
     const attemptModel = candidates[index];
-    const attemptBody = prepareAttemptBody(body, model, attemptModel, levelFromUrl);
-    try {
-      upstream = await fetch(`${proxyBaseUrl()}/v1/chat/completions`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(attemptBody),
-      });
-    } catch (err) {
-      bufferedError = JSON.stringify({ error: { message: err.message || String(err) } });
-      if (combo && index < candidates.length - 1) {
-        console.warn(`Combo "${combo.name}": ${attemptModel} transport failed, trying next: ${err.message}`);
+    let attemptBody = prepareAttemptBody(body, model, attemptModel, levelFromUrl);
+    let retriedWithoutSamplingParams = false;
+    let message = "";
+
+    while (true) {
+      try {
+        upstream = await fetch(`${proxyBaseUrl()}/v1/chat/completions`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify(attemptBody),
+        });
+      } catch (err) {
+        bufferedError = JSON.stringify({ error: { message: err.message || String(err) } });
+        if (combo && index < candidates.length - 1) {
+          console.warn(`Combo "${combo.name}": ${attemptModel} transport failed, trying next: ${err.message}`);
+          continue candidateLoop;
+        }
+        finish(false);
+        return res.status(503).type("application/json").send(bufferedError);
+      }
+
+      if (upstream.status < 400) break;
+
+      bufferedError = await upstream.text();
+      message = errorMessage(bufferedError, upstream.statusText);
+      if (!retriedWithoutSamplingParams && shouldRetryWithoutSamplingParams(attemptBody, message)) {
+        retriedWithoutSamplingParams = true;
+        attemptBody = stripSamplingParams(attemptBody);
+        upstream = null;
+        console.warn(`${attemptModel} rejected custom sampling parameters; retrying with provider defaults.`);
         continue;
       }
-      finish(false);
-      return res.status(503).type("application/json").send(bufferedError);
+      break;
     }
 
-    if (upstream.status < 400) break;
-
-    bufferedError = await upstream.text();
-    const message = errorMessage(bufferedError, upstream.statusText);
+    if (upstream?.status < 400) break;
     if (combo && index < candidates.length - 1 && shouldFallback(upstream.status, message)) {
       console.warn(`Combo "${combo.name}": ${attemptModel} failed (${upstream.status}), trying next.`);
       upstream = null;
-      continue;
+      continue candidateLoop;
     }
     break;
   }
