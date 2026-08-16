@@ -24,6 +24,7 @@ export function createFirebaseAuthenticator(projectId: string): Authenticator {
         kind: "firebase",
         id: `firebase:${claims.uid}`,
         uid: claims.uid,
+        tenantId: claims.firebase?.tenant ?? claims.uid,
         email: typeof claims.email === "string" ? claims.email : undefined,
         expiresAt: claims.exp * 1_000
       };

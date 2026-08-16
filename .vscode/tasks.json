@@ -192,6 +192,18 @@
 			"isBackground": true,
 			"problemMatcher": [],
 			"group": "test"
+		},
+		{
+			"label": "WAN SSH Web Rebuild RTDB Fix",
+			"type": "shell",
+			"command": "zsh",
+			"args": [
+				"-lc",
+				"npm run build:ssh-web && docker compose --env-file services/wan-ssh-gateway/.runtime/compose.env -f services/wan-ssh-gateway/docker-compose.local.yml -f services/wan-ssh-gateway/docker-compose.firebase.yml build web && docker compose --env-file services/wan-ssh-gateway/.runtime/compose.env -f services/wan-ssh-gateway/docker-compose.local.yml -f services/wan-ssh-gateway/docker-compose.firebase.yml up -d --no-deps --force-recreate web"
+			],
+			"isBackground": false,
+			"problemMatcher": [],
+			"group": "build"
 		}
 	]
 }

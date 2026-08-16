@@ -3,11 +3,14 @@ import { pathToFileURL } from "node:url";
 import { createApp, type ReadinessState } from "./app.js";
 import { createAuthenticator } from "./auth/index.js";
 import type { Authenticator } from "./auth/index.js";
+import { initializeGatewayFirebase } from "./auth/firebase.js";
+import { getFirestore } from "firebase-admin/firestore";
 import { loadConfig, type GatewayConfig } from "./config.js";
 import { CLOSE_CODES } from "./errors.js";
 import { createLogger } from "./observability/logger.js";
 import { GatewayMetrics } from "./observability/metrics.js";
 import { SessionManager } from "./sessions/manager.js";
+import { FirestoreKnownHostStore, type KnownHostStore } from "./sessions/known-host-store.js";
 import type { SessionService } from "./sessions/types.js";
 import { attachWebSocketServer } from "./websocket/upgrade.js";
 
@@ -17,13 +20,17 @@ type GatewayRuntimeDependencies = {
   authenticator?: Authenticator;
   sessions?: SessionService;
   metrics?: GatewayMetrics;
+  knownHosts?: KnownHostStore;
 };
 
 export function createGatewayRuntime(config: GatewayConfig, dependencies: GatewayRuntimeDependencies = {}) {
   const readiness: ReadinessState = { ready: false };
   const logger = createLogger(config.logLevel);
   const metrics = dependencies.metrics ?? new GatewayMetrics();
-  const sessions = dependencies.sessions ?? new SessionManager(config, logger, undefined, metrics);
+  const knownHosts = dependencies.knownHosts ?? (config.knownHostMode === "firestore"
+    ? new FirestoreKnownHostStore(getFirestore(initializeGatewayFirebase(config.firebaseProjectId!)))
+    : undefined);
+  const sessions = dependencies.sessions ?? new SessionManager(config, logger, undefined, metrics, knownHosts);
   const server = createServer(createApp(config, readiness, metrics));
   const webSockets = attachWebSocketServer({
     server,

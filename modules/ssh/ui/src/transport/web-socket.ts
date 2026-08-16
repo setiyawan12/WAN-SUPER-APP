@@ -16,6 +16,19 @@ type ServerMessage =
   | { type: "auth.refreshed"; requestId: string; expiresAt: number }
   | { type: "session.opened"; requestId: string; sessionId: string }
   | { type: "session.closed"; requestId: string; sessionId: string }
+  | { type: "sftp.home.result"; requestId: string; sessionId: string; path: string }
+  | { type: "sftp.list.result"; requestId: string; sessionId: string; entries: Array<Record<string, unknown>> }
+  | { type: "sftp.stat.result"; requestId: string; sessionId: string; entry: Record<string, unknown> }
+  | { type: "sftp.mutation.result"; requestId: string; sessionId: string; ok: true }
+  | { type: "sftp.write.result"; requestId: string; sessionId: string; written: number }
+  | { type: "sftp.read.result"; requestId: string; sessionId: string; data: string; bytesRead: number; size: number; eof: boolean }
+  | { type: "tunnel.result"; requestId: string; sessionId: string; tunnels: Array<Record<string, unknown>> }
+  | { type: "diagnostics.result"; requestId: string; address: string; port: number; phases: Array<Record<string, unknown>> }
+  | { type: "knownhost.list.result"; requestId: string; entries: Array<Record<string, unknown>> }
+  | { type: "knownhost.removed"; requestId: string; removed: boolean }
+  | { type: "key.generated"; requestId: string; privateKey: string; publicKey: string; algorithm: string; bits: number | null; fingerprintSha256: string }
+  | { type: "key.inspected"; requestId: string; publicKey: string; algorithm: string; bits: number | null; fingerprintSha256: string }
+  | { type: "key.installed"; requestId: string; sessionId: string; installed: true }
   | SshTransportEvent
   | { type: "error"; requestId?: string; sessionId?: string; code: string; message: string; retryable: boolean };
 
@@ -49,14 +62,14 @@ export class WebSocketRemoteTerminalTransport implements RemoteTerminalTransport
   readonly capabilities: SshRuntimeCapabilities = {
     runtime: "web-local",
     remoteTerminal: true,
-    hostProfiles: false,
+    hostProfiles: true,
     localShell: false,
-    sftp: false,
-    tunnels: false,
-    recording: false,
+    sftp: true,
+    tunnels: true,
+    recording: true,
     biometric: false,
     openSshImport: false,
-    firebaseSync: false
+    firebaseSync: true
   };
 
   private socket?: WebSocket;
@@ -83,7 +96,9 @@ export class WebSocketRemoteTerminalTransport implements RemoteTerminalTransport
 
   async open(input: WebSessionOpenInput | Record<string, unknown>) {
     await this.ensureConnected();
-    const message = await this.request({ type: "session.open", ...input }, "session.opened");
+    const pending = this.request({ type: "session.open", ...input }, "session.opened");
+    clearSessionOpenInput(input);
+    const message = await pending;
     if (message.type !== "session.opened") throw new GatewayClientError("INTERNAL", "Unexpected gateway response");
     this.sessions.add(message.sessionId);
     return { sessionId: message.sessionId };
@@ -112,6 +127,101 @@ export class WebSocketRemoteTerminalTransport implements RemoteTerminalTransport
     }
     const response = await this.request({ type: "session.close", sessionId }, "session.closed");
     if (response.type === "session.closed") this.sessions.delete(sessionId);
+  }
+
+  async sftpHome(sessionId: string) {
+    const response = await this.request({ type: "sftp.home", sessionId }, "sftp.home.result");
+    if (response.type !== "sftp.home.result") throw new GatewayClientError("INTERNAL", "Unexpected SFTP response");
+    return response.path;
+  }
+
+  async sftpList(sessionId: string, path: string) {
+    const response = await this.request({ type: "sftp.list", sessionId, path }, "sftp.list.result");
+    if (response.type !== "sftp.list.result") throw new GatewayClientError("INTERNAL", "Unexpected SFTP response");
+    return response.entries;
+  }
+
+  async sftpStat(sessionId: string, path: string) {
+    const response = await this.request({ type: "sftp.stat", sessionId, path }, "sftp.stat.result");
+    if (response.type !== "sftp.stat.result") throw new GatewayClientError("INTERNAL", "Unexpected SFTP response");
+    return response.entry;
+  }
+
+  async sftpMkdir(sessionId: string, path: string) {
+    await this.request({ type: "sftp.mkdir", sessionId, path }, "sftp.mutation.result");
+  }
+
+  async sftpRename(sessionId: string, from: string, to: string) {
+    await this.request({ type: "sftp.rename", sessionId, from, to }, "sftp.mutation.result");
+  }
+
+  async sftpRemove(sessionId: string, path: string, directory: boolean) {
+    await this.request({ type: "sftp.remove", sessionId, path, directory }, "sftp.mutation.result");
+  }
+
+  async sftpWrite(sessionId: string, path: string, offset: number, data: Uint8Array, truncate: boolean) {
+    const response = await this.request({ type: "sftp.write", sessionId, path, offset, data: bytesToBase64(data), truncate }, "sftp.write.result");
+    if (response.type !== "sftp.write.result") throw new GatewayClientError("INTERNAL", "Unexpected SFTP response");
+    return response.written;
+  }
+
+  async sftpRead(sessionId: string, path: string, offset: number, length: number) {
+    const response = await this.request({ type: "sftp.read", sessionId, path, offset, length }, "sftp.read.result");
+    if (response.type !== "sftp.read.result") throw new GatewayClientError("INTERNAL", "Unexpected SFTP response");
+    return { ...response, data: base64ToBytes(response.data) };
+  }
+
+  async tunnelStart(input: Record<string, unknown>) {
+    const response = await this.request({ type: "tunnel.start", ...input }, "tunnel.result");
+    if (response.type !== "tunnel.result") throw new GatewayClientError("INTERNAL", "Unexpected tunnel response");
+    return response.tunnels;
+  }
+
+  async tunnelList(sessionId: string) {
+    const response = await this.request({ type: "tunnel.list", sessionId }, "tunnel.result");
+    if (response.type !== "tunnel.result") throw new GatewayClientError("INTERNAL", "Unexpected tunnel response");
+    return response.tunnels;
+  }
+
+  async tunnelStop(sessionId: string, tunnelId: string) {
+    const response = await this.request({ type: "tunnel.stop", sessionId, tunnelId }, "tunnel.result");
+    if (response.type !== "tunnel.result") throw new GatewayClientError("INTERNAL", "Unexpected tunnel response");
+    return response.tunnels;
+  }
+
+  async diagnostics(target: { host: string; port: number }) {
+    const response = await this.request({ type: "diagnostics.run", target }, "diagnostics.result");
+    if (response.type !== "diagnostics.result") throw new GatewayClientError("INTERNAL", "Unexpected diagnostics response");
+    return response;
+  }
+
+  async knownHosts() {
+    const response = await this.request({ type: "knownhost.list" }, "knownhost.list.result");
+    if (response.type !== "knownhost.list.result") throw new GatewayClientError("INTERNAL", "Unexpected known-host response");
+    return response.entries;
+  }
+
+  async removeKnownHost(host: string, port: number) {
+    const response = await this.request({ type: "knownhost.remove", host, port }, "knownhost.removed");
+    if (response.type !== "knownhost.removed") throw new GatewayClientError("INTERNAL", "Unexpected known-host response");
+    return response.removed;
+  }
+
+  async generateKey(input: { algorithm: string; bits?: number; passphrase?: string }) {
+    const response = await this.request({ type: "key.generate", ...input }, "key.generated");
+    if (response.type !== "key.generated") throw new GatewayClientError("INTERNAL", "Unexpected key response");
+    return response;
+  }
+
+  async inspectKey(input: { privateKey: string; passphrase?: string }) {
+    const response = await this.request({ type: "key.inspect", ...input }, "key.inspected");
+    if (response.type !== "key.inspected") throw new GatewayClientError("INTERNAL", "Unexpected key response");
+    return response;
+  }
+
+  async installKey(sessionId: string, publicKey: string) {
+    const response = await this.request({ type: "key.install", sessionId, publicKey }, "key.installed");
+    if (response.type !== "key.installed") throw new GatewayClientError("INTERNAL", "Unexpected key response");
   }
 
   onEvent(listener: (event: SshTransportEvent) => void) {
@@ -243,7 +353,7 @@ export class WebSocketRemoteTerminalTransport implements RemoteTerminalTransport
     if ("requestId" in message && typeof message.requestId === "string") this.settle(message.requestId, message);
     if (message.type === "session.opened") this.sessions.add(message.sessionId);
     if (message.type === "session.closed") this.sessions.delete(message.sessionId);
-    if (["session.state", "session.output", "session.exit", "hostkey.prompt", "auth.prompt"].includes(message.type)) {
+    if (["session.state", "session.output", "session.exit", "hostkey.prompt", "auth.prompt", "tunnel.changed"].includes(message.type)) {
       this.emit(message as SshTransportEvent);
     }
   }
@@ -289,5 +399,36 @@ export class WebSocketRemoteTerminalTransport implements RemoteTerminalTransport
 
   private isOpen() {
     return this.socket?.readyState === WebSocket.OPEN;
+  }
+}
+
+function bytesToBase64(value: Uint8Array) {
+  let binary = "";
+  for (let offset = 0; offset < value.length; offset += 0x8000) binary += String.fromCharCode(...value.subarray(offset, offset + 0x8000));
+  return btoa(binary);
+}
+
+function base64ToBytes(value: string) {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function clearSessionOpenInput(input: WebSessionOpenInput | Record<string, unknown>) {
+  const value = input as Partial<WebSessionOpenInput>;
+  clearAuthentication(value.authentication);
+  for (const hop of value.route?.jumps ?? []) clearAuthentication(hop.authentication);
+  value.route = undefined;
+  value.environment = undefined;
+  value.startupCommand = undefined;
+}
+
+function clearAuthentication(authentication?: WebSessionOpenInput["authentication"]) {
+  if (!authentication) return;
+  if (authentication.method === "password") authentication.password = "";
+  else {
+    authentication.privateKey = "";
+    authentication.passphrase = undefined;
   }
 }

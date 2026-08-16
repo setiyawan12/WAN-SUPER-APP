@@ -1446,6 +1446,34 @@ kbd {
   color: var(--text-muted);
 }
 
+.vault-account,
+.workspace-fixed {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.vault-account {
+  justify-content: space-between;
+  padding-top: 2px;
+  border-top: 1px solid var(--border);
+}
+
+.vault-account strong,
+.workspace-fixed {
+  color: var(--text-secondary);
+}
+
+.workspace-fixed {
+  padding: 0 9px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
 .muted-copy {
   overflow: hidden;
   margin-top: 3px;
@@ -1761,6 +1789,48 @@ kbd {
   color: var(--green);
 }
 
+.web-auth-google {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  color: var(--text);
+  background: var(--surface-2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-weight: 700;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.web-auth-google:hover:not(:disabled) {
+  background: var(--surface-hover);
+  border-color: var(--green);
+}
+
+.web-auth-google:disabled {
+  color: var(--text-muted);
+}
+
+.web-auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -3px 0;
+  color: var(--text-muted);
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.web-auth-divider::before,
+.web-auth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
 .web-auth-reset {
   justify-self: start;
   padding: 0;
@@ -1876,20 +1946,133 @@ kbd {
   white-space: nowrap;
 }
 
+.web-account-menu {
+  position: relative;
+  min-width: 0;
+}
+
 .web-account {
   display: flex;
   align-items: center;
   min-width: 0;
   max-width: 210px;
   gap: 6px;
+  padding: 4px 6px;
   color: var(--text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   font-size: 10px;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease;
+}
+
+.web-account:hover,
+.web-account[aria-expanded="true"] {
+  color: var(--text);
+  background: var(--surface-hover);
+  border-color: var(--border);
 }
 
 .web-account span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.web-account-avatar {
+  display: grid;
+  place-items: center;
+  width: 21px;
+  height: 21px;
+  flex: 0 0 21px;
+  overflow: hidden;
+  color: #0b1510;
+  background: var(--green);
+  border-radius: 50%;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 800;
+  object-fit: cover;
+}
+
+.web-account-panel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  display: grid;
+  width: 254px;
+  gap: 10px;
+  padding: 12px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.web-account-identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.web-account-identity > div {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.web-account-identity .web-account-avatar {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  font-size: 15px;
+}
+
+.web-account-identity strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-account-identity small {
+  overflow: hidden;
+  color: var(--text-secondary);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-account-identity code {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.web-account-action {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  color: var(--text-secondary);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.web-account-action:hover:not(:disabled) {
+  color: var(--red);
+  background: var(--red-soft);
+  border-color: rgba(224, 108, 104, 0.35);
 }
 
 .web-ssh-workspace {
@@ -2984,12 +3167,17 @@ kbd {
 
   .web-product-mark small,
   .web-gateway-status small,
-  .web-account span {
+  .web-account span,
+  .web-account svg {
     display: none;
   }
 
   .web-account {
-    width: 18px;
+    padding: 3px;
+  }
+
+  .web-account-panel {
+    width: min(254px, calc(100vw - 24px));
   }
 
   .web-gateway-status strong {

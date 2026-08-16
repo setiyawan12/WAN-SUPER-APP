@@ -34,10 +34,11 @@ function addressType(family: 4 | 6) {
   return family === 4 ? "ipv4" : "ipv6";
 }
 
-export async function resolveTarget(
+async function resolvePolicyTarget(
   config: GatewayConfig,
   host: string,
   port: number,
+  enforceSshPort: boolean,
   lookup: (hostname: string) => Promise<Array<{ address: string; family: number }>> = async (hostname) => {
     const resolver = new Resolver();
     const [ipv4, ipv6] = await Promise.all([
@@ -50,7 +51,7 @@ export async function resolveTarget(
     ];
   }
 ): Promise<ResolvedTarget> {
-  if (config.environment === "production" && port !== 22) {
+  if (enforceSshPort && config.environment === "production" && port !== 22) {
     throw new GatewayError("TARGET_DENIED", "Target port is not allowed");
   }
   let addresses: Array<{ address: string; family: number }>;
@@ -75,6 +76,24 @@ export async function resolveTarget(
 
   const selected = normalized[0];
   return { originalHost: host, address: selected.address, family: selected.family, port };
+}
+
+export function resolveTarget(
+  config: GatewayConfig,
+  host: string,
+  port: number,
+  lookup?: (hostname: string) => Promise<Array<{ address: string; family: number }>>
+) {
+  return resolvePolicyTarget(config, host, port, true, lookup);
+}
+
+export function resolveForwardTarget(
+  config: GatewayConfig,
+  host: string,
+  port: number,
+  lookup?: (hostname: string) => Promise<Array<{ address: string; family: number }>>
+) {
+  return resolvePolicyTarget(config, host, port, false, lookup);
 }
 
 export function sshConnectEndpoint(target: ResolvedTarget) {

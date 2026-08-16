@@ -27,7 +27,8 @@ export type SshTransportEvent =
       fingerprint: string;
       previousFingerprint?: string;
     }
-  | { type: "auth.prompt"; sessionId: string; prompts: Array<{ prompt: string; echo: boolean }> };
+  | { type: "auth.prompt"; sessionId: string; prompts: Array<{ prompt: string; echo: boolean }> }
+  | { type: "tunnel.changed"; sessionId: string; tunnels: Array<Record<string, unknown>> };
 
 export type WebSessionOpenInput = {
   target: { host: string; port: number; username: string };
@@ -43,6 +44,10 @@ export type WebSessionOpenInput = {
         password: string;
       };
   expectedHostKeyFingerprint?: string;
+  route?: { jumps: Array<{ target: { host: string; port: number; username: string }; authentication: WebSessionOpenInput["authentication"]; expectedHostKeyFingerprint?: string }> };
+  environment?: Record<string, string>;
+  startupCommand?: string;
+  keepAliveInterval?: number;
 };
 
 export interface RemoteTerminalTransport {

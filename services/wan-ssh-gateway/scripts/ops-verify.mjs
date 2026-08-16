@@ -2,13 +2,22 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const caddy = await readFile(new URL("../docker/Caddyfile.production.example", import.meta.url), "utf8");
+const nginx = await readFile(new URL("../docker/nginx.local.conf", import.meta.url), "utf8");
 const alerts = await readFile(new URL("../observability/alerts.yml", import.meta.url), "utf8");
 const runbook = await readFile(new URL("../docs/OPS-SSH-01.md", import.meta.url), "utf8");
 
 assert.match(caddy, /ssh\.example\.com/);
 assert.match(caddy, /wss:\/\/ssh\.example\.com/);
+assert.match(caddy, /script-src 'self' 'wasm-unsafe-eval'/);
+assert.match(caddy, /https:\/\/\*\.firebaseio\.com/);
+assert.match(caddy, /wss:\/\/\*\.firebasedatabase\.app/);
+assert.match(caddy, /frame-src[^\n]+https:\/\/\*\.firebaseio\.com/);
 assert.match(caddy, /header_up X-Forwarded-For \{remote_host\}/);
 assert.doesNotMatch(caddy, /handle \/metrics/);
+assert.match(nginx, /script-src 'self' 'wasm-unsafe-eval'/);
+assert.match(nginx, /https:\/\/\*\.firebaseio\.com/);
+assert.match(nginx, /wss:\/\/\*\.firebasedatabase\.app/);
+assert.match(nginx, /frame-src[^\n]+https:\/\/\*\.firebaseio\.com/);
 assert.match(alerts, /wan_ssh_process_ready == 0/);
 assert.match(alerts, /wan_ssh_ws_auth_total\{result="failure"\}/);
 assert.match(alerts, /wan_ssh_sessions_active \/ wan_ssh_sessions_limit/);

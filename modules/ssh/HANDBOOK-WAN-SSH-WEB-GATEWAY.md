@@ -7,7 +7,8 @@ sama kemudian dapat dipindahkan ke VPS tanpa menulis ulang terminal web.
 
 > Status dokumen: **LOCAL MVP IMPLEMENTED**, `AUTH-SSH-01` **IMPLEMENTED / EMULATOR VERIFIED**,
 > `SEC-SSH-01` **IMPLEMENTED / UNIT VERIFIED**, dan `OPS-SSH-01` **IMPLEMENTED / UNIT VERIFIED**;
-> live TLS/WSS/canary production tetap deployment gate.
+> `HOSTKEY-SSH-01` **IMPLEMENTED / FIRESTORE EMULATOR VERIFIED**;
+> live Firebase/Firestore, TLS/WSS, dan canary production tetap deployment gate.
 >
 > Checkpoint repository 2026-08-13:
 >
@@ -32,8 +33,12 @@ sama kemudian dapat dipindahkan ke VPS tanpa menulis ulang terminal web.
 >   `ssh2` socket ke IP yang sudah diperiksa sudah diuji di repository;
 > - `/metrics`, reconnect socket setelah close `1012`, Caddy/WSS example, dan
 >   runbook rollback/incident tersedia di repository;
-> - live Firebase project/ADC validation, durable tenant-scoped known-host
->   production store, production egress allowlist operator flow, live TLS/WSS
+> - durable tenant-scoped known-host store berbasis Firestore Admin SDK,
+>   authoritative lookup, normalized identity, transactional compare-and-set,
+>   immutable audit entry, dan deny-all direct-client Security Rules tersedia.
+>   Firestore Emulator membuktikan persistence, tenant isolation, race conflict,
+>   audit continuity, dan penolakan direct-client read/write;
+> - live Firebase project/ADC/Firestore validation, production egress allowlist operator flow, live TLS/WSS
 >   deployment, canary, rollback rehearsal, dan public deployment belum selesai.
 
 Dokumen menggunakan empat label:
@@ -994,6 +999,7 @@ Semua konfigurasi dibaca dan divalidasi sekali saat startup:
 | `WAN_SSH_BACKPRESSURE_TIMEOUT_MS` | `10000` | wajib |
 | `WAN_SSH_OUTPUT_BATCH_BYTES` | `65536` | wajib |
 | `WAN_SSH_EGRESS_MODE` | `development` | `allowlist` atau reviewed policy |
+| `WAN_SSH_KNOWN_HOST_MODE` | `client-hint` | `firestore` |
 | `WAN_SSH_TRUSTED_PROXY_CIDRS` | Docker subnet yang dibuat stack | wajib, CIDR/hop proxy internal exact |
 | `WAN_SSH_CONNECT_RATE_LIMIT` | `30` | wajib, bounded per client identity |
 | `WAN_SSH_CONNECT_RATE_WINDOW_MS` | `60000` | wajib |
@@ -1028,6 +1034,7 @@ export interface Principal {
   kind: "development" | "firebase";
   id: string;
   uid: string;
+  tenantId: string;
   email?: string;
   expiresAt?: number;
 }
@@ -1957,6 +1964,15 @@ tetap menjadi deployment gate dan bukan bagian dari klaim ini.
 Pekerjaan:
 
 - [x] login frontend Email/Password;
+- [x] login frontend Google OAuth (`GoogleAuthProvider` + `signInWithPopup`,
+  fallback `signInWithRedirect` saat popup diblokir);
+- [x] halaman `/login`, protected route `/dashboard`, dan redirect dua arah;
+- [x] state auth global `loading`/`authenticated`/`unauthenticated` sehingga
+  halaman login tidak tampil sebelum pengecekan sesi selesai;
+- [x] session persistence IndexedDB/localStorage yang bertahan setelah refresh;
+- [x] menu akun `uid`, `displayName`, `email`, `photoURL` dan logout ke `/login`;
+- [x] konfigurasi Web SDK hanya dari environment `VITE_FIREBASE_*` atau
+  `/__/firebase/init.json`; tidak ada credential server-side di bundle web;
 - [x] `getIdToken()` sebelum WebSocket auth;
 - [x] Admin SDK `verifyIdToken(..., true)`;
 - [x] refresh token protocol dan server-owned expiry timer;
@@ -1984,13 +2000,39 @@ npm run test:ssh-web:firebase
 Test emulator memverifikasi UID dari claim server-side, invalid/wrong-project/
 expired/revoked/disabled token, refresh UID berbeda, expiry tanpa refresh,
 cleanup sesi pada auth fatal, login browser, token handoff tanpa URL, logout,
-dan layout auth mobile.
+dan layout auth mobile. Browser test juga memverifikasi redirect protected route
+ke `/login`, kehadiran tombol Continue with Google, sesi yang bertahan sehingga
+`/login` kembali ke `/dashboard`, dan logout yang kembali ke `/login`.
+
+Konfigurasi Firebase untuk web gateway memakai Firebase project yang sama dengan
+WAN SSH Desktop dan hanya membaca nilai publik Web SDK:
+
+```sh
+# modules/ssh/ui/.env.local — lihat modules/ssh/ui/.env.example
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+
+Saat web di-host oleh Firebase Hosting, seluruh variabel tersebut boleh kosong
+karena konfigurasi dibaca dari `/__/firebase/init.json`; deployment tidak perlu
+meng-upload `firebase.json` atau credential apa pun. Service account tetap hanya
+dipakai gateway melalui Application Default Credentials.
+
+Deployment gate tambahan untuk Google sign-in: provider Google harus diaktifkan
+pada Firebase Authentication, domain web gateway harus masuk Authorized domains,
+dan edge harus mengirim `Cross-Origin-Opener-Policy: same-origin-allow-popups`
+beserta `frame-src` authDomain Firebase agar popup dapat menyelesaikan sign-in.
 
 #### `SEC-SSH-01` - Production network policy
 
 Status repository 2026-08-14: **implemented dan unit/integration verified**.
 Production egress allowlist operator, live TLS/WSS, dan durable known-host store
-tetap menjadi deployment gate.
+telah tersedia di repository; live Firestore/ADC dan rollout tetap menjadi
+deployment gate.
 
 Pekerjaan:
 
@@ -2015,6 +2057,37 @@ Verification:
 
 ```sh
 npm run ssh-gateway:test
+```
+
+#### `HOSTKEY-SSH-01` - Durable authoritative known-host
+
+Status repository 2026-08-14: **implemented dan Firestore Emulator verified**.
+Live Firestore project, ADC/workload identity, backup/export, dan restore
+rehearsal tetap deployment gate.
+
+Pekerjaan:
+
+- [x] lookup authoritative `(tenantId, normalizedHost, port)`;
+- [x] client `expectedHostKeyFingerprint` hanya menjadi local-mode hint;
+- [x] accept unknown/changed memakai Firestore transaction compare-and-set;
+- [x] actor, timestamp, previous/new fingerprint, algorithm, dan version diaudit;
+- [x] direct client read/write ditolak Firestore Security Rules;
+- [x] production startup mewajibkan `WAN_SSH_KNOWN_HOST_MODE=firestore`.
+- [x] Firestore Emulator persistence, multi-client CAS conflict, audit, tenant
+  isolation, dan direct-client denial test.
+
+Acceptance repository:
+
+- normalisasi hostname stabil dan document identity terisolasi antar tenant;
+- stale concurrent writer ditolak sebagai conflict;
+- koneksi production tidak dapat memakai IndexedDB fingerprint sebagai authority;
+- gateway gagal start pada production tanpa authoritative store.
+
+Verification:
+
+```sh
+npm run ssh-gateway:test
+npm run test:ssh-web:known-host
 ```
 
 #### `OPS-SSH-01` - TLS, metrics, runbook, rollback
@@ -2360,6 +2433,7 @@ WAN_SSH_OUTPUT_LOW_WATER_BYTES=262144
 WAN_SSH_BACKPRESSURE_TIMEOUT_MS=10000
 WAN_SSH_OUTPUT_BATCH_BYTES=65536
 WAN_SSH_EGRESS_MODE=allowlist
+WAN_SSH_KNOWN_HOST_MODE=firestore
 WAN_SSH_TRUSTED_PROXY_CIDRS=172.31.0.0/24
 WAN_SSH_CONNECT_RATE_LIMIT=30
 WAN_SSH_CONNECT_RATE_WINDOW_MS=60000
@@ -2689,7 +2763,8 @@ allowlist, installer, auto-update, loopback transport, dan security review.
 - [x] Token tidak berada pada URL atau log.
 - [ ] Image immutable, non-root, scanned, dan dipin.
 - [ ] Service-account tidak berada dalam image/repository.
-- [ ] Known-host fingerprint durable, tenant-scoped, dan diaudit server-side.
+- [x] Known-host fingerprint durable, tenant-scoped, diaudit server-side, dan
+  diverifikasi dengan Firestore Emulator.
 - [ ] Core dump, Node diagnostic report, heap snapshot, APM/request-body capture,
       dan unauthorized debug/exec dinonaktifkan atau dibatasi.
 - [x] Audit/metrics tidak memuat secret atau terminal content.

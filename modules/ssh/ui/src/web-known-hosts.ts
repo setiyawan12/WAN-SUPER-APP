@@ -59,3 +59,29 @@ export async function saveKnownHost(input: Omit<WebKnownHost, "key" | "firstSeen
     database.close();
   }
 }
+
+export async function listKnownHosts(): Promise<WebKnownHost[]> {
+  const database = await openDatabase();
+  try {
+    return await new Promise<WebKnownHost[]>((resolve, reject) => {
+      const request = database.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME).getAll();
+      request.onsuccess = () => resolve((request.result as WebKnownHost[]).sort((left, right) => left.host.localeCompare(right.host) || left.port - right.port));
+      request.onerror = () => reject(request.error ?? new Error("Known-host listing failed"));
+    });
+  } finally {
+    database.close();
+  }
+}
+
+export async function removeKnownHost(key: string): Promise<void> {
+  const database = await openDatabase();
+  try {
+    await new Promise<void>((resolve, reject) => {
+      const request = database.transaction(STORE_NAME, "readwrite").objectStore(STORE_NAME).delete(key);
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error ?? new Error("Known-host removal failed"));
+    });
+  } finally {
+    database.close();
+  }
+}

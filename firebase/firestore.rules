@@ -2,6 +2,12 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // WAN SSH known-host state is authoritative server metadata. Only the
+    // gateway Admin SDK may read or mutate records and their audit trail.
+    match /wanSshKnownHosts/{document=**} {
+      allow read, write: if false;
+    }
+
     function signedIn() {
       return request.auth != null;
     }

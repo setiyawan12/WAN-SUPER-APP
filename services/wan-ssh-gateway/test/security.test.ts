@@ -27,6 +27,7 @@ test("target policy blocks metadata and enforces production allowlist", async ()
     WAN_SSH_ALLOWED_ORIGINS: "https://ssh.example.com",
     WAN_SSH_EGRESS_MODE: "allowlist",
     WAN_SSH_EGRESS_ALLOW_CIDRS: "10.20.0.0/16",
+    WAN_SSH_KNOWN_HOST_MODE: "firestore",
     WAN_SSH_TRUSTED_PROXY_CIDRS: "172.31.0.0/24",
     WAN_SSH_LOG_LEVEL: "error"
   });

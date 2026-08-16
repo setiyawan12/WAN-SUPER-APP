@@ -3,6 +3,7 @@ import { isIP } from "node:net";
 export type GatewayEnvironment = "development" | "production";
 export type GatewayAuthMode = "dev-anonymous" | "firebase";
 export type GatewayEgressMode = "development" | "allowlist";
+export type GatewayKnownHostMode = "client-hint" | "firestore";
 
 export interface GatewayConfig {
   environment: GatewayEnvironment;
@@ -25,6 +26,7 @@ export interface GatewayConfig {
   backpressureTimeoutMs: number;
   outputBatchBytes: number;
   egressMode: GatewayEgressMode;
+  knownHostMode: GatewayKnownHostMode;
   egressAllowCidrs: string[];
   trustedProxyCidrs: string[];
   connectRateLimit: number;
@@ -44,7 +46,7 @@ const defaults = {
   WAN_SSH_PORT: "8788",
   WAN_SSH_AUTH_MODE: "dev-anonymous",
   WAN_SSH_ALLOWED_ORIGINS: "http://127.0.0.1:5179",
-  WAN_SSH_MAX_SESSIONS_PER_USER: "3",
+  WAN_SSH_MAX_SESSIONS_PER_USER: "4",
   WAN_SSH_MAX_SESSIONS_TOTAL: "20",
   WAN_SSH_CONNECT_TIMEOUT_MS: "15000",
   WAN_SSH_IDLE_TIMEOUT_MS: "900000",
@@ -58,6 +60,7 @@ const defaults = {
   WAN_SSH_BACKPRESSURE_TIMEOUT_MS: "10000",
   WAN_SSH_OUTPUT_BATCH_BYTES: "65536",
   WAN_SSH_EGRESS_MODE: "development",
+  WAN_SSH_KNOWN_HOST_MODE: "client-hint",
   WAN_SSH_TRUSTED_PROXY_CIDRS: "172.30.0.0/24",
   WAN_SSH_CONNECT_RATE_LIMIT: "30",
   WAN_SSH_CONNECT_RATE_WINDOW_MS: "60000",
@@ -121,10 +124,12 @@ export function loadConfig(env: Environment = process.env): GatewayConfig {
   const environment = value(env, "WAN_SSH_ENV");
   const authMode = value(env, "WAN_SSH_AUTH_MODE");
   const egressMode = value(env, "WAN_SSH_EGRESS_MODE");
+  const knownHostMode = value(env, "WAN_SSH_KNOWN_HOST_MODE");
   const logLevel = value(env, "WAN_SSH_LOG_LEVEL");
   if (environment !== "development" && environment !== "production") throw new Error("WAN_SSH_ENV must be development or production");
   if (authMode !== "dev-anonymous" && authMode !== "firebase") throw new Error("WAN_SSH_AUTH_MODE must be dev-anonymous or firebase");
   if (egressMode !== "development" && egressMode !== "allowlist") throw new Error("WAN_SSH_EGRESS_MODE must be development or allowlist");
+  if (knownHostMode !== "client-hint" && knownHostMode !== "firestore") throw new Error("WAN_SSH_KNOWN_HOST_MODE must be client-hint or firestore");
   if (!["debug", "info", "warn", "error"].includes(logLevel)) throw new Error("WAN_SSH_LOG_LEVEL is invalid");
 
   const allowedOrigins = list(env.WAN_SSH_ALLOWED_ORIGINS ?? defaults.WAN_SSH_ALLOWED_ORIGINS);
@@ -156,6 +161,7 @@ export function loadConfig(env: Environment = process.env): GatewayConfig {
     backpressureTimeoutMs: integer(env, "WAN_SSH_BACKPRESSURE_TIMEOUT_MS", 100, 300_000),
     outputBatchBytes: integer(env, "WAN_SSH_OUTPUT_BATCH_BYTES", 1_024, 1_048_576),
     egressMode,
+    knownHostMode,
     connectRateLimit: integer(env, "WAN_SSH_CONNECT_RATE_LIMIT", 1, 100_000),
     connectRateWindowMs: integer(env, "WAN_SSH_CONNECT_RATE_WINDOW_MS", 100, 3_600_000),
     egressAllowCidrs,
@@ -182,6 +188,7 @@ export function loadConfig(env: Environment = process.env): GatewayConfig {
     if (config.authMode !== "firebase") throw new Error("Production requires Firebase authentication");
     if (originUrls.some((origin) => origin.protocol !== "https:")) throw new Error("Production origins must use HTTPS");
     if (config.egressMode !== "allowlist" || !config.egressAllowCidrs.length) throw new Error("Production requires a non-empty egress allowlist");
+    if (config.knownHostMode !== "firestore") throw new Error("Production requires the Firestore authoritative known-host store");
     if (!config.trustedProxyCidrs.length || config.trustedProxyCidrs.some((cidr) => cidr === "0.0.0.0/0" || cidr === "::/0")) {
       throw new Error("Production requires bounded trusted proxy CIDRs");
     }

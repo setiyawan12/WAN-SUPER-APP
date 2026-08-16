@@ -20,15 +20,29 @@ test("production rejects HTTP and empty egress policy", () => {
     WAN_SSH_FIREBASE_PROJECT_ID: "test",
     WAN_SSH_ALLOWED_ORIGINS: "http://ssh.example.com",
     WAN_SSH_EGRESS_MODE: "allowlist",
-    WAN_SSH_EGRESS_ALLOW_CIDRS: "10.0.0.0/8"
+    WAN_SSH_EGRESS_ALLOW_CIDRS: "10.0.0.0/8",
+    WAN_SSH_KNOWN_HOST_MODE: "firestore"
   }), /HTTPS/);
   assert.throws(() => loadConfig({
     WAN_SSH_ENV: "production",
     WAN_SSH_AUTH_MODE: "firebase",
     WAN_SSH_FIREBASE_PROJECT_ID: "test",
     WAN_SSH_ALLOWED_ORIGINS: "https://ssh.example.com",
-    WAN_SSH_EGRESS_MODE: "allowlist"
+    WAN_SSH_EGRESS_MODE: "allowlist",
+    WAN_SSH_KNOWN_HOST_MODE: "firestore"
   }), /egress allowlist/);
+});
+
+test("production requires authoritative Firestore known-host state", () => {
+  assert.throws(() => loadConfig({
+    WAN_SSH_ENV: "production",
+    WAN_SSH_AUTH_MODE: "firebase",
+    WAN_SSH_FIREBASE_PROJECT_ID: "test",
+    WAN_SSH_ALLOWED_ORIGINS: "https://ssh.example.com",
+    WAN_SSH_EGRESS_MODE: "allowlist",
+    WAN_SSH_EGRESS_ALLOW_CIDRS: "10.0.0.0/8",
+    WAN_SSH_TRUSTED_PROXY_CIDRS: "172.31.0.0/24"
+  }), /authoritative known-host/);
 });
 
 test("credential-like gateway environment variables are forbidden", () => {

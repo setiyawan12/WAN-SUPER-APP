@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ArrowLeft,
   Bot,
+  ChevronDown,
   CircleStop,
   Clipboard,
   ClipboardPaste,
@@ -10,6 +11,7 @@ import {
   FolderOpen,
   KeyRound,
   LockKeyhole,
+  LogOut,
   PanelRight,
   Play,
   Plus,
@@ -32,6 +34,7 @@ import { Inspector } from "./Inspector";
 import { ResourceExplorer } from "./ResourceExplorer";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import { ElectronRemoteTerminalTransport } from "./transport/electron";
+import type { RemoteTerminalTransport, SshRuntimeCapabilities } from "./transport/contract";
 import type { Catalog, Host, Session, TransferJob, Tunnel } from "./types";
 import { EnvironmentBadge, IconButton, StatusDot, useConfirm } from "./ui";
 
@@ -39,7 +42,25 @@ type InspectorView = "files" | "tunnels" | "host" | "snippets";
 type VaultState = "loading" | "locked" | "no-vault" | "unlocked";
 
 const emptyCatalog: Catalog = { hosts: [], groups: [], identities: [], keys: [], snippets: [] };
-const terminalTransport = new ElectronRemoteTerminalTransport();
+const electronTransport = new ElectronRemoteTerminalTransport();
+
+export type WorkspaceAccount = { uid: string; displayName?: string; email?: string; photoURL?: string };
+
+export type SshWorkspaceProps = {
+  transport: RemoteTerminalTransport;
+  capabilities?: SshRuntimeCapabilities;
+  account?: WorkspaceAccount;
+  onSignOut?: () => Promise<void>;
+};
+
+function accountLabel(account: WorkspaceAccount) {
+  return account.displayName || account.email || "WAN user";
+}
+
+function AccountAvatar({ account }: { account: WorkspaceAccount }) {
+  if (account.photoURL) return <img className="web-account-avatar" src={account.photoURL} alt="" referrerPolicy="no-referrer" />;
+  return <i className="web-account-avatar" aria-hidden="true">{accountLabel(account).slice(0, 1).toUpperCase()}</i>;
+}
 
 function normalizeSessionState(value: string): Session["status"] {
   if (["connecting", "authenticating", "connected", "reconnecting", "disconnected", "error", "closed"].includes(value)) return value as Session["status"];
@@ -86,10 +107,10 @@ export default function App() {
       </div>
     );
   }
-  return <SshApp />;
+  return <SshWorkspace transport={electronTransport} />;
 }
 
-function SshApp() {
+export function SshWorkspace({ transport, capabilities = transport.capabilities, account, onSignOut }: SshWorkspaceProps) {
   const [vaultState, setVaultState] = useState<VaultState>("loading");
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
@@ -117,10 +138,14 @@ function SshApp() {
   const [tabMenu, setTabMenu] = useState<{ sessionId: string; x: number; y: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<"add" | "single" | null>(null);
   const [draggingTab, setDraggingTab] = useState<string | null>(null);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const MAX_PANES = 4;
   const terminalRefs = useRef(new Map<string, TerminalHandle>());
   const mockOpened = useRef(false);
   const confirm = useConfirm();
+  const mockRuntime = transport === electronTransport && isMockApi;
 
   const showToast = useCallback((message: string, tone: "default" | "danger" = "default") => {
     const id = Date.now();
@@ -234,7 +259,7 @@ function SshApp() {
         hostId: host.id,
         label: host.label,
         environment: host.environment,
-        status: "connected",
+        status: normalizeSessionState(result.state ?? "connected"),
         local: false
       });
       setInspectorView("files");
@@ -255,10 +280,10 @@ function SshApp() {
   }, [addSession, showToast]);
 
   useEffect(() => {
-    if (!isMockApi || mockOpened.current || vaultState !== "unlocked" || !catalog.hosts.length) return;
+    if (!mockRuntime || mockOpened.current || vaultState !== "unlocked" || !catalog.hosts.length) return;
     mockOpened.current = true;
     void openHost(catalog.hosts[0]);
-  }, [catalog.hosts, openHost, vaultState]);
+  }, [catalog.hosts, mockRuntime, openHost, vaultState]);
 
   const closeSession = useCallback(async (sessionId: string) => {
     if (recording[sessionId]) {
@@ -342,6 +367,21 @@ function SshApp() {
     return () => { window.removeEventListener("resize", close); window.removeEventListener("keydown", onKey); };
   }, [tabMenu]);
 
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      if (event.type === "pointerdown" && accountMenuRef.current?.contains(event.target as Node)) return;
+      setAccountMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [accountMenuOpen]);
+
   const focusedSession = focusedSessionId ? sessions[focusedSessionId] ?? null : null;
   const selectedHost = catalog.hosts.find((host) => host.id === selectedHostId) ?? null;
   const activeTerminal = useCallback(
@@ -353,8 +393,23 @@ function SshApp() {
     if (!focusedSession || focusedSession.local) return;
     const dimensions = activeTerminal()?.dimensions() ?? { cols: 100, rows: 32 };
     try {
-      await api.session.reconnect({ sessionId: focusedSession.sessionId, ...dimensions });
-      setSessions((current) => ({ ...current, [focusedSession.sessionId]: { ...current[focusedSession.sessionId], status: "connected" } }));
+      const result = await api.session.reconnect({ sessionId: focusedSession.sessionId, ...dimensions });
+      const nextId = result?.sessionId ?? focusedSession.sessionId;
+      if (nextId === focusedSession.sessionId) {
+        setSessions((current) => ({ ...current, [focusedSession.sessionId]: { ...current[focusedSession.sessionId], status: "connected" } }));
+      } else {
+        terminalRefs.current.delete(focusedSession.sessionId);
+        setSessions((current) => {
+          const next = { ...current };
+          const previous = next[focusedSession.sessionId];
+          delete next[focusedSession.sessionId];
+          next[nextId] = { ...previous, sessionId: nextId, status: normalizeSessionState(result.state ?? "connected"), reason: undefined, message: undefined };
+          return next;
+        });
+        setTabs((current) => current.map((id) => id === focusedSession.sessionId ? nextId : id));
+        setPanes((current) => current.map((id) => id === focusedSession.sessionId ? nextId : id));
+        setFocusedSessionId(nextId);
+      }
     } catch (error) {
       showToast(error instanceof Error ? error.message : String(error), "danger");
     }
@@ -419,19 +474,36 @@ function SshApp() {
   const cancelTransfer = async (id: string) => { await api.transfer.cancel(id); };
   const retryTransfer = async (id: string) => { await api.transfer.retry(id); };
 
-  const commands = useMemo<Array<{ id: string; label: string; hint?: string; icon: ReactNode; run: () => void; disabled?: boolean }>>(() => [
-    { id: "new-host", label: "New SSH host", hint: "Create a connection profile", icon: <Plus size={16} />, run: () => setHostDialog("new") },
-    { id: "local", label: "Open local shell", hint: "Start a terminal on this device", icon: <SquareTerminal size={16} />, run: () => void openLocal() },
-    { id: "connect", label: "Connect selected host", hint: selectedHost?.label, icon: <Play size={16} />, disabled: !selectedHost, run: () => selectedHost && void openHost(selectedHost) },
-    { id: "reconnect", label: "Reconnect active session", icon: <RefreshCw size={16} />, disabled: !focusedSession || focusedSession.local || focusedSession.status === "connected", run: () => void reconnect() },
-    { id: "files", label: "Open SFTP inspector", icon: <FolderOpen size={16} />, disabled: !focusedSession || focusedSession.local, run: () => { setInspectorOpen(true); setInspectorView("files"); } },
-    { id: "tunnels", label: "Open forwarding inspector", icon: <Route size={16} />, disabled: !focusedSession || focusedSession.local, run: () => { setInspectorOpen(true); setInspectorView("tunnels"); } },
-    { id: "search", label: "Search terminal output", hint: "Command/Ctrl + F", icon: <Search size={16} />, disabled: !focusedSession, run: () => activeTerminal()?.openSearch() },
-    { id: "record", label: recording[focusedSessionId ?? ""] ? "Stop and save recording" : "Start terminal recording", icon: recording[focusedSessionId ?? ""] ? <CircleStop size={16} /> : <Radio size={16} />, disabled: !focusedSession, run: () => void toggleRecording() },
-    { id: "ai", label: "Add selection to Chat context", icon: <Bot size={16} />, disabled: !focusedSession, run: () => void sendSelectionToChat() },
-    { id: "settings", label: "SSH workspace settings", icon: <Settings size={16} />, run: () => setSettingsOpen(true) },
-    { id: "lock", label: "Lock encrypted vault", icon: <LockKeyhole size={16} />, run: () => void api.vault.lock() }
-  ], [activeTerminal, focusedSession, focusedSessionId, openHost, openLocal, recording, selectedHost]);
+  const commands = useMemo<Array<{ id: string; label: string; hint?: string; icon: ReactNode; run: () => void; disabled?: boolean }>>(() => {
+    const values: Array<{ id: string; label: string; hint?: string; icon: ReactNode; run: () => void; disabled?: boolean }> = [
+      { id: "new-host", label: "New SSH host", hint: "Create a connection profile", icon: <Plus size={16} />, run: () => setHostDialog("new") },
+      { id: "connect", label: "Connect selected host", hint: selectedHost?.label, icon: <Play size={16} />, disabled: !selectedHost, run: () => selectedHost && void openHost(selectedHost) },
+      { id: "reconnect", label: "Reconnect active session", icon: <RefreshCw size={16} />, disabled: !focusedSession || focusedSession.local || focusedSession.status === "connected", run: () => void reconnect() },
+      { id: "search", label: "Search terminal output", hint: "Command/Ctrl + F", icon: <Search size={16} />, disabled: !focusedSession, run: () => activeTerminal()?.openSearch() },
+      { id: "ai", label: "Add selection to Chat context", icon: <Bot size={16} />, disabled: !focusedSession, run: () => void sendSelectionToChat() },
+      { id: "settings", label: "SSH workspace settings", icon: <Settings size={16} />, run: () => setSettingsOpen(true) },
+      { id: "lock", label: "Lock encrypted vault", icon: <LockKeyhole size={16} />, run: () => void api.vault.lock() }
+    ];
+    if (capabilities.localShell) values.splice(1, 0, { id: "local", label: "Open local shell", hint: "Start a terminal on this device", icon: <SquareTerminal size={16} />, run: () => void openLocal() });
+    if (capabilities.sftp) values.splice(3, 0, { id: "files", label: "Open SFTP inspector", icon: <FolderOpen size={16} />, disabled: !focusedSession || focusedSession.local, run: () => { setInspectorOpen(true); setInspectorView("files"); } });
+    if (capabilities.tunnels) values.splice(4, 0, { id: "tunnels", label: "Open forwarding inspector", icon: <Route size={16} />, disabled: !focusedSession || focusedSession.local, run: () => { setInspectorOpen(true); setInspectorView("tunnels"); } });
+    if (capabilities.recording) values.splice(values.length - 3, 0, { id: "record", label: recording[focusedSessionId ?? ""] ? "Stop and save recording" : "Start terminal recording", icon: recording[focusedSessionId ?? ""] ? <CircleStop size={16} /> : <Radio size={16} />, disabled: !focusedSession, run: () => void toggleRecording() });
+    return values;
+  }, [activeTerminal, capabilities, focusedSession, focusedSessionId, openHost, openLocal, recording, selectedHost]);
+
+  const signOut = async () => {
+    if (!onSignOut || signingOut) return;
+    setSigningOut(true);
+    setAccountMenuOpen(false);
+    try {
+      await api.vault.lock();
+      transport.dispose();
+      await onSignOut();
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : String(error), "danger");
+      setSigningOut(false);
+    }
+  };
 
   useEffect(() => {
     const handleKey = (event: KeyboardEvent) => {
@@ -457,21 +529,46 @@ function SshApp() {
     return <VaultScreen
       state={vaultState}
       error={vaultError}
-      onUnlock={async (password) => { setVaultError(null); try { await api.vault.unlock(password); await unlockComplete(); } catch { setVaultError("Master password is incorrect or this vault cannot be unlocked."); } }}
+      onUnlock={async (password) => {
+        setVaultError(null);
+        try {
+          await api.vault.unlock(password);
+        } catch (error) {
+          setVaultError(error instanceof Error ? error.message : "Master password is incorrect or this vault cannot be unlocked.");
+          return;
+        }
+        try {
+          await unlockComplete();
+        } catch (error) {
+          setVaultError(error instanceof Error ? `Vault unlocked, but workspace loading failed: ${error.message}` : "Vault unlocked, but workspace loading failed.");
+        }
+      }}
       onCreate={async (password) => { setVaultError(null); try { await api.vault.create(password); await unlockComplete(); } catch (error) { setVaultError(error instanceof Error ? error.message : String(error)); } }}
       onBiometric={async () => { if (await api.vault.tryBiometricUnlock()) await unlockComplete(); else setVaultError("Device unlock is not configured for this vault."); }}
+      accountLabel={account ? accountLabel(account) : undefined}
+      onSignOut={onSignOut ? () => void signOut() : undefined}
+      cloudOnly={capabilities.runtime === "web-cloud"}
     />;
   }
 
   return (
-    <div className={`ssh-app ${inspectorOpen ? "with-inspector" : ""}`}>
+    <div className={`ssh-app ${inspectorOpen ? "with-inspector" : ""} ${capabilities.runtime.startsWith("web-") ? "web-runtime" : ""}`}>
       <header className="app-titlebar">
-        <div className="traffic-space" />
+        {capabilities.runtime === "electron" && <div className="traffic-space" />}
         <button className="titlebar-button mobile-resources" onClick={() => setExplorerOpen(true)}><Server size={15} /> Resources</button>
         {(window as unknown as { superApp?: { showHub?: () => Promise<unknown> } }).superApp?.showHub && <button className="titlebar-button" onClick={() => void (window as unknown as { superApp: { showHub: () => Promise<unknown> } }).superApp.showHub()}><ArrowLeft size={15} /> Hub</button>}
         <div className="product-mark"><TerminalSquare size={17} /><strong>WANN SSH</strong><span>Operations workspace</span></div>
         <button className="command-trigger" onClick={() => setPaletteOpen(true)}><Command size={14} /><span>Command</span><kbd>⌘K</kbd></button>
         <div className="titlebar-spacer" />
+        {account && <div className="web-account-menu" ref={accountMenuRef}>
+          <button className="web-account" type="button" aria-haspopup="menu" aria-expanded={accountMenuOpen} title={account.email || accountLabel(account)} onClick={() => setAccountMenuOpen((open) => !open)}>
+            <AccountAvatar account={account} /><span>{accountLabel(account)}</span><ChevronDown size={13} />
+          </button>
+          {accountMenuOpen && <div className="web-account-panel" role="menu">
+            <div className="web-account-identity"><AccountAvatar account={account} /><div><strong>{accountLabel(account)}</strong>{account.email && <small>{account.email}</small>}<code>{account.uid}</code></div></div>
+            {onSignOut && <button className="web-account-action" type="button" role="menuitem" onClick={() => void signOut()} disabled={signingOut}><LogOut size={14} />{signingOut ? "Signing out..." : "Sign out"}</button>}
+          </div>}
+        </div>}
         <IconButton label="Settings" onClick={() => setSettingsOpen(true)}><Settings size={16} /></IconButton>
         <button className="titlebar-button" onClick={() => void api.vault.lock()}><LockKeyhole size={15} /> Lock</button>
       </header>
@@ -490,7 +587,7 @@ function SshApp() {
             onConnect={(host) => { setExplorerOpen(false); void openHost(host); }}
             onNewHost={() => { setExplorerOpen(false); setHostDialog("new"); }}
             onNewGroup={() => { setExplorerOpen(false); setGroupDialog(true); }}
-            onOpenLocal={() => { setExplorerOpen(false); void openLocal(); }}
+            onOpenLocal={capabilities.localShell ? () => { setExplorerOpen(false); void openLocal(); } : undefined}
             onSettings={() => { setExplorerOpen(false); setSettingsOpen(true); }}
             onToggleFavorite={(host) => void toggleFavorite(host)}
           />
@@ -545,7 +642,7 @@ function SshApp() {
                 return nodes;
               })()}
             </div>
-            <IconButton label="New local shell" onClick={() => void openLocal()}><Plus size={16} /></IconButton>
+            <IconButton label={capabilities.localShell ? "New local shell" : "New SSH host"} onClick={() => capabilities.localShell ? void openLocal() : setHostDialog("new")}><Plus size={16} /></IconButton>
           </div>
 
           <div className="terminal-toolbar">
@@ -560,7 +657,7 @@ function SshApp() {
               <span className="toolbar-separator" />
               <IconButton label="Reconnect" disabled={!focusedSession || focusedSession.local || focusedSession.status === "connected"} onClick={() => void reconnect()}><RefreshCw size={15} /></IconButton>
               <IconButton label={panes.length > 1 ? "Close split" : "Split terminal"} disabled={tabs.length < 2} onClick={toggleSplit}><SplitSquareHorizontal size={15} /></IconButton>
-              <IconButton className={recording[focusedSessionId ?? ""] ? "recording" : ""} label={recording[focusedSessionId ?? ""] ? "Stop and save recording" : "Start recording"} disabled={!focusedSession} onClick={() => void toggleRecording()}>{recording[focusedSessionId ?? ""] ? <CircleStop size={15} /> : <Radio size={15} />}</IconButton>
+              {capabilities.recording && <IconButton className={recording[focusedSessionId ?? ""] ? "recording" : ""} label={recording[focusedSessionId ?? ""] ? "Stop and save recording" : "Start recording"} disabled={!focusedSession} onClick={() => void toggleRecording()}>{recording[focusedSessionId ?? ""] ? <CircleStop size={15} /> : <Radio size={15} />}</IconButton>}
               <IconButton label="Add selection to Chat" disabled={!focusedSession} onClick={() => void sendSelectionToChat()}><Bot size={15} /></IconButton>
               <span className="toolbar-separator" />
               <IconButton className={inspectorOpen ? "active" : ""} label={inspectorOpen ? "Hide inspector" : "Show inspector"} onClick={() => setInspectorOpen((value) => !value)}><PanelRight size={15} /></IconButton>
@@ -568,7 +665,7 @@ function SshApp() {
           </div>
 
           <div className={`terminal-grid ${panes.length > 1 ? "split" : ""}`} data-panes={panes.length}>
-            {tabs.length === 0 && <div className="workspace-empty"><TerminalSquare size={34} /><strong>Start an operational session</strong><p>Select a host and press Connect, or open a local shell.</p><div><button className="button primary" disabled={!selectedHost} onClick={() => selectedHost && void openHost(selectedHost)}><Play size={15} /> Connect {selectedHost?.label ?? "host"}</button><button className="button" onClick={() => void openLocal()}><SquareTerminal size={15} /> Local shell</button></div></div>}
+            {tabs.length === 0 && <div className="workspace-empty"><TerminalSquare size={34} /><strong>Start an operational session</strong><p>{capabilities.localShell ? "Select a host and press Connect, or open a local shell." : "Select a cloud host and press Connect."}</p><div><button className="button primary" disabled={!selectedHost} onClick={() => selectedHost && void openHost(selectedHost)}><Play size={15} /> Connect {selectedHost?.label ?? "host"}</button>{capabilities.localShell && <button className="button" onClick={() => void openLocal()}><SquareTerminal size={15} /> Local shell</button>}</div></div>}
             {tabs.map((id) => {
               const session = sessions[id];
               if (!session) return null;
@@ -584,7 +681,7 @@ function SshApp() {
               }
               return <div key={id} className={`terminal-surface ${visible ? "visible" : "hidden"} ${focusedSessionId === id ? "focused" : ""}`} style={placement} onMouseDown={() => setFocusedSessionId(id)}>
                 {panes.length > 1 && <button className="pane-close" title="Tutup pane" onClick={(event) => { event.stopPropagation(); removeFromSplit(id); }}><X size={13} /></button>}
-                <TerminalPane ref={(handle) => { if (handle) terminalRefs.current.set(id, handle); else terminalRefs.current.delete(id); }} sessionId={id} visible={visible} active={focusedSessionId === id} label={session.label} transport={terminalTransport} mockBanner={isMockApi} />
+                <TerminalPane ref={(handle) => { if (handle) terminalRefs.current.set(id, handle); else terminalRefs.current.delete(id); }} sessionId={id} visible={visible} active={focusedSessionId === id} label={session.label} transport={transport} mockBanner={mockRuntime} />
                 {session.status !== "connected" && session.status !== "connecting" && session.status !== "authenticating" && <div className="disconnect-banner"><WifiOff size={15} /><span>{session.message || session.reason || "Session disconnected"}</span>{!session.local && <button className="button compact" onClick={() => { setFocusedSessionId(id); void reconnect(); }}><RefreshCw size={14} /> Reconnect</button>}</div>}
               </div>;
             })}
@@ -613,6 +710,7 @@ function SshApp() {
           snippets={catalog.snippets}
           transfers={transfers}
           tunnels={tunnels}
+          capabilities={capabilities}
           view={inspectorView}
           onViewChange={setInspectorView}
           onEditHost={(host) => setHostDialog(host)}
@@ -637,9 +735,9 @@ function SshApp() {
         <span><KeyRound size={13} /> Vault unlocked</span>
       </footer>
 
-      {hostDialog && <HostDialog initial={hostDialog === "new" ? null : hostDialog} catalog={catalog} onClose={() => setHostDialog(null)} onSave={saveHost} onDelete={deleteHost} />}
-      {groupDialog && <GroupDialog groups={catalog.groups} keys={catalog.keys} onClose={() => setGroupDialog(false)} onSave={async (input) => { await api.groups.save(input); await reloadCatalog(); }} onDelete={async (id) => { await api.groups.remove(id); await reloadCatalog(); }} onToast={showToast} />}
-      {settingsOpen && <SettingsDialog catalog={catalog} onCatalogChange={reloadCatalog} onClose={() => setSettingsOpen(false)} onToast={showToast} />}
+      {hostDialog && <HostDialog initial={hostDialog === "new" ? null : hostDialog} catalog={catalog} cloudOnly={capabilities.runtime === "web-cloud"} agentForwarding={capabilities.runtime === "electron"} onClose={() => setHostDialog(null)} onSave={saveHost} onDelete={deleteHost} />}
+      {groupDialog && <GroupDialog groups={catalog.groups} keys={catalog.keys} cloudOnly={capabilities.runtime === "web-cloud"} onClose={() => setGroupDialog(false)} onSave={async (input) => { await api.groups.save(input); await reloadCatalog(); }} onDelete={async (id) => { await api.groups.remove(id); await reloadCatalog(); }} onToast={showToast} />}
+      {settingsOpen && <SettingsDialog catalog={catalog} capabilities={capabilities} onCatalogChange={reloadCatalog} onClose={() => setSettingsOpen(false)} onToast={showToast} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {hostKeyPrompt && <HostKeyDialog prompt={hostKeyPrompt} onAnswer={(accept) => { void api.session.answerHostKey(hostKeyPrompt.sessionId, accept); setHostKeyPrompt(null); }} />}
       {authPrompt && <AuthPromptDialog prompt={authPrompt} onAnswer={(answers) => { if (answers) void api.session.answerAuthPrompt(authPrompt.sessionId, answers); else void api.session.close(authPrompt.sessionId); setAuthPrompt(null); }} />}

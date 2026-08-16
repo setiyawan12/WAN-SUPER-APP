@@ -33,7 +33,7 @@ class FakeSession implements ManagedSession {
 function context(connectionId: string, principalId: string) {
   return {
     id: connectionId,
-    principal: { kind: "development" as const, id: principalId, uid: principalId },
+    principal: { kind: "development" as const, id: principalId, uid: principalId, tenantId: "development" },
     send: () => true,
     bufferedAmount: () => 0
   };

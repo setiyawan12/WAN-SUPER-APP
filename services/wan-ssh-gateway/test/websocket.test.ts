@@ -60,6 +60,7 @@ function firebaseAuthenticator(expiresInMs: number): Authenticator {
     kind: "firebase" as const,
     id: `firebase:${uid}`,
     uid,
+    tenantId: uid,
     expiresAt: Date.now() + expiresInMs
   });
   return {

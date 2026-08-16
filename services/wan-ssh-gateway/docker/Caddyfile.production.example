@@ -4,11 +4,12 @@ ssh.example.com {
 
   header {
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' wss://ssh.example.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
+    Content-Security-Policy "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://apis.google.com https://*.firebaseio.com https://*.firebasedatabase.app; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: https://*.googleusercontent.com; connect-src 'self' wss://ssh.example.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://*.firebaseio.com wss://*.firebaseio.com https://*.firebasedatabase.app wss://*.firebasedatabase.app; frame-src https://*.firebaseapp.com https://*.web.app https://*.firebaseio.com https://*.firebasedatabase.app https://accounts.google.com https://apis.google.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'"
     X-Content-Type-Options "nosniff"
     Referrer-Policy "no-referrer"
     Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
-    Cross-Origin-Opener-Policy "same-origin"
+    # Popup Google sign-in memerlukan opener yang tetap terhubung.
+    Cross-Origin-Opener-Policy "same-origin-allow-popups"
   }
 
   handle /v1/ws {

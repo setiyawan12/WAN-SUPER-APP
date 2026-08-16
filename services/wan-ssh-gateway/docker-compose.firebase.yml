@@ -1,0 +1,17 @@
+# Overlay opsional untuk menjalankan stack lokal dalam mode Firebase penuh.
+#
+# Dipakai otomatis oleh scripts/local-stack.mjs ketika WAN_SSH_SERVICE_ACCOUNT_FILE
+# menunjuk ke service account JSON. Kunci di-mount read-only ke container dan tidak
+# pernah masuk image, repository, maupun bundle web.
+services:
+  gateway:
+    environment:
+      WAN_SSH_AUTH_MODE: firebase
+      WAN_SSH_FIREBASE_PROJECT_ID: ${VITE_FIREBASE_PROJECT_ID:?VITE_FIREBASE_PROJECT_ID is required for Firebase mode}
+      WAN_SSH_ALLOWED_ORIGINS: ${WAN_SSH_WEB_ORIGIN:-http://localhost:5179}
+      GOOGLE_APPLICATION_CREDENTIALS: /run/secrets/firebase-service-account.json
+    volumes:
+      - type: bind
+        source: ${WAN_SSH_SERVICE_ACCOUNT_FILE:?WAN_SSH_SERVICE_ACCOUNT_FILE is required}
+        target: /run/secrets/firebase-service-account.json
+        read_only: true

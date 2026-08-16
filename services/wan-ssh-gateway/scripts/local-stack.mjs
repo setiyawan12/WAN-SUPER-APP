@@ -1,17 +1,21 @@
 import { access, copyFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { spawn } from "node:child_process";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createFixtureKey } from "./create-fixture-key.mjs";
 
 const serviceDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = path.join(serviceDirectory, "docker-compose.local.yml");
+const firebaseOverlayFile = path.join(serviceDirectory, "docker-compose.firebase.yml");
+const webEnvironmentFile = path.resolve(serviceDirectory, "../../modules/ssh/ui/.env.local");
 const environmentFile = path.join(serviceDirectory, ".env.local");
 const exampleEnvironmentFile = path.join(serviceDirectory, ".env.local.example");
 const runtimeDirectory = path.join(serviceDirectory, ".runtime");
 const composeEnvironmentFile = path.join(runtimeDirectory, "compose.env");
 const fixturePathFile = path.join(runtimeDirectory, "fixture-dir");
+const overlayMarkerFile = path.join(runtimeDirectory, "firebase-overlay");
 const command = process.argv[2] ?? "up";
 const extraArguments = process.argv.slice(3);
 
@@ -44,7 +48,14 @@ async function up() {
     await writeFile(fixturePathFile, `${fixtureDirectory}\n`, { mode: 0o600 });
   }
   const subnet = process.env.WAN_SSH_DOCKER_SUBNET || "172.30.0.0/24";
-  await writeFile(composeEnvironmentFile, `WAN_SSH_FIXTURE_DIR=${escapeEnvironment(fixtureDirectory)}\nWAN_SSH_DOCKER_SUBNET=${subnet}\n`, { mode: 0o600 });
+  const firebase = await firebaseOverlaySettings();
+  await writeFile(
+    composeEnvironmentFile,
+    `WAN_SSH_FIXTURE_DIR=${escapeEnvironment(fixtureDirectory)}\nWAN_SSH_DOCKER_SUBNET=${subnet}\n${firebase.environment}`,
+    { mode: 0o600 }
+  );
+  if (firebase.enabled) await writeFile(overlayMarkerFile, "1\n", { mode: 0o600 });
+  else await rm(overlayMarkerFile, { force: true });
   try {
     await compose(["--profile", "fixture", "up", "--build", "--wait", "--wait-timeout", "120"]);
   } catch (error) {
@@ -52,7 +63,8 @@ async function up() {
     await cleanupFixture();
     throw error;
   }
-  process.stdout.write("\nWAN SSH Web: http://127.0.0.1:5179\n");
+  process.stdout.write(`\nWAN SSH Web: ${firebase.enabled ? firebase.origin : "http://127.0.0.1:5179"}\n`);
+  if (firebase.enabled) process.stdout.write("Auth mode: firebase (service account di-mount read-only)\n");
   process.stdout.write(`Fixture host: ssh-target\nFixture port: 22\nFixture username: wan\nFixture private key: ${path.join(fixtureDirectory, "id_ed25519")}\n`);
   process.stdout.write(`Fixture password file: ${path.join(fixtureDirectory, "password")}\n`);
 }
@@ -73,8 +85,57 @@ async function cleanupFixture() {
   await rm(runtimeDirectory, { recursive: true, force: true });
 }
 
+/**
+ * Mode Firebase penuh aktif saat service account tersedia: dari
+ * WAN_SSH_SERVICE_ACCOUNT_FILE, atau dari lokasi default di luar repository
+ * (`~/.config/wan-ssh/service-account.json`) sehingga `ssh-web:up` langsung
+ * berjalan tanpa environment variable dan kunci tidak pernah berada di dalam
+ * project. Tanpa keduanya stack tetap berjalan pada mode dev-anonymous.
+ *
+ * Konfigurasi Web SDK diambil dari modules/ssh/ui/.env.local agar image web
+ * dibangun dengan project yang sama seperti WAN SSH Desktop.
+ */
+async function firebaseOverlaySettings() {
+  const configured = process.env.WAN_SSH_SERVICE_ACCOUNT_FILE?.trim();
+  const resolved = path.resolve(configured || path.join(os.homedir(), ".config", "wan-ssh", "service-account.json"));
+  if (!(await exists(resolved))) {
+    if (configured) throw new Error(`WAN_SSH_SERVICE_ACCOUNT_FILE does not exist: ${resolved}`);
+    return { enabled: false, environment: "" };
+  }
+
+  let webEnvironment;
+  try {
+    webEnvironment = await readFile(webEnvironmentFile, "utf8");
+  } catch {
+    throw new Error(`Firebase mode requires ${webEnvironmentFile} (copy modules/ssh/ui/.env.example)`);
+  }
+  const web = new Map();
+  for (const line of webEnvironment.split("\n")) {
+    const entry = line.trim();
+    if (!entry || entry.startsWith("#") || !entry.includes("=")) continue;
+    const key = entry.slice(0, entry.indexOf("="));
+    if (key.startsWith("VITE_FIREBASE_") && key !== "VITE_FIREBASE_AUTH_EMULATOR_HOST") {
+      web.set(key, entry.slice(entry.indexOf("=") + 1).trim());
+    }
+  }
+  for (const required of ["VITE_FIREBASE_API_KEY", "VITE_FIREBASE_PROJECT_ID", "VITE_FIREBASE_DATABASE_URL", "VITE_FIREBASE_APP_ID"]) {
+    if (!web.get(required)) throw new Error(`${required} is missing from ${webEnvironmentFile}`);
+  }
+
+  // Firebase hanya mengizinkan `localhost` sebagai authorized domain loopback,
+  // sehingga stack Firebase dibuka di localhost, bukan 127.0.0.1.
+  const origin = process.env.WAN_SSH_WEB_ORIGIN?.trim() || "http://localhost:5179";
+  const lines = [
+    `WAN_SSH_SERVICE_ACCOUNT_FILE=${escapeEnvironment(resolved)}`,
+    `WAN_SSH_WEB_ORIGIN=${escapeEnvironment(origin)}`,
+    ...[...web].map(([key, value]) => `${key}=${escapeEnvironment(value)}`)
+  ];
+  return { enabled: true, origin, environment: `${lines.join("\n")}\n` };
+}
+
 async function compose(arguments_, allowFailure = false) {
-  const args = ["compose", "--env-file", composeEnvironmentFile, "-f", composeFile, ...arguments_];
+  const overlay = (await exists(overlayMarkerFile)) ? ["-f", firebaseOverlayFile] : [];
+  const args = ["compose", "--env-file", composeEnvironmentFile, "-f", composeFile, ...overlay, ...arguments_];
   const code = await run("docker", args, { cwd: serviceDirectory });
   if (code !== 0 && !allowFailure) throw new Error(`docker compose exited with code ${code}`);
 }

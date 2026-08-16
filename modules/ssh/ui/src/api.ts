@@ -128,7 +128,18 @@ const mockApi: any = {
 };
 
 const preloadWindow = window as Window & { api?: any };
+let runtimeApi: any = preloadWindow.api ?? (!preloadWindow.api && import.meta.env.DEV ? mockApi : undefined);
 
 export const bridgeUnavailable = !preloadWindow.api && !import.meta.env.DEV;
 export const isMockApi = !preloadWindow.api && import.meta.env.DEV;
-export const api: any = preloadWindow.api ?? (isMockApi ? mockApi : undefined);
+
+export function installRuntimeApi(nextApi: any) {
+  runtimeApi = nextApi;
+}
+
+export const api: any = new Proxy({}, {
+  get(_target, property) {
+    const value = runtimeApi?.[property];
+    return typeof value === "function" ? value.bind(runtimeApi) : value;
+  }
+});

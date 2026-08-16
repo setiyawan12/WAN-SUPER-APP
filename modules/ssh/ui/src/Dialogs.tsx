@@ -21,15 +21,19 @@ import {
   WifiOff
 } from "lucide-react";
 import { api } from "./api";
+import type { SshRuntimeCapabilities } from "./transport/contract";
 import type { Catalog, Group, Host, Identity, Snippet, SshKey } from "./types";
 import { EnvironmentBadge, Field, IconButton, Modal, Segmented, StatusDot, useConfirm } from "./ui";
 
-export function VaultScreen({ state, error, onUnlock, onCreate, onBiometric }: {
+export function VaultScreen({ state, error, onUnlock, onCreate, onBiometric, accountLabel, onSignOut, cloudOnly = false }: {
   state: "loading" | "locked" | "no-vault";
   error: string | null;
   onUnlock: (password: string) => Promise<void>;
   onCreate: (password: string) => Promise<void>;
   onBiometric: () => Promise<void>;
+  accountLabel?: string;
+  onSignOut?: () => void;
+  cloudOnly?: boolean;
 }) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
@@ -65,7 +69,7 @@ export function VaultScreen({ state, error, onUnlock, onCreate, onBiometric }: {
         <div className="vault-title-block">
           {creating ? <KeyRound size={26} /> : <LockKeyhole size={26} />}
           <h1>{creating ? "Create encrypted vault" : "Unlock workspace"}</h1>
-          <p>{creating ? "Credentials remain encrypted on this device unless you explicitly place an item in Cloud workspace." : "Unlock identities, keys, hosts, and active workspace settings."}</p>
+          <p>{creating ? cloudOnly ? "Credentials are encrypted in this browser before syncing to your Cloud workspace." : "Credentials remain encrypted on this device unless you explicitly place an item in Cloud workspace." : "Unlock identities, keys, hosts, and active workspace settings."}</p>
         </div>
         <Field label="Master password">
           <input autoFocus type="password" autoComplete={creating ? "new-password" : "current-password"} value={password} onChange={(event) => setPassword(event.target.value)} />
@@ -79,6 +83,7 @@ export function VaultScreen({ state, error, onUnlock, onCreate, onBiometric }: {
           {creating ? "Create vault" : "Unlock"}
         </button>
         {!creating && biometric && <button className="button full" type="button" onClick={() => void onBiometric()}><Fingerprint size={17} /> Unlock with device security</button>}
+        {accountLabel && onSignOut && <div className="vault-account"><span>Signed in as <strong>{accountLabel}</strong></span><button className="text-action" type="button" onClick={onSignOut}>Sign out</button></div>}
         <p className="vault-note"><ShieldCheck size={14} /> Master password is never sent to Firebase and cannot be recovered.</p>
       </form>
     </div>
@@ -91,12 +96,14 @@ function isInlineIdentity(identity: Identity): boolean {
   return identity.label === `${identity.username}@inline`;
 }
 
-export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
+export function HostDialog({ initial, catalog, onClose, onSave, onDelete, cloudOnly = false, agentForwarding: supportsAgentForwarding = true }: {
   initial: Host | null;
   catalog: Catalog;
   onClose: () => void;
   onSave: (input: any) => Promise<string>;
   onDelete: (id: string) => Promise<void>;
+  cloudOnly?: boolean;
+  agentForwarding?: boolean;
 }) {
   const confirm = useConfirm();
   const savedIdentities = catalog.identities.filter((identity) => !isInlineIdentity(identity));
@@ -107,7 +114,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
   const [address, setAddress] = useState(initial?.address ?? "");
   const [savedId, setSavedId] = useState(initial?.id);
   const [port, setPort] = useState(initial ? String(initial.port ?? "") : "22");
-  const [vaultId, setVaultId] = useState<"local" | "personal">(initial?.vaultId ?? "local");
+  const [vaultId, setVaultId] = useState<"local" | "personal">(cloudOnly ? "personal" : initial?.vaultId ?? "local");
   const [groupId, setGroupId] = useState(initial?.groupId ?? "");
   const [environment, setEnvironment] = useState<Host["environment"]>(initial?.environment ?? "none");
   const [favorite, setFavorite] = useState(initial?.favorite ?? false);
@@ -215,7 +222,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
           <Field label="Environment"><Segmented value={environment} ariaLabel="Environment" onChange={setEnvironment} options={[{ value: "none", label: "None" }, { value: "prod", label: "PROD" }, { value: "staging", label: "STG" }, { value: "dev", label: "DEV" }]} /></Field>
           <Field label="Address"><input value={address} onChange={(event) => setAddress(event.target.value)} required placeholder="host.example.com or 10.0.0.8" /></Field>
           <Field label="Port" hint={groupId ? "Leave blank to inherit the group port." : undefined}><input type="number" min="1" max="65535" value={port} onChange={(event) => setPort(event.target.value)} placeholder={groupId ? "Inherited" : "22"} /></Field>
-          <Field label="Workspace" hint={initial ? "Workspace cannot be changed after creation." : "Cloud items are encrypted before sync."}><Segmented value={vaultId} ariaLabel="Workspace" onChange={(value) => !initial && setVaultId(value)} options={[{ value: "local", label: "Local" }, { value: "personal", label: "Cloud" }]} /></Field>
+          <Field label="Workspace" hint={cloudOnly ? "Encrypted cloud workspace" : initial ? "Workspace cannot be changed after creation." : "Cloud items are encrypted before sync."}>{cloudOnly ? <div className="workspace-fixed"><Cloud size={15} /> Cloud</div> : <Segmented value={vaultId} ariaLabel="Workspace" onChange={(value) => !initial && setVaultId(value)} options={[{ value: "local", label: "Local" }, { value: "personal", label: "Cloud" }]} />}</Field>
           <Field label="Group"><select value={groupId} onChange={(event) => setGroupId(event.target.value)}><option value="">Ungrouped</option>{catalog.groups.map((group) => <option key={group.id} value={group.id}>{group.name}</option>)}</select></Field>
           <label className="toggle-row"><input type="checkbox" checked={favorite} onChange={(event) => setFavorite(event.target.checked)} /><span><strong>Favorite</strong><small>Pin this host above groups.</small></span></label>
         </div>}
@@ -234,7 +241,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete }: {
           <Field label="Keepalive seconds"><input type="number" min="0" max="3600" value={keepAliveInterval} onChange={(event) => setKeepAliveInterval(event.target.value)} /></Field>
           <label className="toggle-row"><input type="checkbox" checked={autoReconnect} onChange={(event) => setAutoReconnect(event.target.checked)} /><span><strong>Automatic reconnect</strong><small>Retry with bounded exponential backoff.</small></span></label>
           {autoReconnect && <Field label="Reconnect attempts"><input type="number" min="0" max="10" value={reconnectLimit} onChange={(event) => setReconnectLimit(event.target.value)} /></Field>}
-          <label className="toggle-row"><input type="checkbox" checked={agentForwarding} onChange={(event) => setAgentForwarding(event.target.checked)} /><span><strong>Agent forwarding</strong><small>Enable only for servers you trust.</small></span></label>
+          {supportsAgentForwarding && <label className="toggle-row"><input type="checkbox" checked={agentForwarding} onChange={(event) => setAgentForwarding(event.target.checked)} /><span><strong>Agent forwarding</strong><small>Enable only for servers you trust.</small></span></label>}
         </div>}
         {tab === "advanced" && <div className="form-grid single-column">
           <Field label="Startup snippet"><select value={startupSnippetId} onChange={(event) => setStartupSnippetId(event.target.value)}><option value="">None</option>{catalog.snippets.map((snippet) => <option key={snippet.id} value={snippet.id}>{snippet.label}</option>)}</select></Field>
@@ -285,13 +292,14 @@ function isDescendant(groups: Group[], candidateParentId: string, groupId: strin
   return false;
 }
 
-export function GroupDialog({ groups, keys, onClose, onSave, onDelete, onToast }: {
+export function GroupDialog({ groups, keys, onClose, onSave, onDelete, onToast, cloudOnly = false }: {
   groups: Group[];
   keys: SshKey[];
   onClose: () => void;
   onSave: (input: any) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   onToast: (message: string, tone?: "default" | "danger") => void;
+  cloudOnly?: boolean;
 }) {
   const confirm = useConfirm();
   const [draft, setDraft] = useState<GroupDraft | null>(() => groups.length ? null : emptyGroupDraft());
@@ -322,7 +330,7 @@ export function GroupDialog({ groups, keys, onClose, onSave, onDelete, onToast }
     if (draft.port.trim()) defaults.port = Number(draft.port);
     if (draft.keyId) defaults.keyId = draft.keyId;
     if (Object.keys(envVars).length) defaults.envVars = envVars;
-    await onSave({ id: draft.id, name: draft.name.trim(), parentId: draft.parentId || null, defaults });
+    await onSave({ id: draft.id, name: draft.name.trim(), parentId: draft.parentId || null, defaults, ...(cloudOnly ? { vaultId: "personal" } : {}) });
     setDraft(null);
   };
 
@@ -383,7 +391,7 @@ export function AuthPromptDialog({ prompt, onAnswer }: { prompt: any; onAnswer: 
 
 type SettingsTab = "security" | "identities" | "keys" | "known-hosts" | "openssh" | "audit" | "sync" | "storage";
 
-export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: { catalog: Catalog; onCatalogChange: () => Promise<void>; onClose: () => void; onToast: (message: string, tone?: "default" | "danger") => void }) {
+export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast, capabilities }: { catalog: Catalog; onCatalogChange: () => Promise<void>; onClose: () => void; onToast: (message: string, tone?: "default" | "danger") => void; capabilities?: SshRuntimeCapabilities }) {
   const [tab, setTab] = useState<SettingsTab>("security");
   const [settings, setSettings] = useState<any>(null);
   const [knownHosts, setKnownHosts] = useState<any[]>([]);
@@ -405,7 +413,7 @@ export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: {
     setStorage(nextStorage);
   };
   useEffect(() => { void reload(); }, []);
-  const tabs: Array<{ id: SettingsTab; label: string; icon: ReactNode }> = [
+  const settingsTabs: Array<{ id: SettingsTab; label: string; icon: ReactNode }> = [
     { id: "security", label: "Security", icon: <ShieldCheck size={15} /> },
     { id: "identities", label: "Identities", icon: <UserRound size={15} /> },
     { id: "keys", label: "SSH Keys", icon: <KeyRound size={15} /> },
@@ -415,13 +423,18 @@ export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: {
     { id: "sync", label: "Cloud Sync", icon: <Cloud size={15} /> },
     { id: "storage", label: "Storage", icon: <Laptop size={15} /> }
   ];
+  const tabs = settingsTabs.filter((item) => {
+    if (item.id === "openssh") return capabilities?.openSshImport !== false;
+    if (item.id === "storage") return capabilities?.runtime === undefined || capabilities.runtime === "electron";
+    return true;
+  });
 
   return <Modal title="SSH workspace settings" width={820} onClose={onClose}>
     <div className="settings-layout">
       <nav className="settings-nav">{tabs.map((item) => <button key={item.id} aria-selected={tab === item.id} onClick={() => setTab(item.id)}>{item.icon}{item.label}</button>)}</nav>
       <div className="settings-content">
-        {tab === "security" && settings && <SecuritySettings settings={settings} onChange={async () => { await reload(); }} onToast={onToast} />}
-        {tab === "identities" && <IdentitySettings identities={catalog.identities} keys={catalog.keys} draft={identityDraft} setDraft={setIdentityDraft} onChange={async () => { await onCatalogChange(); setIdentityDraft(null); }} />}
+        {tab === "security" && settings && <SecuritySettings settings={settings} biometric={capabilities?.biometric !== false} onChange={async () => { await reload(); }} onToast={onToast} />}
+        {tab === "identities" && <IdentitySettings identities={catalog.identities} keys={catalog.keys} draft={identityDraft} setDraft={setIdentityDraft} cloudOnly={capabilities?.runtime === "web-cloud"} onChange={async () => { await onCatalogChange(); setIdentityDraft(null); }} />}
         {tab === "keys" && <KeySettings keys={catalog.keys} hosts={catalog.hosts} mode={keyMode} setMode={setKeyMode} onChange={onCatalogChange} onToast={onToast} />}
         {tab === "known-hosts" && <div className="manager-list">{knownHosts.map((entry) => <div className="manager-row" key={entry.id}><Server size={16} /><span className="manager-copy"><strong>{entry.hostPattern}</strong><code>{entry.fingerprint}</code><small>{entry.vaultId === "personal" ? "Cloud workspace" : "Local only"}</small></span><IconButton className="danger" label="Revoke trust" onClick={async () => { await api.knownHosts.remove(entry.id); await reload(); }}><Trash2 size={14} /></IconButton></div>)}{!knownHosts.length && <div className="empty-list">No trusted host keys</div>}</div>}
         {tab === "openssh" && <div className="settings-stack"><section className="settings-section"><h3>Import ~/.ssh/config</h3><p className="settings-help">Imports concrete Host entries, user, port, agent forwarding, and ProxyJump chains. Wildcards and Match exec are not executed. Private keys referenced by IdentityFile must be imported separately.</p><button className="button primary" disabled={busy} onClick={async () => { setBusy(true); try { const result = await api.openSsh.importConfig(); if (!result.canceled) { await onCatalogChange(); await reload(); const skipped = result.identityFilesSkipped?.length ? ` · ${result.identityFilesSkipped.length} key path(s) skipped` : ""; onToast(`${result.imported} imported, ${result.updated} updated${skipped}`); } } catch (error) { onToast(error instanceof Error ? error.message : String(error), "danger"); } finally { setBusy(false); } }}><FileInput size={16} /> Import config</button></section></div>}
@@ -433,18 +446,18 @@ export function SettingsDialog({ catalog, onCatalogChange, onClose, onToast }: {
   </Modal>;
 }
 
-function SecuritySettings({ settings, onChange, onToast }: { settings: any; onChange: () => Promise<void>; onToast: (message: string, tone?: "default" | "danger") => void }) {
+function SecuritySettings({ settings, biometric, onChange, onToast }: { settings: any; biometric: boolean; onChange: () => Promise<void>; onToast: (message: string, tone?: "default" | "danger") => void }) {
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   return <div className="settings-stack">
     <section className="settings-section"><h3>Automatic lock</h3><Field label="Idle timeout"><select value={settings.autoLockMs} onChange={async (event) => { await api.vault.setAutoLock(Number(event.target.value)); await onChange(); }}><option value={300000}>5 minutes</option><option value={900000}>15 minutes</option><option value={1800000}>30 minutes</option><option value={3600000}>1 hour</option><option value={14400000}>4 hours</option></select></Field><p className="settings-help">Locking closes SSH, local shell, transfers, tunnels, and active recordings.</p></section>
-    <section className="settings-section"><h3>Device security</h3><button className="button" disabled={!settings.biometricAvailable} onClick={async () => { try { await api.vault.enableBiometric(); onToast("Device unlock enabled"); } catch (error) { onToast(error instanceof Error ? error.message : String(error), "danger"); } }}><Fingerprint size={16} /> Enable device unlock</button></section>
+    {biometric && <section className="settings-section"><h3>Device security</h3><button className="button" disabled={!settings.biometricAvailable} onClick={async () => { try { await api.vault.enableBiometric(); onToast("Device unlock enabled"); } catch (error) { onToast(error instanceof Error ? error.message : String(error), "danger"); } }}><Fingerprint size={16} /> Enable device unlock</button></section>}
     <section className="settings-section"><h3>Change master password</h3><div className="form-grid"><Field label="Current password"><input type="password" value={oldPassword} onChange={(event) => setOldPassword(event.target.value)} /></Field><Field label="New password"><input type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} /></Field></div><button className="button primary" disabled={!oldPassword || newPassword.length < 8} onClick={async () => { await api.vault.changePassword(oldPassword, newPassword); setOldPassword(""); setNewPassword(""); onToast("Master password changed"); }}>Update password</button></section>
   </div>;
 }
 
-function IdentitySettings({ identities, keys, draft, setDraft, onChange }: { identities: Identity[]; keys: SshKey[]; draft: any; setDraft: (value: any) => void; onChange: () => Promise<void> }) {
-  return <div className="settings-stack"><div className="manager-heading"><div><h3>Reusable identities</h3><p>Username, password, and key references shared by hosts.</p></div><button className="button" onClick={() => setDraft({ label: "", username: "", password: "", keyId: "", vaultId: "local" })}><Plus size={15} /> New</button></div>{draft && <div className="manager-editor"><div className="form-grid"><Field label="Label"><input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></Field><Field label="Username"><input value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })} /></Field><Field label="Password"><input type="password" value={draft.password ?? ""} onChange={(event) => setDraft({ ...draft, password: event.target.value })} /></Field><Field label="Key"><select value={draft.keyId ?? ""} onChange={(event) => setDraft({ ...draft, keyId: event.target.value || null })}><option value="">No key</option>{keys.map((key) => <option key={key.id} value={key.id}>{key.label}</option>)}</select></Field></div><div className="form-actions"><button className="button" onClick={() => setDraft(null)}>Cancel</button><button className="button primary" disabled={!draft.label || !draft.username} onClick={async () => { await api.identities.save(draft); await onChange(); }}>Save</button></div></div>}<div className="manager-list">{identities.map((identity) => <div className="manager-row" key={identity.id}><UserRound size={16} /><span className="manager-copy"><strong>{identity.label}</strong><small>{identity.username}{identity.hasSecret ? " · password" : ""}{identity.keyId ? " · SSH key" : ""}</small></span><button className="text-action" onClick={() => setDraft({ ...identity, password: "" })}>Edit</button><IconButton className="danger" label="Delete" onClick={async () => { await api.identities.remove(identity.id); await onChange(); }}><Trash2 size={14} /></IconButton></div>)}</div></div>;
+function IdentitySettings({ identities, keys, draft, setDraft, onChange, cloudOnly }: { identities: Identity[]; keys: SshKey[]; draft: any; setDraft: (value: any) => void; onChange: () => Promise<void>; cloudOnly: boolean }) {
+  return <div className="settings-stack"><div className="manager-heading"><div><h3>Reusable identities</h3><p>Username, password, and key references shared by hosts.</p></div><button className="button" onClick={() => setDraft({ label: "", username: "", password: "", keyId: "", vaultId: cloudOnly ? "personal" : "local" })}><Plus size={15} /> New</button></div>{draft && <div className="manager-editor"><div className="form-grid"><Field label="Label"><input value={draft.label} onChange={(event) => setDraft({ ...draft, label: event.target.value })} /></Field><Field label="Username"><input value={draft.username} onChange={(event) => setDraft({ ...draft, username: event.target.value })} /></Field><Field label="Password"><input type="password" value={draft.password ?? ""} onChange={(event) => setDraft({ ...draft, password: event.target.value })} /></Field><Field label="Key"><select value={draft.keyId ?? ""} onChange={(event) => setDraft({ ...draft, keyId: event.target.value || null })}><option value="">No key</option>{keys.map((key) => <option key={key.id} value={key.id}>{key.label}</option>)}</select></Field></div><div className="form-actions"><button className="button" onClick={() => setDraft(null)}>Cancel</button><button className="button primary" disabled={!draft.label || !draft.username} onClick={async () => { await api.identities.save({ ...draft, vaultId: cloudOnly ? "personal" : draft.vaultId }); await onChange(); }}>Save</button></div></div>}<div className="manager-list">{identities.map((identity) => <div className="manager-row" key={identity.id}><UserRound size={16} /><span className="manager-copy"><strong>{identity.label}</strong><small>{identity.username}{identity.hasSecret ? " · password" : ""}{identity.keyId ? " · SSH key" : ""}</small></span><button className="text-action" onClick={() => setDraft({ ...identity, password: "" })}>Edit</button><IconButton className="danger" label="Delete" onClick={async () => { await api.identities.remove(identity.id); await onChange(); }}><Trash2 size={14} /></IconButton></div>)}</div></div>;
 }
 
 function KeySettings({ keys, hosts, mode, setMode, onChange, onToast }: { keys: SshKey[]; hosts: Host[]; mode: "generate" | "import" | null; setMode: (value: "generate" | "import" | null) => void; onChange: () => Promise<void>; onToast: (message: string, tone?: "default" | "danger") => void }) {

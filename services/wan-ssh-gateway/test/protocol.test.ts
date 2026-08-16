@@ -62,3 +62,23 @@ test("rejects oversized private keys independently of total frame size", () => {
   });
   assert.throws(() => validatePrivateKeySize(message, 1024));
 });
+
+test("accepts bounded cloud workspace operation messages", () => {
+  const sessionId = "4299a3a9-38bf-485b-9648-c343c861f9b6";
+  const requestId = "5e1bbfc4-63b0-42f1-8e14-d79d8fd97b95";
+  assert.equal(parseClientMessage({ type: "sftp.list", requestId, sessionId, path: "/home/wan" }).type, "sftp.list");
+  assert.equal(parseClientMessage({ type: "sftp.read", requestId, sessionId, path: "/home/wan/file", offset: 0, length: 131_072 }).type, "sftp.read");
+  assert.equal(parseClientMessage({ type: "sftp.write", requestId, sessionId, path: "/home/wan/file", offset: 0, data: "d2Fu", truncate: true }).type, "sftp.write");
+  assert.equal(parseClientMessage({ type: "tunnel.start", requestId, sessionId, kind: "remote", bindAddress: "127.0.0.1", bindPort: 0, targetHost: "10.20.0.8", targetPort: 8080 }).type, "tunnel.start");
+  assert.equal(parseClientMessage({ type: "diagnostics.run", requestId, target: { host: "example.test", port: 22 } }).type, "diagnostics.run");
+  assert.equal(parseClientMessage({ type: "knownhost.remove", requestId, host: "example.test", port: 22 }).type, "knownhost.remove");
+  assert.equal(parseClientMessage({ type: "key.generate", requestId, algorithm: "ed25519" }).type, "key.generate");
+});
+
+test("rejects oversized cloud operation chunks and unsupported tunnel kinds", () => {
+  const sessionId = "4299a3a9-38bf-485b-9648-c343c861f9b6";
+  const requestId = "5e1bbfc4-63b0-42f1-8e14-d79d8fd97b95";
+  assert.throws(() => parseClientMessage({ type: "sftp.read", requestId, sessionId, path: "/file", offset: 0, length: 196_609 }));
+  assert.throws(() => parseClientMessage({ type: "tunnel.start", requestId, sessionId, kind: "local", bindAddress: "127.0.0.1", bindPort: 0, targetHost: "10.20.0.8", targetPort: 8080 }));
+  assert.throws(() => parseClientMessage({ type: "key.install", requestId, sessionId, publicKey: "x".repeat(32_769) }));
+});

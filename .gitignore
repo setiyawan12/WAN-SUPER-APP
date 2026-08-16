@@ -41,6 +41,9 @@ services/wan-router/.env.local
 
 # WAN SSH Web local runtime
 services/wan-ssh-gateway/.env.local
+modules/ssh/ui/.env
+modules/ssh/ui/.env.local
+modules/ssh/ui/.env.*.local
 services/wan-ssh-gateway/.runtime/
 services/wan-ssh-gateway/dist/
 firebase/hosting/ssh/

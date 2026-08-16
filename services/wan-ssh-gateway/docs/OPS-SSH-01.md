@@ -46,3 +46,13 @@ If a private key, password, or Firebase token may have been logged or stored:
 
 Production origins must be HTTPS. The web client upgrades `https:` to `wss:`.
 Do not publish `ws://` or HTTP API origins on a TLS page.
+
+## Authoritative known hosts
+
+Production requires `WAN_SSH_KNOWN_HOST_MODE=firestore`. The gateway uses Admin
+SDK credentials and stores tenant-scoped records in `wanSshKnownHosts`; browser
+read/write is denied by Firestore rules. Host-key acceptance is transactional:
+stale concurrent decisions fail closed instead of overwriting a newer record.
+
+Before rollout, verify ADC/workload identity, Firestore backup/export, restore,
+and two-client conflict behavior against the live staging project.

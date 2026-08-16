@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowDownToLine, ArrowUpFromLine, ChevronRight, File, Folder, FolderPlus, PenLine, Play, Plus, RefreshCw, Route, SquareTerminal, Trash2, X } from "lucide-react";
 import { api } from "./api";
+import type { SshRuntimeCapabilities } from "./transport/contract";
 import type { Diagnostics, Host, RemoteEntry, Session, Snippet, TransferJob, Tunnel } from "./types";
 import { EnvironmentBadge, Field, formatBytes, formatRelativeTime, IconButton, Segmented, StatusDot, useConfirm } from "./ui";
 
@@ -12,6 +13,7 @@ type Props = {
   snippets: Snippet[];
   transfers: TransferJob[];
   tunnels: Tunnel[];
+  capabilities?: SshRuntimeCapabilities;
   view: View;
   onViewChange: (view: View) => void;
   onEditHost: (host: Host) => void;
@@ -132,8 +134,8 @@ function FilesView({ session, transfers, onCancelTransfer, onRetryTransfer, onTo
   );
 }
 
-function TunnelsView({ session, tunnels, onStart, onStop }: { session: Session | null; tunnels: Tunnel[]; onStart: Props["onTunnelStart"]; onStop: Props["onTunnelStop"] }) {
-  const [kind, setKind] = useState<"local" | "remote" | "dynamic">("local");
+function TunnelsView({ session, tunnels, onStart, onStop, cloudOnly }: { session: Session | null; tunnels: Tunnel[]; onStart: Props["onTunnelStart"]; onStop: Props["onTunnelStop"]; cloudOnly: boolean }) {
+  const [kind, setKind] = useState<"local" | "remote" | "dynamic">(cloudOnly ? "remote" : "local");
   const [bindPort, setBindPort] = useState("8080");
   const [targetHost, setTargetHost] = useState("127.0.0.1");
   const [targetPort, setTargetPort] = useState("80");
@@ -157,11 +159,11 @@ function TunnelsView({ session, tunnels, onStart, onStop }: { session: Session |
   return (
     <div className="tunnels-view">
       <div className="tunnel-form">
-        <Segmented value={kind} ariaLabel="Tipe forwarding" onChange={setKind} options={[{ value: "local", label: "Local" }, { value: "remote", label: "Remote" }, { value: "dynamic", label: "SOCKS5" }]} />
+        <Segmented value={kind} ariaLabel="Tipe forwarding" onChange={setKind} options={cloudOnly ? [{ value: "remote", label: "Remote" }] : [{ value: "local", label: "Local" }, { value: "remote", label: "Remote" }, { value: "dynamic", label: "SOCKS5" }]} />
         <div className="form-grid compact-grid">
-          <Field label="Bind port"><input type="number" min="0" max="65535" value={bindPort} onChange={(event) => setBindPort(event.target.value)} /></Field>
+          <Field label={cloudOnly ? "Remote bind port" : "Bind port"}><input type="number" min="0" max="65535" value={bindPort} onChange={(event) => setBindPort(event.target.value)} /></Field>
           {kind !== "dynamic" && <>
-            <Field label="Target"><input value={targetHost} onChange={(event) => setTargetHost(event.target.value)} /></Field>
+            <Field label={cloudOnly ? "Gateway target" : "Target"}><input value={targetHost} onChange={(event) => setTargetHost(event.target.value)} /></Field>
             <Field label="Port"><input type="number" min="1" max="65535" value={targetPort} onChange={(event) => setTargetPort(event.target.value)} /></Field>
           </>}
         </div>
@@ -230,12 +232,12 @@ function HostView({ host, onEdit, onToast }: { host: Host | null; onEdit: (host:
   );
 }
 
-function SnippetsView({ session, snippets, onRun, onSave, onDelete }: { session: Session | null; snippets: Snippet[]; onRun: Props["onRunSnippet"]; onSave: Props["onSaveSnippet"]; onDelete: Props["onDeleteSnippet"] }) {
+function SnippetsView({ session, snippets, onRun, onSave, onDelete, cloudOnly }: { session: Session | null; snippets: Snippet[]; onRun: Props["onRunSnippet"]; onSave: Props["onSaveSnippet"]; onDelete: Props["onDeleteSnippet"]; cloudOnly: boolean }) {
   const [editing, setEditing] = useState<Snippet | null>(null);
   const [creating, setCreating] = useState(false);
   const [label, setLabel] = useState("");
   const [command, setCommand] = useState("");
-  const [vaultId, setVaultId] = useState<"local" | "personal">("local");
+  const [vaultId, setVaultId] = useState<"local" | "personal">(cloudOnly ? "personal" : "local");
   const reset = () => { setEditing(null); setCreating(false); setLabel(""); setCommand(""); };
   const beginEdit = (snippet: Snippet) => { setEditing(snippet); setCreating(true); setLabel(snippet.label); setCommand(snippet.command); setVaultId(snippet.vaultId); };
   const save = async () => {
@@ -249,7 +251,7 @@ function SnippetsView({ session, snippets, onRun, onSave, onDelete }: { session:
         <div className="snippet-editor">
           <input autoFocus placeholder="Label" value={label} onChange={(event) => setLabel(event.target.value)} />
           <textarea placeholder="Command" value={command} onChange={(event) => setCommand(event.target.value)} />
-          <Segmented value={vaultId} ariaLabel="Workspace snippet" onChange={setVaultId} options={[{ value: "local", label: "Local" }, { value: "personal", label: "Cloud" }]} />
+          {cloudOnly ? <div className="workspace-fixed">Cloud</div> : <Segmented value={vaultId} ariaLabel="Workspace snippet" onChange={setVaultId} options={[{ value: "local", label: "Local" }, { value: "personal", label: "Cloud" }]} />}
           <div className="form-actions"><button className="button" onClick={reset}>Cancel</button><button className="button primary" disabled={!label || !command} onClick={() => void save()}>Save</button></div>
         </div>
       )}
@@ -275,7 +277,7 @@ export function Inspector(props: Props) {
     { id: "tunnels" as const, label: "Tunnels" },
     { id: "host" as const, label: "Host" },
     { id: "snippets" as const, label: "Snippets" }
-  ], []);
+  ].filter((tab) => tab.id !== "files" || props.capabilities?.sftp !== false).filter((tab) => tab.id !== "tunnels" || props.capabilities?.tunnels !== false), [props.capabilities]);
   return (
     <aside className="inspector">
       <div className="inspector-tabs">
@@ -283,9 +285,9 @@ export function Inspector(props: Props) {
       </div>
       <div className="inspector-content">
         {props.view === "files" && <FilesView session={props.activeSession} transfers={props.transfers} onCancelTransfer={props.onCancelTransfer} onRetryTransfer={props.onRetryTransfer} onToast={props.onToast} />}
-        {props.view === "tunnels" && <TunnelsView session={props.activeSession} tunnels={props.tunnels} onStart={props.onTunnelStart} onStop={props.onTunnelStop} />}
+        {props.view === "tunnels" && <TunnelsView session={props.activeSession} tunnels={props.tunnels} onStart={props.onTunnelStart} onStop={props.onTunnelStop} cloudOnly={props.capabilities?.runtime === "web-cloud"} />}
         {props.view === "host" && <HostView host={props.selectedHost} onEdit={props.onEditHost} onToast={props.onToast} />}
-        {props.view === "snippets" && <SnippetsView session={props.activeSession} snippets={props.snippets} onRun={props.onRunSnippet} onSave={props.onSaveSnippet} onDelete={props.onDeleteSnippet} />}
+        {props.view === "snippets" && <SnippetsView session={props.activeSession} snippets={props.snippets} onRun={props.onRunSnippet} onSave={props.onSaveSnippet} onDelete={props.onDeleteSnippet} cloudOnly={props.capabilities?.runtime === "web-cloud"} />}
       </div>
     </aside>
   );

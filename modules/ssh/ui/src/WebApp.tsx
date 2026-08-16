@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { AlertTriangle, FileKey2, KeyRound, LoaderCircle, LogOut, PlugZap, RotateCw, Server, ShieldCheck, Square, TerminalSquare, Unplug, UserRound, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, FileKey2, KeyRound, LoaderCircle, LogOut, PlugZap, RotateCw, Server, ShieldCheck, Square, TerminalSquare, Unplug, X } from "lucide-react";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
 import type { SshTransportEvent } from "./transport/contract";
 import { GatewayClientError, WebSocketRemoteTerminalTransport, type GatewayTokenProvider } from "./transport/web-socket";
@@ -13,11 +13,24 @@ type AuthenticationMethod = "password" | "privateKey";
 
 const MAX_PRIVATE_KEY_BYTES = 256 * 1024;
 
+type WebAccount = { uid: string; displayName?: string; email?: string; photoURL?: string };
+
 type WebAppProps = {
   tokenProvider?: GatewayTokenProvider;
-  account?: { displayName?: string; email?: string };
+  account?: WebAccount;
   onSignOut?: () => Promise<void>;
 };
+
+function accountLabel(account: WebAccount) {
+  return account.displayName || account.email || "WAN user";
+}
+
+function AccountAvatar({ account }: { account: WebAccount }) {
+  if (account.photoURL) {
+    return <img className="web-account-avatar" src={account.photoURL} alt="" referrerPolicy="no-referrer" />;
+  }
+  return <i className="web-account-avatar" aria-hidden="true">{accountLabel(account).slice(0, 1).toUpperCase()}</i>;
+}
 
 function statusLabel(status: GatewayStatus) {
   switch (status) {
@@ -54,6 +67,8 @@ export default function WebApp({ tokenProvider, account, onSignOut }: WebAppProp
   const [authPrompt, setAuthPrompt] = useState<AuthPrompt>();
   const [authAnswers, setAuthAnswers] = useState<string[]>([]);
   const [signingOut, setSigningOut] = useState(false);
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const terminalRef = useRef<TerminalHandle>(null);
 
@@ -89,6 +104,21 @@ export default function WebApp({ tokenProvider, account, onSignOut }: WebAppProp
       transport.dispose();
     };
   }, [transport]);
+
+  useEffect(() => {
+    if (!accountMenuOpen) return;
+    const close = (event: Event) => {
+      if (event instanceof KeyboardEvent && event.key !== "Escape") return;
+      if (event.type === "pointerdown" && accountMenuRef.current?.contains(event.target as Node)) return;
+      setAccountMenuOpen(false);
+    };
+    window.addEventListener("pointerdown", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("pointerdown", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [accountMenuOpen]);
 
   const clearCredentialFields = () => {
     setPrivateKeyFile(undefined);
@@ -191,6 +221,7 @@ export default function WebApp({ tokenProvider, account, onSignOut }: WebAppProp
   const signOut = async () => {
     if (!onSignOut || signingOut) return;
     setSigningOut(true);
+    setAccountMenuOpen(false);
     setSession(undefined);
     setHostKeyPrompt(undefined);
     setAuthPrompt(undefined);
@@ -208,8 +239,32 @@ export default function WebApp({ tokenProvider, account, onSignOut }: WebAppProp
       <header className="web-topbar">
         <div className="web-product-mark"><span>W</span><div><strong>WAN SSH</strong><small>Web Gateway</small></div></div>
         <div className="web-gateway-status"><span className={`status-dot ${statusTone(gatewayStatus)}`} /><strong>{statusLabel(gatewayStatus)}</strong>{gatewayVersion && <small>v{gatewayVersion}</small>}</div>
-        {account && <div className="web-account"><UserRound size={14} /><span>{account.displayName || account.email || "WAN user"}</span></div>}
-        {onSignOut && <button className="icon-button" type="button" title="Sign out" aria-label="Sign out" onClick={() => void signOut()} disabled={signingOut}><LogOut size={15} /></button>}
+        {account && (
+          <div className="web-account-menu" ref={accountMenuRef}>
+            <button className="web-account" type="button" aria-haspopup="menu" aria-expanded={accountMenuOpen} title={account.email || accountLabel(account)} onClick={() => setAccountMenuOpen((open) => !open)}>
+              <AccountAvatar account={account} />
+              <span>{accountLabel(account)}</span>
+              <ChevronDown size={13} />
+            </button>
+            {accountMenuOpen && (
+              <div className="web-account-panel" role="menu">
+                <div className="web-account-identity">
+                  <AccountAvatar account={account} />
+                  <div>
+                    <strong>{accountLabel(account)}</strong>
+                    {account.email && <small>{account.email}</small>}
+                    <code>{account.uid}</code>
+                  </div>
+                </div>
+                {onSignOut && (
+                  <button className="web-account-action" type="button" role="menuitem" title="Sign out" aria-label="Sign out" onClick={() => void signOut()} disabled={signingOut}>
+                    <LogOut size={14} />{signingOut ? "Signing out..." : "Sign out"}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         <button className="icon-button" type="button" title="Check gateway" onClick={() => void checkGateway()} disabled={gatewayStatus === "checking"}><RotateCw size={15} className={gatewayStatus === "checking" ? "spin" : ""} /></button>
       </header>
 

@@ -1,124 +1,87 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { AlertTriangle, KeyRound, LoaderCircle, ShieldCheck, TerminalSquare } from "lucide-react";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { useEffect, useState } from "react";
+import { AlertTriangle, LoaderCircle } from "lucide-react";
+import { SshWorkspace } from "./App";
+import { installRuntimeApi } from "./api";
 import WebApp from "./WebApp";
-import { loadGatewayRuntimeConfig, type GatewayRuntimeConfig } from "./transport/web-socket";
-import { resetWebSshPassword, signInWebSsh, signOutWebSsh, webFirebaseServices } from "./web-firebase";
+import WebLogin from "./WebLogin";
+import { useWebAuthSession } from "./web-auth";
+import { WebCloudApi } from "./web-cloud-api";
+import { WebCloudStore } from "./web-cloud-store";
+import { webFirebaseServices } from "./web-firebase";
+import { DASHBOARD_ROUTE, LOGIN_ROUTE, navigateRoute, useRoute } from "./web-router";
+import { WebSocketRemoteTerminalTransport } from "./transport/web-socket";
 
-function authenticationMessage(error: unknown) {
-  const code = typeof error === "object" && error && "code" in error ? String(error.code) : "";
-  if (code.includes("invalid-credential")) return "Email or password is incorrect.";
-  if (code.includes("too-many-requests")) return "Too many sign-in attempts. Try again later.";
-  if (code.includes("network-request-failed")) return "Firebase Authentication is unreachable.";
-  return error instanceof Error ? error.message : String(error);
+function BootScreen() {
+  return <div className="web-auth-boot"><LoaderCircle size={22} className="spin" /><strong>Connecting WAN SSH</strong></div>;
 }
 
-function AuthGate({ emulator }: { emulator: boolean }) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("");
-  const [success, setSuccess] = useState(false);
-
-  const run = async (action: () => Promise<unknown>) => {
-    setBusy(true);
-    setMessage("");
-    setSuccess(false);
-    try {
-      await action();
-    } catch (error) {
-      setMessage(authenticationMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const resetPassword = async () => {
-    if (!email.trim()) {
-      setMessage("Enter your email first.");
-      return;
-    }
-    await run(async () => {
-      await resetWebSshPassword(email.trim());
-      setSuccess(true);
-      setMessage("Password reset email sent.");
-    });
-  };
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    void run(() => signInWebSsh(email.trim(), password));
-  };
-
-  return (
-    <main className="web-auth-layout">
-      <section className="web-auth-context" aria-label="WAN SSH identity">
-        <div className="web-auth-brand"><span>W</span><div><strong>WAN SSH</strong><small>WEB GATEWAY</small></div></div>
-        <div className="web-auth-title"><span><ShieldCheck size={14} />Production access</span><h1>Remote terminal,<br />verified identity.</h1><p>Sign in with an authorized WAN account.</p></div>
-        <small>{emulator ? "Firebase Auth emulator" : "Firebase Authentication"}</small>
-      </section>
-      <section className="web-auth-form-panel">
-        <form className="web-auth-form" onSubmit={submit}>
-          <div className="web-auth-form-head"><TerminalSquare size={21} /><div><small>WAN SSH CLOUD</small><h2>Sign in</h2></div></div>
-          <label>Email<input type="email" autoComplete="email" required value={email} onChange={(event) => setEmail(event.target.value)} /></label>
-          <label>Password<input type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} /></label>
-          {message && <p className={success ? "web-auth-message success" : "web-auth-message"}><AlertTriangle size={14} />{message}</p>}
-          <button className="button primary large full" type="submit" disabled={busy}>{busy ? <LoaderCircle size={16} className="spin" /> : <KeyRound size={16} />}{busy ? "Signing in" : "Sign in"}</button>
-          <button className="web-auth-reset" type="button" disabled={busy} onClick={() => void resetPassword()}>Reset password</button>
-        </form>
-      </section>
-    </main>
-  );
-}
-
-export default function WebRoot() {
-  const [runtimeConfig, setRuntimeConfig] = useState<GatewayRuntimeConfig>();
-  const [user, setUser] = useState<User | null>(null);
-  const [emulator, setEmulator] = useState(false);
-  const [loading, setLoading] = useState(true);
+function CloudWorkspace({ session }: { session: ReturnType<typeof useWebAuthSession> }) {
+  const [runtime, setRuntime] = useState<WebCloudApi>();
   const [error, setError] = useState("");
 
   useEffect(() => {
     let active = true;
-    let unsubscribe = () => {};
-    void loadGatewayRuntimeConfig()
-      .then(async (config) => {
-        if (!active) return;
-        setRuntimeConfig(config);
-        if (config.authMode === "dev-anonymous") {
-          setLoading(false);
-          return;
-        }
-        const services = await webFirebaseServices();
-        if (!active) return;
-        setEmulator(services.emulator);
-        unsubscribe = onAuthStateChanged(services.auth, (nextUser) => {
-          if (!active) return;
-          setUser(nextUser);
-          setLoading(false);
-        });
-      })
-      .catch((cause) => {
-        if (!active) return;
-        setError(cause instanceof Error ? cause.message : String(cause));
-        setLoading(false);
-      });
+    let cloudApi: WebCloudApi | undefined;
+    void webFirebaseServices().then(async (services) => {
+      if (!services.database || !session.account) throw new Error("Firebase Realtime Database is required for the WAN SSH cloud workspace.");
+      const transport = new WebSocketRemoteTerminalTransport(window.location.origin, session.getIdToken);
+      const store = new WebCloudStore(services.database, session.account.uid);
+      cloudApi = new WebCloudApi(store, transport, session.account.email || session.account.displayName || session.account.uid, session.signOut);
+      await cloudApi.initialize();
+      if (!active) {
+        cloudApi.dispose();
+        return;
+      }
+      installRuntimeApi(cloudApi);
+      setRuntime(cloudApi);
+    }).catch((cause) => {
+      if (active) setError(cause instanceof Error ? cause.message : String(cause));
+    });
     return () => {
       active = false;
-      unsubscribe();
+      cloudApi?.dispose();
     };
-  }, []);
+  }, [session.account?.uid, session.getIdToken, session.signOut]);
 
-  if (loading) return <div className="web-auth-boot"><LoaderCircle size={22} className="spin" /><strong>Connecting WAN SSH</strong></div>;
-  if (error || !runtimeConfig) return <div className="web-auth-boot error"><AlertTriangle size={24} /><strong>SSH web runtime unavailable</strong><span>{error || "Gateway configuration is unavailable."}</span></div>;
-  if (runtimeConfig.authMode === "dev-anonymous") return <WebApp />;
-  if (!user) return <AuthGate emulator={emulator} />;
-  return (
-    <WebApp
-      key={user.uid}
-      account={{ displayName: user.displayName ?? undefined, email: user.email ?? undefined }}
-      tokenProvider={(forceRefresh) => user.getIdToken(forceRefresh)}
-      onSignOut={signOutWebSsh}
-    />
-  );
+  if (error) return <div className="web-auth-boot error"><AlertTriangle size={24} /><strong>Cloud workspace unavailable</strong><span>{error}</span></div>;
+  if (!runtime || !session.account) return <BootScreen />;
+  return <SshWorkspace
+    transport={runtime.transport}
+    capabilities={{ ...runtime.transport.capabilities, runtime: "web-cloud" }}
+    account={session.account}
+    onSignOut={session.signOut}
+  />;
+}
+
+export default function WebRoot() {
+  const session = useWebAuthSession();
+  const route = useRoute();
+
+  // Guard rute: seluruh path internal terproteksi. Belum login diarahkan ke
+  // `/login`, sudah login selalu berakhir di `/dashboard`.
+  useEffect(() => {
+    if (session.status === "loading" || session.error) return;
+    if (session.status === "unauthenticated") {
+      if (route !== LOGIN_ROUTE) navigateRoute(LOGIN_ROUTE, true);
+      return;
+    }
+    if (route !== DASHBOARD_ROUTE) navigateRoute(DASHBOARD_ROUTE, true);
+  }, [session.status, session.error, route]);
+
+  if (session.status === "loading") return <BootScreen />;
+  if (session.error || !session.runtimeConfig) {
+    return (
+      <div className="web-auth-boot error">
+        <AlertTriangle size={24} />
+        <strong>SSH web runtime unavailable</strong>
+        <span>{session.error || "Gateway configuration is unavailable."}</span>
+      </div>
+    );
+  }
+  if (session.status === "unauthenticated") {
+    return route === LOGIN_ROUTE ? <WebLogin emulator={session.emulator} /> : <BootScreen />;
+  }
+  if (route !== DASHBOARD_ROUTE) return <BootScreen />;
+  if (session.runtimeConfig.authMode === "dev-anonymous") return <WebApp />;
+  return <CloudWorkspace key={session.account?.uid} session={session} />;
 }

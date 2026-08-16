@@ -13,7 +13,7 @@ function createDevelopmentAuthenticator(): Authenticator {
   return {
     async authenticate(message) {
       if (message.mode !== "dev-anonymous") throw new GatewayError("AUTH_INVALID", "Authentication mode mismatch", false, CLOSE_CODES.authInvalid);
-      return { kind: "development", id: "development:local-browser", uid: "local-browser" };
+      return { kind: "development", id: "development:local-browser", uid: "local-browser", tenantId: "development" };
     },
     async refresh() {
       throw new GatewayError("AUTH_INVALID", "Authentication refresh is unavailable", false, CLOSE_CODES.authInvalid);

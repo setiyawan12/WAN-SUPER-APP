@@ -12,7 +12,7 @@ type Props = {
   onConnect: (host: Host) => void;
   onNewHost: () => void;
   onNewGroup: () => void;
-  onOpenLocal: () => void;
+  onOpenLocal?: () => void;
   onSettings: () => void;
   onToggleFavorite: (host: Host) => void;
 };
@@ -125,7 +125,7 @@ export function ResourceExplorer(props: Props) {
         )}
       </div>
       <div className="explorer-footer">
-        <button className="nav-button" onClick={props.onOpenLocal}><Laptop size={15} /> Local shell</button>
+        {props.onOpenLocal && <button className="nav-button" onClick={props.onOpenLocal}><Laptop size={15} /> Local shell</button>}
         <IconButton label="Settings" onClick={props.onSettings}><Settings size={16} /></IconButton>
       </div>
     </aside>
