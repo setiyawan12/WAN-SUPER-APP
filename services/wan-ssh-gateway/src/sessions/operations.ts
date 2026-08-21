@@ -1,5 +1,6 @@
 import { createHash, createPrivateKey, generateKeyPairSync } from "node:crypto";
 import ssh2 from "ssh2";
+import type { AgentBridgeConnector } from "../agent/hub.js";
 import type { GatewayConfig } from "../config.js";
 import { GatewayError } from "../errors.js";
 import { connectResolvedTarget, resolveTarget } from "./target-policy.js";
@@ -59,6 +60,26 @@ export async function runTargetDiagnostics(config: GatewayConfig, target: { host
     phases.push({ name: "tcp", ok: true, durationMs: Date.now() - tcpStarted, detail: `${target.host}:${target.port} accepts TCP connections` });
   } catch (error) {
     phases.push({ name: "tcp", ok: false, durationMs: Date.now() - tcpStarted, detail: error instanceof Error ? error.message : "TCP probe failed" });
+  }
+  return phases;
+}
+
+export async function runAgentDiagnostics(agentBridge: AgentBridgeConnector | undefined, principalId: string, target: { host: string; port: number }) {
+  const connected = Boolean(agentBridge?.isConnected(principalId));
+  const phases: Array<{ name: "resolve" | "tcp"; ok: boolean; durationMs: number; detail: string }> = [{
+    name: "resolve",
+    ok: connected,
+    durationMs: 0,
+    detail: connected ? "Paired local agent online" : "No paired local agent online"
+  }];
+  if (!agentBridge || !connected) return phases;
+  const started = Date.now();
+  try {
+    const socket = await agentBridge.open(principalId, target.host, target.port);
+    socket.destroy();
+    phases.push({ name: "tcp", ok: true, durationMs: Date.now() - started, detail: `${target.host}:${target.port} is reachable through the local agent` });
+  } catch (error) {
+    phases.push({ name: "tcp", ok: false, durationMs: Date.now() - started, detail: error instanceof Error ? error.message : "Local-agent probe failed" });
   }
   return phases;
 }

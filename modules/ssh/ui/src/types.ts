@@ -12,6 +12,7 @@ export type Host = {
   keyId: string | null;
   jumpHostId: string | null;
   startupSnippetId: string | null;
+  useLocalAgent: boolean;
   tags: string[];
   environment: Environment;
   favorite: boolean;

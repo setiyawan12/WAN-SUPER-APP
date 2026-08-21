@@ -67,7 +67,8 @@ export const sessionOpenMessageSchema = strictObject({
   route: strictObject({ jumps: z.array(routeHopSchema).max(5) }).optional(),
   environment: z.record(z.string().max(255), z.string().max(4_096)).optional(),
   startupCommand: z.string().max(20_000).optional(),
-  keepAliveInterval: z.number().int().min(0).max(3_600).optional()
+  keepAliveInterval: z.number().int().min(0).max(3_600).optional(),
+  egress: strictObject({ mode: z.literal("client-agent") }).optional()
 });
 
 export const sessionInputMessageSchema = strictObject({
@@ -143,7 +144,12 @@ export const tunnelStartMessageSchema = strictObject({
 export const tunnelListMessageSchema = strictObject({ type: z.literal("tunnel.list"), requestId, sessionId });
 export const tunnelStopMessageSchema = strictObject({ type: z.literal("tunnel.stop"), requestId, sessionId, tunnelId: z.string().uuid() });
 
-export const diagnosticsRunMessageSchema = strictObject({ type: z.literal("diagnostics.run"), requestId, target: targetSchema.pick({ host: true, port: true }) });
+export const diagnosticsRunMessageSchema = strictObject({
+  type: z.literal("diagnostics.run"),
+  requestId,
+  target: targetSchema.pick({ host: true, port: true }),
+  egress: strictObject({ mode: z.literal("client-agent") }).optional()
+});
 export const knownHostListMessageSchema = strictObject({ type: z.literal("knownhost.list"), requestId });
 export const knownHostRemoveMessageSchema = strictObject({ type: z.literal("knownhost.remove"), requestId, host: z.string().min(1).max(253), port: z.number().int().min(1).max(65_535) });
 

@@ -34,6 +34,10 @@ export interface GatewayConfig {
   logLevel: LogLevel;
   heartbeatMs: number;
   shutdownGraceMs: number;
+  agentBridgeEnabled: boolean;
+  agentRegistrationTimeoutMs: number;
+  agentOpenTimeoutMs: number;
+  agentMaxBufferedBytes: number;
 }
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
@@ -66,7 +70,11 @@ const defaults = {
   WAN_SSH_CONNECT_RATE_WINDOW_MS: "60000",
   WAN_SSH_LOG_LEVEL: "info",
   WAN_SSH_HEARTBEAT_MS: "30000",
-  WAN_SSH_SHUTDOWN_GRACE_MS: "10000"
+  WAN_SSH_SHUTDOWN_GRACE_MS: "10000",
+  WAN_SSH_AGENT_BRIDGE_ENABLED: "true",
+  WAN_SSH_AGENT_REGISTRATION_TIMEOUT_MS: "5000",
+  WAN_SSH_AGENT_OPEN_TIMEOUT_MS: "15000",
+  WAN_SSH_AGENT_MAX_BUFFERED_BYTES: "1048576"
 } as const;
 
 function value(env: Environment, key: keyof typeof defaults) {
@@ -80,6 +88,12 @@ function integer(env: Environment, key: keyof typeof defaults, minimum: number, 
     throw new Error(`${key} must be an integer between ${minimum} and ${maximum}`);
   }
   return parsed;
+}
+
+function boolean(env: Environment, key: keyof typeof defaults) {
+  const raw = value(env, key);
+  if (raw !== "true" && raw !== "false") throw new Error(`${key} must be true or false`);
+  return raw === "true";
 }
 
 function list(raw: string | undefined) {
@@ -168,7 +182,11 @@ export function loadConfig(env: Environment = process.env): GatewayConfig {
     trustedProxyCidrs,
     logLevel: logLevel as LogLevel,
     heartbeatMs: integer(env, "WAN_SSH_HEARTBEAT_MS", 1_000, 300_000),
-    shutdownGraceMs: integer(env, "WAN_SSH_SHUTDOWN_GRACE_MS", 1_000, 120_000)
+    shutdownGraceMs: integer(env, "WAN_SSH_SHUTDOWN_GRACE_MS", 1_000, 120_000),
+    agentBridgeEnabled: boolean(env, "WAN_SSH_AGENT_BRIDGE_ENABLED"),
+    agentRegistrationTimeoutMs: integer(env, "WAN_SSH_AGENT_REGISTRATION_TIMEOUT_MS", 100, 60_000),
+    agentOpenTimeoutMs: integer(env, "WAN_SSH_AGENT_OPEN_TIMEOUT_MS", 100, 300_000),
+    agentMaxBufferedBytes: integer(env, "WAN_SSH_AGENT_MAX_BUFFERED_BYTES", 65_536, 16_777_216)
   };
 
   if (config.outputLowWaterBytes >= config.outputHighWaterBytes) throw new Error("Output low-water limit must be below high-water limit");

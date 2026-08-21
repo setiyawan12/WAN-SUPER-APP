@@ -948,6 +948,7 @@ router.put(
 // (not a list) since xAI only ever needs the one shared entry -- multiple
 // raw keys can still round-robin inside its api-key-entries array.
 const XAI_BASE_URL = "https://api.x.ai/v1";
+const KIMI_BASE_URL = "https://api.moonshot.ai/v1";
 
 async function findXaiEntry() {
   const items = normalizeList(await management.getOpenAiCompatibility());
@@ -976,6 +977,36 @@ router.put(
 
     await management.putOpenAiCompatibility(items);
     res.json({ item: await findXaiEntry() });
+  })
+);
+
+async function findKimiEntry() {
+  const items = normalizeList(await management.getOpenAiCompatibility());
+  return items.find((e) => e["base-url"] === KIMI_BASE_URL) || null;
+}
+
+router.get(
+  "/api-providers/kimi-key",
+  asyncHandler(async (req, res) => res.json({ item: await findKimiEntry() }))
+);
+router.put(
+  "/api-providers/kimi-key",
+  express.json(),
+  asyncHandler(async (req, res) => {
+    const incoming = req.body?.item;
+    const items = normalizeList(await management.getOpenAiCompatibility());
+    const idx = items.findIndex((e) => e["base-url"] === KIMI_BASE_URL);
+
+    if (!incoming || !incoming["api-key-entries"]?.length) {
+      if (idx !== -1) items.splice(idx, 1);
+    } else {
+      const entry = { ...incoming, name: "kimi", "base-url": KIMI_BASE_URL };
+      if (idx === -1) items.push(entry);
+      else items[idx] = entry;
+    }
+
+    await management.putOpenAiCompatibility(items);
+    res.json({ item: await findKimiEntry() });
   })
 );
 

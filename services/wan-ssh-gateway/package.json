@@ -6,9 +6,12 @@
   "engines": {
     "node": ">=22"
   },
+  "bin": {
+    "wan-ssh-agent": "dist/src/agent-client/cli.js"
+  },
   "scripts": {
     "clean": "node -e \"import('node:fs').then(({rmSync})=>rmSync('dist',{recursive:true,force:true}))\"",
-    "build": "npm run clean && tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json && npm run agent:bundle",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "npm run build && node --test dist/test/*.test.js",
     "e2e:local": "node scripts/local-e2e.mjs",
@@ -18,7 +21,10 @@
     "qa:firebase": "npm run build && npm --prefix ../.. run test:ssh-vault-web && node scripts/firebase-auth-emulator.mjs && ../../node_modules/.bin/electron scripts/firebase-browser-e2e.cjs",
     "e2e:browser": "../../node_modules/.bin/electron scripts/browser-e2e.cjs",
     "start": "node dist/src/server.js",
+    "agent": "node dist/src/agent-client/cli.js",
+    "agent:bundle": "../../node_modules/.bin/esbuild src/agent-client/cli.ts --bundle --platform=node --target=node22 --format=cjs --external:bufferutil --external:utf-8-validate --outfile=dist/wan-ssh-agent.cjs",
     "ops:verify": "node scripts/ops-verify.mjs",
+    "tailscale:verify": "node scripts/tailscale-verify.mjs",
     "qa:verify": "node scripts/qa-verify.mjs"
   },
   "dependencies": {

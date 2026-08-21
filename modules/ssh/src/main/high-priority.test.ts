@@ -5,7 +5,7 @@ import * as node_path from "node:path";
 import test from "node:test";
 import * as ssh2 from "ssh2";
 import { AuditService } from "./audit.js";
-import { RealtimeDbTransport, vaultMetaPath } from "./firebase.js";
+import { loadConfig, RealtimeDbTransport, vaultMetaPath } from "./firebase.js";
 import { generateKey } from "./keys.js";
 import { knownHostPattern } from "./knownhosts.js";
 import { HostService } from "./hosts.js";
@@ -137,6 +137,23 @@ test("account switch clears the previous account vault metadata", () => {
 
 test("vault metadata uses the RTDB path allowed by the deployed rules", () => {
   assert.equal(vaultMetaPath("uid-1", "personal"), "users/uid-1/vaultMeta/personal");
+});
+
+test("desktop Firebase sync uses the embedded WAN SSH config by default", () => {
+  const previousConfig = process.env.WANN_FIREBASE_CONFIG;
+  delete process.env.WANN_FIREBASE_CONFIG;
+  try {
+    const missingConfigPath = node_path.join(process.cwd(), `missing-firebase-config-${process.pid}.json`);
+    assert.equal(fs.existsSync(missingConfigPath), false);
+    const config = loadConfig(missingConfigPath);
+    assert.equal(config.projectId, "wan-ssh");
+    assert.equal(config.databaseURL, "https://wan-ssh-default-rtdb.firebaseio.com");
+    assert.match(config.googleClientId, /^830159901702-.+\.apps\.googleusercontent\.com$/);
+    assert.equal(config.googleClientSecret, undefined);
+  } finally {
+    if (previousConfig === undefined) delete process.env.WANN_FIREBASE_CONFIG;
+    else process.env.WANN_FIREBASE_CONFIG = previousConfig;
+  }
 });
 
 test("fresh login pulls the complete RTDB items node without an indexed query", async () => {

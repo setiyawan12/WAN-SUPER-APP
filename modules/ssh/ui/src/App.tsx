@@ -29,7 +29,7 @@ import {
   X
 } from "lucide-react";
 import { api, bridgeUnavailable, isMockApi } from "./api";
-import { AuthPromptDialog, CommandPalette, GroupDialog, HostDialog, HostKeyDialog, SettingsDialog, VaultScreen } from "./Dialogs";
+import { AuthPromptDialog, CommandPalette, GroupDialog, HostDialog, HostKeyDialog, LocalAgentDialog, SettingsDialog, VaultScreen } from "./Dialogs";
 import { Inspector } from "./Inspector";
 import { ResourceExplorer } from "./ResourceExplorer";
 import { TerminalPane, type TerminalHandle } from "./TerminalPane";
@@ -51,6 +51,7 @@ export type SshWorkspaceProps = {
   capabilities?: SshRuntimeCapabilities;
   account?: WorkspaceAccount;
   onSignOut?: () => Promise<void>;
+  onLocalAgentCode?: () => Promise<string>;
 };
 
 function accountLabel(account: WorkspaceAccount) {
@@ -110,7 +111,7 @@ export default function App() {
   return <SshWorkspace transport={electronTransport} />;
 }
 
-export function SshWorkspace({ transport, capabilities = transport.capabilities, account, onSignOut }: SshWorkspaceProps) {
+export function SshWorkspace({ transport, capabilities = transport.capabilities, account, onSignOut, onLocalAgentCode }: SshWorkspaceProps) {
   const [vaultState, setVaultState] = useState<VaultState>("loading");
   const [vaultError, setVaultError] = useState<string | null>(null);
   const [catalog, setCatalog] = useState<Catalog>(emptyCatalog);
@@ -139,6 +140,7 @@ export function SshWorkspace({ transport, capabilities = transport.capabilities,
   const [dropTarget, setDropTarget] = useState<"add" | "single" | null>(null);
   const [draggingTab, setDraggingTab] = useState<string | null>(null);
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [localAgentOpen, setLocalAgentOpen] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
   const accountMenuRef = useRef<HTMLDivElement>(null);
   const MAX_PANES = 4;
@@ -566,6 +568,7 @@ export function SshWorkspace({ transport, capabilities = transport.capabilities,
           </button>
           {accountMenuOpen && <div className="web-account-panel" role="menu">
             <div className="web-account-identity"><AccountAvatar account={account} /><div><strong>{accountLabel(account)}</strong>{account.email && <small>{account.email}</small>}<code>{account.uid}</code></div></div>
+            {onLocalAgentCode && <button className="web-account-action" type="button" role="menuitem" onClick={() => { setAccountMenuOpen(false); setLocalAgentOpen(true); }}><Route size={14} />Local agent</button>}
             {onSignOut && <button className="web-account-action" type="button" role="menuitem" onClick={() => void signOut()} disabled={signingOut}><LogOut size={14} />{signingOut ? "Signing out..." : "Sign out"}</button>}
           </div>}
         </div>}
@@ -737,6 +740,7 @@ export function SshWorkspace({ transport, capabilities = transport.capabilities,
 
       {hostDialog && <HostDialog initial={hostDialog === "new" ? null : hostDialog} catalog={catalog} cloudOnly={capabilities.runtime === "web-cloud"} agentForwarding={capabilities.runtime === "electron"} onClose={() => setHostDialog(null)} onSave={saveHost} onDelete={deleteHost} />}
       {groupDialog && <GroupDialog groups={catalog.groups} keys={catalog.keys} cloudOnly={capabilities.runtime === "web-cloud"} onClose={() => setGroupDialog(false)} onSave={async (input) => { await api.groups.save(input); await reloadCatalog(); }} onDelete={async (id) => { await api.groups.remove(id); await reloadCatalog(); }} onToast={showToast} />}
+      {localAgentOpen && onLocalAgentCode && <LocalAgentDialog onCode={onLocalAgentCode} onClose={() => setLocalAgentOpen(false)} />}
       {settingsOpen && <SettingsDialog catalog={catalog} capabilities={capabilities} onCatalogChange={reloadCatalog} onClose={() => setSettingsOpen(false)} onToast={showToast} />}
       {paletteOpen && <CommandPalette commands={commands} onClose={() => setPaletteOpen(false)} />}
       {hostKeyPrompt && <HostKeyDialog prompt={hostKeyPrompt} onAnswer={(accept) => { void api.session.answerHostKey(hostKeyPrompt.sessionId, accept); setHostKeyPrompt(null); }} />}

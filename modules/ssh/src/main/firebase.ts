@@ -5,6 +5,19 @@ import * as node_crypto from "node:crypto";
 import { app, safeStorage, shell } from "electron";
 import { VAULT, logger } from "./constants.js";
 
+// Firebase Web SDK config bersifat publik. Jangan tambahkan service account,
+// private key, OAuth client secret, atau kredensial Firebase Admin di sini.
+const EMBEDDED_FIREBASE_CONFIG = Object.freeze({
+  apiKey: "AIzaSyBfy336eNTefbSz92w0rSf_PBeB3yKnTjo",
+  authDomain: "wan-ssh.firebaseapp.com",
+  projectId: "wan-ssh",
+  databaseURL: "https://wan-ssh-default-rtdb.firebaseio.com",
+  storageBucket: "wan-ssh.firebasestorage.app",
+  messagingSenderId: "830159901702",
+  appId: "1:830159901702:web:951f21563bc7faa0879f87",
+  googleClientId: "830159901702-e5khtkkt07o0urtg5vpuefs9rnpotv2m.apps.googleusercontent.com"
+});
+
 export function firebaseConfigPath() {
   return path.join(app.getPath("userData"), "firebase-config.json");
 }
@@ -113,7 +126,7 @@ export async function loadFirebase() {
   }
 }
 
-export function loadConfig(): any {
+export function loadConfig(configFilePath?: string): any {
   const env = process.env.WANN_FIREBASE_CONFIG;
   if (env) {
     try {
@@ -122,11 +135,11 @@ export function loadConfig(): any {
     }
   }
   try {
-    const p = firebaseConfigPath();
-    if (node_fs.existsSync(p)) return JSON.parse(node_fs.readFileSync(p, "utf8"));
+    const targetPath = configFilePath ?? firebaseConfigPath();
+    if (node_fs.existsSync(targetPath)) return JSON.parse(node_fs.readFileSync(targetPath, "utf8"));
   } catch {
   }
-  return null;
+  return { ...EMBEDDED_FIREBASE_CONFIG };
 }
 
 function base64url(buf: Buffer): string {
@@ -247,7 +260,7 @@ export class RealtimeDbTransport {
   onFreshLogin: (() => void) | null = null;
 
   isConfigured() {
-    // RTDB butuh databaseURL di firebase-config.json / WANN_FIREBASE_CONFIG.
+    // RTDB membutuhkan databaseURL dari config bawaan atau override operator.
     return this.config !== null && !!this.config.databaseURL;
   }
   /** Baca ulang config dari disk (dipanggil setelah import). Reset app agar init ulang. */
@@ -360,7 +373,7 @@ export class RealtimeDbTransport {
   async ensureInit() {
     if (!this.config) return;
     if (!this.config.databaseURL) {
-      throw new Error("firebase-config.json harus berisi databaseURL (Realtime Database)");
+      throw new Error("Konfigurasi Firebase harus berisi databaseURL (Realtime Database)");
     }
     if (this.db && this.auth) {
       if (this.authReady) await this.authReady;

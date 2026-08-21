@@ -1,0 +1,55 @@
+# Overlay opsional untuk menjangkau target yang hanya hidup di dalam VPN,
+# tanpa memasang VPN di dalam container gateway.
+#
+# Dipakai otomatis oleh scripts/local-stack.mjs ketika TS_AUTHKEY tersedia di
+# environment shell. TS_AUTHKEY tidak pernah ditulis ke compose.env maupun file
+# lain di repository: Docker Compose menginterpolasinya langsung dari shell.
+#
+# Sidecar bergabung ke network namespace milik gateway (`network_mode:
+# service:gateway`), sehingga route tailscale0 berlaku untuk trafik gateway
+# sementara nama service, `expose`, dan `proxy_pass http://gateway:8788` di
+# docker/nginx.local.conf tetap seperti semula.
+#
+# Skenario A (Tailscale terpasang di server target):
+#   WAN_SSH_EGRESS_ALLOW_CIDRS=100.64.0.0/10
+# Skenario B (subnet router mengiklankan jaringan lokal):
+#   WAN_SSH_EGRESS_ALLOW_CIDRS=100.64.0.0/10,10.8.0.0/24
+services:
+  gateway:
+    environment:
+      WAN_SSH_EGRESS_MODE: ${WAN_SSH_EGRESS_MODE:-allowlist}
+      WAN_SSH_EGRESS_ALLOW_CIDRS: ${WAN_SSH_EGRESS_ALLOW_CIDRS:-100.64.0.0/10}
+
+  tailscale:
+    image: tailscale/tailscale:stable
+    hostname: ${TS_HOSTNAME:-wan-ssh-gateway}
+    network_mode: "service:gateway"
+    depends_on:
+      - gateway
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    devices:
+      - /dev/net/tun
+    environment:
+      # Tanpa nilai default, `ssh-web:down` di shell baru akan gagal render
+      # karena auth key memang tidak pernah disimpan. local-stack.mjs yang
+      # menjaga agar overlay hanya aktif ketika TS_AUTHKEY tersedia saat `up`.
+      TS_AUTHKEY: ${TS_AUTHKEY:-}
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "false"
+      # --accept-routes wajib eksplisit di Linux agar subnet router terpakai.
+      TS_EXTRA_ARGS: ${TS_EXTRA_ARGS:---accept-routes}
+    volumes:
+      - tailscale-state:/var/lib/tailscale
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --peers=false >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    restart: unless-stopped
+
+volumes:
+  tailscale-state:

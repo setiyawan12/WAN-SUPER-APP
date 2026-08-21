@@ -1,3 +1,4 @@
+import type { AgentBridgeConnector } from "../agent/hub.js";
 import type { GatewayConfig } from "../config.js";
 import { CLOSE_CODES, GatewayError } from "../errors.js";
 import type { Logger } from "../observability/logger.js";
@@ -5,7 +6,7 @@ import type { GatewayMetrics } from "../observability/metrics.js";
 import type { ClientMessage, SessionOpenMessage } from "../protocol.js";
 import type { KnownHostStore } from "./known-host-store.js";
 import { knownHostDocumentId, normalizeKnownHost } from "./known-host-store.js";
-import { generateSshKey, inspectSshKey, runTargetDiagnostics } from "./operations.js";
+import { generateSshKey, inspectSshKey, runAgentDiagnostics, runTargetDiagnostics } from "./operations.js";
 import { SshSession, type ManagedSession } from "./ssh-session.js";
 import type { ConnectionContext, SessionService } from "./types.js";
 
@@ -16,6 +17,7 @@ type SessionFactory = (options: {
   logger: Logger;
   metrics?: GatewayMetrics;
   knownHosts?: KnownHostStore;
+  agentBridge?: AgentBridgeConnector;
   onClose(session: ManagedSession): void;
 }) => ManagedSession;
 
@@ -29,7 +31,8 @@ export class SessionManager implements SessionService {
     private readonly logger: Logger,
     private readonly factory: SessionFactory = (options) => new SshSession({ ...options, onClose: options.onClose }),
     private readonly metrics?: GatewayMetrics,
-    private readonly knownHosts?: KnownHostStore
+    private readonly knownHosts?: KnownHostStore,
+    private readonly agentBridge?: AgentBridgeConnector
   ) {}
 
   get activeCount() {
@@ -49,6 +52,7 @@ export class SessionManager implements SessionService {
       logger: this.logger,
       metrics: this.metrics,
       knownHosts: this.knownHosts,
+      agentBridge: this.agentBridge,
       onClose: (closed) => this.remove(closed)
     });
     this.sessions.set(session.id, session);
@@ -141,7 +145,9 @@ export class SessionManager implements SessionService {
   }
 
   private async runDiagnostics(context: ConnectionContext, message: Extract<ClientMessage, { type: "diagnostics.run" }>) {
-    const phases = await runTargetDiagnostics(this.config, message.target);
+    const phases = message.egress?.mode === "client-agent"
+      ? await runAgentDiagnostics(this.agentBridge, context.principal.id, message.target)
+      : await runTargetDiagnostics(this.config, message.target);
     context.send({ type: "diagnostics.result", requestId: message.requestId, address: message.target.host, port: message.target.port, phases });
   }
 

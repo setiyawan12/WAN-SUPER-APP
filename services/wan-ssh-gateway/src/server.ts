@@ -1,5 +1,6 @@
 import { createServer, type Server } from "node:http";
 import { pathToFileURL } from "node:url";
+import { AgentHub, type AgentBridgeConnector } from "./agent/hub.js";
 import { createApp, type ReadinessState } from "./app.js";
 import { createAuthenticator } from "./auth/index.js";
 import type { Authenticator } from "./auth/index.js";
@@ -21,6 +22,7 @@ type GatewayRuntimeDependencies = {
   sessions?: SessionService;
   metrics?: GatewayMetrics;
   knownHosts?: KnownHostStore;
+  agentBridge?: AgentBridgeConnector;
 };
 
 export function createGatewayRuntime(config: GatewayConfig, dependencies: GatewayRuntimeDependencies = {}) {
@@ -30,12 +32,17 @@ export function createGatewayRuntime(config: GatewayConfig, dependencies: Gatewa
   const knownHosts = dependencies.knownHosts ?? (config.knownHostMode === "firestore"
     ? new FirestoreKnownHostStore(getFirestore(initializeGatewayFirebase(config.firebaseProjectId!)))
     : undefined);
-  const sessions = dependencies.sessions ?? new SessionManager(config, logger, undefined, metrics, knownHosts);
   const server = createServer(createApp(config, readiness, metrics));
+  let agentHub: AgentHub | undefined;
+  const authenticator = dependencies.authenticator ?? createAuthenticator(config);
+  const agentBridge = dependencies.agentBridge ?? (config.agentBridgeEnabled
+    ? (agentHub = new AgentHub(server, config, authenticator, logger, () => readiness.ready))
+    : undefined);
+  const sessions = dependencies.sessions ?? new SessionManager(config, logger, undefined, metrics, knownHosts, agentBridge);
   const webSockets = attachWebSocketServer({
     server,
     config,
-    authenticator: dependencies.authenticator ?? createAuthenticator(config),
+    authenticator,
     sessions,
     logger,
     metrics,
@@ -69,6 +76,7 @@ export function createGatewayRuntime(config: GatewayConfig, dependencies: Gatewa
       shuttingDown = true;
       readiness.ready = false;
       webSockets.close(CLOSE_CODES.serviceRestart, "Service restart");
+      agentHub?.close(CLOSE_CODES.serviceRestart, "Service restart");
       sessions.closeAll(reason);
       await closeServer(server, config.shutdownGraceMs);
       logger.info("gateway.stopped", { reason });

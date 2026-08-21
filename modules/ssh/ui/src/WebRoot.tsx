@@ -7,7 +7,7 @@ import WebLogin from "./WebLogin";
 import { useWebAuthSession } from "./web-auth";
 import { WebCloudApi } from "./web-cloud-api";
 import { WebCloudStore } from "./web-cloud-store";
-import { webFirebaseServices } from "./web-firebase";
+import { webFirebaseServices, webSshAgentPairingCode } from "./web-firebase";
 import { DASHBOARD_ROUTE, LOGIN_ROUTE, navigateRoute, useRoute } from "./web-router";
 import { WebSocketRemoteTerminalTransport } from "./transport/web-socket";
 
@@ -50,6 +50,7 @@ function CloudWorkspace({ session }: { session: ReturnType<typeof useWebAuthSess
     capabilities={{ ...runtime.transport.capabilities, runtime: "web-cloud" }}
     account={session.account}
     onSignOut={session.signOut}
+    onLocalAgentCode={webSshAgentPairingCode}
   />;
 }
 

@@ -48,6 +48,7 @@ export type WebSessionOpenInput = {
   environment?: Record<string, string>;
   startupCommand?: string;
   keepAliveInterval?: number;
+  egress?: { mode: "client-agent" };
 };
 
 export interface RemoteTerminalTransport {

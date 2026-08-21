@@ -2545,6 +2545,153 @@ Jangan melakukan in-place source edit pada VPS.
 
 ---
 
+## 17A. Local Agent Egress (target di balik VPN)
+
+Ketika target SSH hanya bisa dijangkau lewat VPN, gateway di VPS tidak perlu
+ikut memasang VPN. Sesi bisa dialihkan lewat mesin operator yang sudah
+terhubung VPN: browser tetap bicara ke gateway, gateway meminta agent lokal
+membuka koneksi TCP-nya.
+
+```text
+Browser ──wss──► Gateway (VPS) ──bridge.open──► Agent (laptop, VPN aktif) ──► Target 10.x
+```
+
+Seluruh koneksi bersifat outbound dari laptop ke VPS (443), sehingga VPN tidak
+perlu mengizinkan inbound apa pun.
+
+### 17A.1 Komponen
+
+| Bagian | Lokasi | Catatan |
+| --- | --- | --- |
+| Hub `/v1/agent` | `services/wan-ssh-gateway/src/agent/` | Auth Firebase, principal-scoped, framing biner |
+| Agent CLI | `services/wan-ssh-gateway/src/agent-client/` | `wan-ssh-agent` (`pair`/`run`/`status`/`unpair`) |
+| Toggle host | `modules/ssh/ui/src/Dialogs.tsx` → tab Routing | Menyimpan `useLocalAgent`, mengirim `egress.mode = "client-agent"` |
+| Pairing code | Menu akun → **Local agent** | `WANSSH1.<base64url>` berisi `apiKey` + `refreshToken` |
+
+Env gateway: `WAN_SSH_AGENT_BRIDGE_ENABLED` (default `true`),
+`WAN_SSH_AGENT_REGISTRATION_TIMEOUT_MS`, `WAN_SSH_AGENT_OPEN_TIMEOUT_MS`,
+`WAN_SSH_AGENT_MAX_BUFFERED_BYTES`.
+
+### 17A.2 Menjalankan agent
+
+Agent runtime hanya memerlukan `ws` dan modul bawaan Node, jadi mesin operator
+tidak perlu checkout repo maupun `npm install` 103 MB milik gateway. Bungkus
+sekali di mesin developer, lalu salin satu file hasilnya:
+
+```bash
+npm run ssh-agent:bundle
+```
+
+Keluarannya `services/wan-ssh-gateway/dist/wan-ssh-agent.cjs` (~150 KB, sengaja
+tanpa minify agar tetap bisa diaudit — file ini memegang refresh token). Salin
+ke mesin yang terhubung VPN, lalu:
+
+```bash
+node wan-ssh-agent.cjs pair WANSSH1.xxxxx --allow 10.8.0.0/24
+node wan-ssh-agent.cjs run
+```
+
+Di dalam checkout repo, jalur setara tanpa bundle tetap tersedia:
+
+```bash
+npm run ssh-gateway:build
+npm run ssh-agent -- pair WANSSH1.xxxxx --allow 10.8.0.0/24
+npm run ssh-agent -- run
+```
+
+Pairing tersimpan di `~/.wan-ssh/agent.json` dengan mode `0600`
+(`WAN_SSH_AGENT_HOME` / `WAN_SSH_AGENT_STORE` untuk mengubah lokasi). Untuk
+stack lokal `dev-anonymous`: `npm run ssh-agent -- run --dev-anonymous --url
+http://localhost:5179`.
+
+Agent mencetak ID token sendiri dari refresh token lewat endpoint Secure Token,
+melakukan `agent.auth.refresh` sebelum kedaluwarsa, dan reconnect dengan
+exponential backoff bila koneksi putus.
+
+### 17A.3 Konsekuensi keamanan
+
+- `connectClient` melewati `resolveTarget` untuk mode agent
+  (`services/wan-ssh-gateway/src/sessions/ssh-session.ts`), jadi
+  `WAN_SSH_EGRESS_ALLOW_CIDRS` **tidak** berlaku pada jalur ini. Penyaringan
+  sepenuhnya di `src/agent-client/policy.ts`: loopback, `0.0.0.0/8`,
+  `169.254.0.0/16`, multicast, dan link-local ditolak; `--allow` mempersempit
+  ke CIDR VPN.
+- Resolusi DNS memakai resolver mesin agent, sehingga hostname internal ikut
+  bekerja tanpa konfigurasi DNS di VPS.
+- Pairing code setara sesi login penuh. Jangan dikirim lewat chat; cabut dengan
+  `wan-ssh-agent unpair` di mesin yang tidak dipakai lagi.
+- Registry agent bersifat in-memory per instance. Bila gateway diskalakan lebih
+  dari satu replica, browser dan agent wajib mendarat di instance yang sama
+  (sticky session).
+- Hanya hop pertama yang lewat agent; jump host berikutnya tetap
+  `forwardOut` di dalam rantai SSH.
+
+---
+
+## 17B. Egress lewat Tailscale
+
+Alternatif dari 17A ketika Anda bisa memasang software di jaringan target.
+Berbeda dengan jalur agent, jalur ini **tidak** melewati `resolveTarget`,
+sehingga `WAN_SSH_EGRESS_ALLOW_CIDRS` tetap menjadi penjaga sesungguhnya, dan
+sesi tidak bergantung pada laptop yang menyala.
+
+```text
+Browser ──wss──► Gateway (VPS, node tailnet) ──100.x.y.z──► Target SSH
+```
+
+### 17B.1 Dua skenario
+
+| | Pemasangan | Allowlist |
+| --- | --- | --- |
+| A. Tailscale di server target | `tailscale up` di target | `100.64.0.0/10` |
+| B. Subnet router | `tailscale up --advertise-routes=10.8.0.0/24 --accept-routes` di satu mesin dalam jaringan, lalu setujui route di admin console | `100.64.0.0/10,10.8.0.0/24` |
+
+`--accept-routes` wajib eksplisit di Linux; tanpa itu subnet router tidak
+terpakai walaupun sudah disetujui.
+
+### 17B.2 Menjalankan
+
+Auth key dibuat di admin console Tailscale dan hanya diekspor di shell — ia
+tidak pernah ditulis ke `compose.env`, repository, maupun image:
+
+```bash
+export TS_AUTHKEY=tskey-auth-xxxxx
+export WAN_SSH_EGRESS_ALLOW_CIDRS=100.64.0.0/10
+npm run ssh-web:up
+```
+
+`scripts/local-stack.mjs` menambahkan `docker-compose.tailscale.yml` secara
+otomatis ketika `TS_AUTHKEY` ada. Sidecar bergabung ke network namespace
+gateway (`network_mode: service:gateway`), jadi `proxy_pass
+http://gateway:8788` di `docker/nginx.local.conf` dan seluruh `expose` tetap
+tidak berubah. Container gateway sendiri tetap `cap_drop: ALL` dan
+`read_only: true`; hanya sidecar yang memegang `NET_ADMIN` dan `/dev/net/tun`.
+
+Verifikasi sebelum membuat host profile:
+
+```bash
+npm run ssh-web:tailscale-check -- 100.101.102.103 22
+```
+
+Skrip memeriksa allowlist memakai `ipMatchesCidrs` milik gateway sendiri, lalu
+menguji TCP dari dalam container. Kegagalan allowlist muncul lebih dulu karena
+`TARGET_DENIED` memang terjadi sebelum socket dibuka.
+
+### 17B.3 Catatan operasional
+
+- Isi host profile dengan **IP tailnet**, bukan nama MagicDNS: resolver di
+  dalam container tidak mengenal MagicDNS sehingga gagal di fase resolve.
+- Toggle "Route through the local agent" dibiarkan mati untuk jalur ini.
+- Batasi jangkauan VPS lewat ACL Tailscale, bukan hanya allowlist gateway.
+  Beri tag saat mendaftar (`--advertise-tags=tag:wan-ssh-gateway`) lalu izinkan
+  hanya `tag:ssh-target:22`. Tanpa ACL, VPS yang terekspos internet bisa
+  menjangkau seluruh tailnet.
+- Paket Personal Tailscale gratis, tetapi ditujukan untuk penggunaan pribadi;
+  pemakaian atas nama perusahaan masuk paket berbayar. Alternatif self-hosted:
+  Headscale di VPS yang sama.
+
+---
+
 ## 18. Observability dan Operasi
 
 ### 18.1 Metrics minimum

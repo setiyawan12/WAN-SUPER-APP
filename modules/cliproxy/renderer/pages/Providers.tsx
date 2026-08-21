@@ -19,19 +19,20 @@ const IconDatabase = (
   </svg>
 );
 
-const FIXED_PROVIDER_IDS = ["antigravity", "claude", "codex", "xai"] as const;
+const FIXED_PROVIDER_IDS = ["antigravity", "claude", "codex", "xai", "kimi"] as const;
 type FixedProviderId = (typeof FIXED_PROVIDER_IDS)[number];
 
 const PROVIDER_CARDS: {
   id: FixedProviderId;
   label: string;
   description: string;
-  // Every fixed provider except xai has a dedicated Management API key list
-  // (gemini/claude/codex-key). xAI has none (see routes.js's findXaiEntry
-  // doc comment) -- its card uses `isXai` to route "Add via API key" to a
-  // different modal backed by a shared openai-compatibility entry instead.
+  // Every fixed provider except xai/kimi has a dedicated Management API key list
+  // (gemini/claude/codex-key). xAI and Kimi have none -- they use `isXai`/`isKimi`
+  // to route "Add via API key" to a different modal backed by a shared
+  // openai-compatibility entry instead.
   apiKey?: { label: string; getter: () => Promise<{ items: ApiKeyEntry[] }>; setter: (items: ApiKeyEntry[]) => Promise<{ items: ApiKeyEntry[] }> };
   isXai?: boolean;
+  isKimi?: boolean;
   oauthDisabled?: boolean;
   oauthDisabledReason?: string;
   note?: string;
@@ -67,6 +68,15 @@ const PROVIDER_CARDS: {
       "xAI login uses a device code, not a browser redirect: after clicking, a page opens where you approve the " +
       "code shown below (it's usually pre-filled from the link). This can take up to a few minutes to complete.",
   },
+  {
+    id: "kimi",
+    label: "Kimi (Moonshot AI)",
+    description: "Add your Kimi API key from platform.kimi.ai or use Kimi Coding subscription.",
+    isKimi: true,
+    note:
+      "Kimi provides OpenAI-compatible API at api.moonshot.ai. Get your API key from platform.kimi.ai/console/api-keys. " +
+      "Supports kimi-k3 (1M context), kimi-k2-7 (Code), and kimi-k2-6 models.",
+  },
 ];
 
 function ProviderMark({ id }: { id: FixedProviderId | "custom" }) {
@@ -74,6 +84,7 @@ function ProviderMark({ id }: { id: FixedProviderId | "custom" }) {
   if (id === "claude") return <Sparkles size={20} />;
   if (id === "codex") return <Code2 size={20} />;
   if (id === "xai") return <Bot size={20} />;
+  if (id === "kimi") return <Sparkles size={20} strokeWidth={2.5} />; // Moon/star icon for Moonshot AI
   return <Boxes size={20} />;
 }
 
@@ -128,6 +139,7 @@ export function Providers() {
   const [now, setNow] = useState(() => Date.now());
   const [apiKeyModal, setApiKeyModal] = useState<(typeof PROVIDER_CARDS)[number]["apiKey"] | null>(null);
   const [xaiModalOpen, setXaiModalOpen] = useState(false);
+  const [kimiModalOpen, setKimiModalOpen] = useState(false);
   const [customModalOpen, setCustomModalOpen] = useState(false);
   const [selectedGroup, setSelectedGroup] = useState("antigravity");
   const [customGroups, setCustomGroups] = useState<Record<string, string>>({});
@@ -649,7 +661,7 @@ export function Providers() {
                 <button
                   className="btn secondary"
                   style={{ width: "100%" }}
-                  onClick={() => (p.isXai ? setXaiModalOpen(true) : setApiKeyModal(p.apiKey!))}
+                  onClick={() => (p.isXai ? setXaiModalOpen(true) : p.isKimi ? setKimiModalOpen(true) : setApiKeyModal(p.apiKey!))}
                   disabled={!serverRunning}
                 >
                   <KeyRound size={15} />
@@ -723,6 +735,10 @@ export function Providers() {
 
       <Modal open={xaiModalOpen} onClose={() => setXaiModalOpen(false)}>
         <XaiApiKeyModalContent onClose={() => setXaiModalOpen(false)} />
+      </Modal>
+
+      <Modal open={kimiModalOpen} onClose={() => setKimiModalOpen(false)}>
+        <KimiApiKeyModalContent onClose={() => setKimiModalOpen(false)} />
       </Modal>
 
       <Modal open={customModalOpen} onClose={() => setCustomModalOpen(false)}>
@@ -819,6 +835,113 @@ function ApiKeyModalContent({
 // models a generic openai-compatibility endpoint serves from what's declared
 // here), so this modal also collects them -- same requirement as the Custom
 // provider modal below, just pre-scoped to xAI's fixed base URL.
+function KimiApiKeyModalContent({ onClose }: { onClose: () => void }) {
+  const { data, mutate, isLoading } = usePolling(api.getKimiKey, 30000);
+  const entry = data?.item ?? null;
+  const keyEntries = entry?.["api-key-entries"] ?? [];
+  const [apiKey, setApiKey] = useState("");
+  const [modelIds, setModelIds] = useState(() => (entry?.models ?? []).map((m) => m.alias || m.name).join(", "));
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setModelIds((entry?.models ?? []).map((m) => m.alias || m.name).join(", "));
+  }, [entry?.models]);
+
+  function parsedModels() {
+    return modelIds
+      .split(",")
+      .map((m) => m.trim())
+      .filter(Boolean)
+      .map((m) => ({ name: m }));
+  }
+
+  async function addEntry() {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    try {
+      const models = parsedModels();
+      await api.setKimiKey({
+        name: "kimi",
+        "base-url": "https://api.moonshot.ai/v1",
+        "api-key-entries": [...keyEntries, { "api-key": apiKey.trim() }],
+        ...(models.length ? { models } : {}),
+      });
+      setApiKey("");
+    } finally {
+      setSaving(false);
+      mutate(undefined, true);
+    }
+  }
+
+  async function removeKey(index: number) {
+    setSaving(true);
+    try {
+      const nextEntries = keyEntries.filter((_, i) => i !== index);
+      await api.setKimiKey(nextEntries.length ? { ...entry!, "api-key-entries": nextEntries } : null);
+    } finally {
+      setSaving(false);
+      mutate(undefined, true);
+    }
+  }
+
+  async function saveModelIds() {
+    if (!keyEntries.length) return;
+    setSaving(true);
+    try {
+      const models = parsedModels();
+      await api.setKimiKey({ ...entry!, name: "kimi", "base-url": "https://api.moonshot.ai/v1", ...(models.length ? { models } : { models: [] }) });
+    } finally {
+      setSaving(false);
+      mutate(undefined, true);
+    }
+  }
+
+  return (
+    <>
+      <ModalHeader title="Kimi API Key" description={`${keyEntries.length} key${keyEntries.length === 1 ? "" : "s"} configured`} onClose={onClose} />
+      {isLoading && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <Skeleton h={30} />
+          <Skeleton h={30} w="80%" />
+        </div>
+      )}
+      {!isLoading && !keyEntries.length && <p className="card-desc">No keys yet. Get your API key from platform.kimi.ai/console/api-keys</p>}
+      {keyEntries.map((k, i) => (
+        <div key={i} className="cred-row">
+          <div style={{ fontFamily: "var(--vscode-editor-font-family, monospace)" }}>{maskKey(k["api-key"])}</div>
+          <button className="btn secondary" disabled={saving} onClick={() => removeKey(i)}>
+            Remove
+          </button>
+        </div>
+      ))}
+      <div className="field" style={{ border: "1px dashed var(--vscode-panel-border)", borderRadius: 4, padding: 10, gap: 8 }}>
+        <div className="field">
+          <label className="field-label">API key</label>
+          <input className="text-input" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder="sk-..." />
+        </div>
+        <div className="field">
+          <label className="field-label">Model IDs (comma-separated)</label>
+          <input className="text-input" value={modelIds} onChange={(e) => setModelIds(e.target.value)} placeholder="kimi-k3, kimi-k2-7, kimi-k2-6" />
+          <p className="card-desc">
+            Shared across all keys above -- CLIProxyAPI needs this to know which models this endpoint serves; without it they won't show up on the Models page. 
+            Default: kimi-k3 (1M context), kimi-k2-7 (Code), kimi-k2-6.
+          </p>
+        </div>
+        <div className="btn-row">
+          <button className="btn" disabled={saving || !apiKey.trim()} onClick={addEntry}>
+            Add key
+          </button>
+          {keyEntries.length > 0 && (
+            <button className="btn secondary" disabled={saving} onClick={saveModelIds}>
+              Save model IDs
+            </button>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function XaiApiKeyModalContent({ onClose }: { onClose: () => void }) {
   const { data, mutate, isLoading } = usePolling(api.getXaiKey, 30000);
   const entry = data?.item ?? null;

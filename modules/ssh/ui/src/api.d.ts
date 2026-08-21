@@ -12,6 +12,7 @@ interface HostView {
   keyId: string | null;
   jumpHostId: string | null;
   startupSnippetId: string | null;
+  useLocalAgent: boolean;
   tags: string[];
   environment: "none" | "prod" | "staging" | "dev";
   favorite: boolean;

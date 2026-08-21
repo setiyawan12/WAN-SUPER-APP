@@ -1,5 +1,6 @@
 import type { IncomingMessage, Server } from "node:http";
 import WebSocket, { WebSocketServer } from "ws";
+import { AGENT_UPGRADE_PATH } from "../agent/hub.js";
 import type { Authenticator } from "../auth/index.js";
 import type { GatewayConfig } from "../config.js";
 import { hashLogValue, type Logger } from "../observability/logger.js";
@@ -26,6 +27,10 @@ export function attachWebSocketServer(dependencies: Dependencies) {
   const webSocketServer = new WebSocketServer({ noServer: true, maxPayload: config.maxMessageBytes });
   server.on("upgrade", (request, socket, head) => {
     try {
+      // Hub local-agent memasang listener `upgrade` sendiri untuk path ini.
+      // Tanpa pengecualian ini handler klien ikut menulis 503 ke socket yang
+      // sama dan merusak handshake agent.
+      if (config.agentBridgeEnabled && request.url === AGENT_UPGRADE_PATH) return;
       if (!isReady() || request.url !== "/v1/ws") {
         socket.write("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n");
         socket.destroy();

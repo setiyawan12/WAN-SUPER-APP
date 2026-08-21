@@ -362,7 +362,7 @@ scripts/            # Build helper (copy-assets, dev, vendor-sync)
 | CLIProxyAPI home | `~/.wan-super-app/cliproxyapi` |
 | WAN NET config | `{userData}/wan-net-cfg.json` |
 | WANN SSH store | `{userData}/wann-ssh.json` (item/outbox/vault-meta) |
-| WANN SSH Firebase config | `{userData}/firebase-config.json` (opsional, sync cloud RTDB; wajib `databaseURL`) |
+| WANN SSH Firebase config | Project `wan-ssh` tertanam; `{userData}/firebase-config.json` hanya override opsional |
 | WAN Mindmap local cache | Chromium local storage/IndexedDB dalam `{userData}` |
 | WAN Mindmap Firebase | Config bersama `{userData}/firebase-config.json` |
 
@@ -399,13 +399,18 @@ Host/group/identity/key **tetap disimpan lokal dulu** (`wann-ssh.json`). Vault `
 saja yang di-outbox lalu di-push ke RTDB. Field sensitif tetap terenkripsi vault
 sebelum sync.
 
+Build desktop sudah membawa Firebase Web SDK config publik untuk project `wan-ssh`,
+jadi instalasi baru dapat langsung sign in tanpa mengimpor JSON. Untuk staging atau
+project lain, override dapat diberikan melalui `WANN_FIREBASE_CONFIG` atau
+`{userData}/firebase-config.json`; override wajib menyertakan `databaseURL`.
+
 **Path RTDB:**
 
 ```text
 users/{uid}/vaults/{vaultId}/items/{itemId}
 ```
 
-**`firebase-config.json` (wajib `databaseURL`):**
+**Format override `firebase-config.json`:**
 
 ```json
 {

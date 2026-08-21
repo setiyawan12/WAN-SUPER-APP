@@ -22,6 +22,11 @@ export const MODEL_CATALOG = [
 
   // --- Codex (ChatGPT OAuth) ---------------------------------------------
   { id: "codex/gpt-5.1", provider: "codex", family: "gpt", label: "GPT-5.1 (Codex login)", thinking: false },
+
+  // --- Kimi (Moonshot AI) ------------------------------------------------
+  { id: "kimi/kimi-k3", provider: "kimi", family: "kimi", label: "Kimi K3 (1M context)", thinking: true },
+  { id: "kimi/kimi-k2-7", provider: "kimi", family: "kimi", label: "Kimi K2.7 Code", thinking: false },
+  { id: "kimi/kimi-k2-6", provider: "kimi", family: "kimi", label: "Kimi K2.6", thinking: false },
 ];
 
 /**
@@ -60,11 +65,13 @@ function guessProvider(id, loggedInProviders = []) {
     ? "antigravity" // Gemini is Antigravity-only today
     : lower.includes("claude")
       ? "claude"
-      : lower.includes("grok")
-        ? "xai"
-        : lower.includes("gpt") || lower.includes("codex") || /\bo[134]\b/.test(lower)
-          ? "codex"
-          : "other";
+      : lower.includes("kimi")
+        ? "kimi"
+        : lower.includes("grok")
+          ? "xai"
+          : lower.includes("gpt") || lower.includes("codex") || /\bo[134]\b/.test(lower)
+            ? "codex"
+            : "other";
 
   // Only trust the name-based guess if that provider is actually logged in
   // right now -- otherwise (e.g. a claude-named id naively guessed as

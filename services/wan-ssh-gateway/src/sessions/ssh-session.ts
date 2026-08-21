@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
 import type { Socket } from "node:net";
 import { posix as posixPath } from "node:path";
+import type { Duplex } from "node:stream";
 import { Client, type ClientChannel, type ConnectConfig, type Prompt, type SFTPWrapper } from "ssh2";
+import type { AgentBridgeConnector } from "../agent/hub.js";
 import type { GatewayConfig } from "../config.js";
 import { GatewayError, normalizeError, type ErrorCode } from "../errors.js";
 import type { Logger } from "../observability/logger.js";
@@ -95,6 +97,7 @@ type SessionOptions = {
   input: SessionOpenMessage;
   metrics?: GatewayMetrics;
   knownHosts?: KnownHostStore;
+  agentBridge?: AgentBridgeConnector;
   logger: Logger;
   onClose(session: SshSession): void;
 };
@@ -149,6 +152,7 @@ export class SshSession implements ManagedSession {
   private readonly logger: Logger;
   private readonly metrics?: GatewayMetrics;
   private readonly knownHosts?: KnownHostStore;
+  private readonly agentBridge?: AgentBridgeConnector;
   private readonly onClose: (session: SshSession) => void;
   private readonly startedAt = Date.now();
   private connectStartedAt = 0;
@@ -159,11 +163,12 @@ export class SshSession implements ManagedSession {
   private readonly environment: Record<string, string>;
   private readonly startupCommand?: string;
   private readonly keepAliveIntervalMs: number;
+  private readonly egressMode?: "client-agent";
   private client?: Client;
-  private socket?: Socket | ClientChannel;
+  private socket?: Socket | ClientChannel | Duplex;
   private stream?: ClientChannel;
   private readonly auxiliaryClients: Client[] = [];
-  private readonly routeSockets: Array<Socket | ClientChannel> = [];
+  private readonly routeSockets: Array<Socket | ClientChannel | Duplex> = [];
   private readonly remoteTunnels = new Map<string, RemoteTunnelRecord>();
   private remoteTunnelHandler?: (...args: any[]) => void;
   private privateKey?: Buffer;
@@ -190,6 +195,7 @@ export class SshSession implements ManagedSession {
     this.logger = options.logger;
     this.metrics = options.metrics;
     this.knownHosts = options.knownHosts;
+    this.agentBridge = options.agentBridge;
     this.onClose = options.onClose;
     this.connectionId = options.context.id;
     this.principalId = options.context.principal.id;
@@ -199,6 +205,7 @@ export class SshSession implements ManagedSession {
     this.environment = { ...(options.input.environment ?? {}) };
     this.startupCommand = options.input.startupCommand;
     this.keepAliveIntervalMs = (options.input.keepAliveInterval ?? 30) * 1_000;
+    this.egressMode = options.input.egress?.mode;
     this.route = (options.input.route?.jumps ?? []).map((hop) => ({
       target: { ...hop.target },
       expectedFingerprint: hop.expectedHostKeyFingerprint,
@@ -275,16 +282,21 @@ export class SshSession implements ManagedSession {
   }
 
   private async connectClient(target: SessionOpenMessage["target"], credential: SessionCredential, expectedFingerprint: string | undefined, previousClient?: Client) {
-    const resolved = await resolveTarget(this.config, target.host, target.port);
+    const throughAgent = !previousClient && this.egressMode === "client-agent";
+    const resolved = throughAgent
+      ? { originalHost: target.host, address: target.host, family: 4 as const, port: target.port }
+      : await resolveTarget(this.config, target.host, target.port);
     if (this.closed) throw new GatewayError("SSH_CONNECTION_FAILED", "SSH session was closed");
     const socket = previousClient
       ? await new Promise<ClientChannel>((resolve, reject) => previousClient.forwardOut("127.0.0.1", 0, resolved.address, resolved.port, (error, stream) => error ? reject(error) : resolve(stream)))
-      : await connectResolvedTarget(resolved, this.config.connectTimeoutMs);
+      : throughAgent
+        ? await this.requireAgentBridge().open(this.principalId, target.host, target.port)
+        : await connectResolvedTarget(resolved, this.config.connectTimeoutMs);
     this.routeSockets.push(socket);
     const authoritative = this.knownHosts ? await this.knownHosts.get(this.knownHostIdentity(target)) : undefined;
     const client = new Client();
     this.bindClientEvents(client);
-    const endpoint = sshConnectEndpoint(resolved);
+    const endpoint = throughAgent ? { host: target.host, port: target.port } : sshConnectEndpoint(resolved);
     const config: ConnectConfig = {
       host: endpoint.host,
       port: endpoint.port,
@@ -314,6 +326,11 @@ export class SshSession implements ManagedSession {
       credential.passphrase = undefined;
       credential.password = undefined;
     }
+  }
+
+  private requireAgentBridge() {
+    if (!this.agentBridge) throw new GatewayError("AGENT_UNAVAILABLE", "Local-agent bridge is disabled", true);
+    return this.agentBridge;
   }
 
   private bindClientEvents(client: Client) {

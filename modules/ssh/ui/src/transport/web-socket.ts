@@ -189,8 +189,8 @@ export class WebSocketRemoteTerminalTransport implements RemoteTerminalTransport
     return response.tunnels;
   }
 
-  async diagnostics(target: { host: string; port: number }) {
-    const response = await this.request({ type: "diagnostics.run", target }, "diagnostics.result");
+  async diagnostics(target: { host: string; port: number }, egress?: { mode: "client-agent" }) {
+    const response = await this.request({ type: "diagnostics.run", target, ...(egress ? { egress } : {}) }, "diagnostics.result");
     if (response.type !== "diagnostics.result") throw new GatewayClientError("INTERNAL", "Unexpected diagnostics response");
     return response;
   }

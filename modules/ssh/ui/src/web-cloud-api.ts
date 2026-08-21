@@ -347,7 +347,10 @@ export class WebCloudApi {
       const jumps = resolveJumpChain(host, (id) => this.item(id));
       const probe = jumps[0] ?? host;
       const effectiveProbe = resolveEffective(probe, (id) => this.item(id));
-      const result = await this.transport.diagnostics({ host: probe.address, port: effectiveProbe.port ?? 22 });
+      const result = await this.transport.diagnostics(
+        { host: probe.address, port: effectiveProbe.port ?? 22 },
+        host.useLocalAgent ? { mode: "client-agent" } : undefined
+      );
       const started = Date.now();
       const tested = await this.testConnection(hostId);
       const phases = [...result.phases, { name: "ssh", ok: tested.ok, durationMs: Date.now() - started, detail: tested.ok ? `Authentication and shell ready (${tested.latencyMs} ms)` : tested.error ?? "SSH failed" }];
@@ -452,6 +455,7 @@ export class WebCloudApi {
       keyId: input.keyId !== undefined ? input.keyId : existing?.keyId ?? null,
       jumpHostId: input.jumpHostId !== undefined ? input.jumpHostId : existing?.jumpHostId ?? null,
       startupSnippetId: input.startupSnippetId !== undefined ? input.startupSnippetId : existing?.startupSnippetId ?? null,
+      useLocalAgent: input.useLocalAgent ?? existing?.useLocalAgent ?? false,
       tags: input.tags ?? existing?.tags ?? [],
       environment: input.environment ?? existing?.environment ?? "none",
       favorite: input.favorite ?? existing?.favorite ?? false,
@@ -482,6 +486,7 @@ export class WebCloudApi {
       keyId: host.keyId ?? null,
       jumpHostId: host.jumpHostId ?? null,
       startupSnippetId: host.startupSnippetId ?? null,
+      useLocalAgent: Boolean(host.useLocalAgent),
       tags: host.tags ?? [],
       environment: host.environment ?? "none",
       favorite: Boolean(host.favorite),
@@ -519,6 +524,7 @@ export class WebCloudApi {
       ...(route.length ? { route: { jumps: route } } : {}),
       ...(Object.keys(effective.environment).length ? { environment: effective.environment } : {}),
       ...(startupSnippet?.command ? { startupCommand: startupSnippet.command } : {}),
+      ...(host.useLocalAgent ? { egress: { mode: "client-agent" as const } } : {}),
       keepAliveInterval: host.keepAliveInterval ?? 30
     };
     const opened = await this.transport.open(input);

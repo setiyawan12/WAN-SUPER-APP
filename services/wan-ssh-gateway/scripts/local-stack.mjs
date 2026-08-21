@@ -9,6 +9,7 @@ import { createFixtureKey } from "./create-fixture-key.mjs";
 const serviceDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const composeFile = path.join(serviceDirectory, "docker-compose.local.yml");
 const firebaseOverlayFile = path.join(serviceDirectory, "docker-compose.firebase.yml");
+const tailscaleOverlayFile = path.join(serviceDirectory, "docker-compose.tailscale.yml");
 const webEnvironmentFile = path.resolve(serviceDirectory, "../../modules/ssh/ui/.env.local");
 const environmentFile = path.join(serviceDirectory, ".env.local");
 const exampleEnvironmentFile = path.join(serviceDirectory, ".env.local.example");
@@ -16,13 +17,14 @@ const runtimeDirectory = path.join(serviceDirectory, ".runtime");
 const composeEnvironmentFile = path.join(runtimeDirectory, "compose.env");
 const fixturePathFile = path.join(runtimeDirectory, "fixture-dir");
 const overlayMarkerFile = path.join(runtimeDirectory, "firebase-overlay");
+const tailscaleMarkerFile = path.join(runtimeDirectory, "tailscale-overlay");
 const command = process.argv[2] ?? "up";
 const extraArguments = process.argv.slice(3);
 
 await main();
 
 async function main() {
-  if (!["up", "ps", "logs", "down", "config"].includes(command)) {
+  if (!["up", "ps", "logs", "down", "config", "exec"].includes(command)) {
     throw new Error(`Unsupported ssh-web stack command: ${command}`);
   }
   if (command === "up") await up();
@@ -56,6 +58,11 @@ async function up() {
   );
   if (firebase.enabled) await writeFile(overlayMarkerFile, "1\n", { mode: 0o600 });
   else await rm(overlayMarkerFile, { force: true });
+  // TS_AUTHKEY sengaja tidak ikut ditulis ke compose.env; Docker Compose
+  // menginterpolasinya dari shell sehingga auth key tidak pernah menyentuh disk.
+  const tailscale = Boolean(process.env.TS_AUTHKEY?.trim());
+  if (tailscale) await writeFile(tailscaleMarkerFile, "1\n", { mode: 0o600 });
+  else await rm(tailscaleMarkerFile, { force: true });
   try {
     await compose(["--profile", "fixture", "up", "--build", "--wait", "--wait-timeout", "120"]);
   } catch (error) {
@@ -65,6 +72,10 @@ async function up() {
   }
   process.stdout.write(`\nWAN SSH Web: ${firebase.enabled ? firebase.origin : "http://127.0.0.1:5179"}\n`);
   if (firebase.enabled) process.stdout.write("Auth mode: firebase (service account di-mount read-only)\n");
+  if (tailscale) {
+    process.stdout.write(`Egress: tailscale sidecar aktif (allowlist ${process.env.WAN_SSH_EGRESS_ALLOW_CIDRS || "100.64.0.0/10"})\n`);
+    process.stdout.write("Verifikasi target: npm run ssh-web:tailscale-check -- <ip> [port]\n");
+  }
   process.stdout.write(`Fixture host: ssh-target\nFixture port: 22\nFixture username: wan\nFixture private key: ${path.join(fixtureDirectory, "id_ed25519")}\n`);
   process.stdout.write(`Fixture password file: ${path.join(fixtureDirectory, "password")}\n`);
 }
@@ -134,7 +145,10 @@ async function firebaseOverlaySettings() {
 }
 
 async function compose(arguments_, allowFailure = false) {
-  const overlay = (await exists(overlayMarkerFile)) ? ["-f", firebaseOverlayFile] : [];
+  const overlay = [
+    ...(await exists(overlayMarkerFile)) ? ["-f", firebaseOverlayFile] : [],
+    ...(await exists(tailscaleMarkerFile)) ? ["-f", tailscaleOverlayFile] : []
+  ];
   const args = ["compose", "--env-file", composeEnvironmentFile, "-f", composeFile, ...overlay, ...arguments_];
   const code = await run("docker", args, { cwd: serviceDirectory });
   if (code !== 0 && !allowFailure) throw new Error(`docker compose exited with code ${code}`);

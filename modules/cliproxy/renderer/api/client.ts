@@ -550,6 +550,15 @@ export const api = {
       body: JSON.stringify({ item }),
     }),
 
+  // Kimi (Moonshot AI) keys follow the same pattern as xAI (OpenAI-compat entry
+  // stored separately from the main openai-compatibility list).
+  getKimiKey: () => request<{ item: OpenAiCompatEntry | null }>("/api-providers/kimi-key"),
+  setKimiKey: (item: OpenAiCompatEntry | null) =>
+    request<{ item: OpenAiCompatEntry | null }>("/api-providers/kimi-key", {
+      method: "PUT",
+      body: JSON.stringify({ item }),
+    }),
+
   getRoutingStrategy: () => request<RoutingStrategy>("/routing-strategy"),
   setRoutingStrategy: (strategy: RoutingStrategy["strategy"]) =>
     request<RoutingStrategy>("/routing-strategy", {

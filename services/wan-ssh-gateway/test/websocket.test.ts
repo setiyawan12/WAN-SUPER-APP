@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { connect, createServer, type AddressInfo } from "node:net";
 import test from "node:test";
 import WebSocket from "ws";
 import type { Authenticator } from "../src/auth/index.js";
@@ -278,4 +279,57 @@ test("Firebase refresh cannot change the verified UID", async (context) => {
   assert.equal(error.code, "AUTH_INVALID");
   assert.equal(await closed(socket), CLOSE_CODES.authInvalid);
   assert.equal(sessions.activeCount, 0);
+});
+// Regresi yang dijaga: handler upgrade klien pernah menulis 503 ke socket
+// `/v1/agent` yang sudah di-upgrade hub, sehingga agent tidak pernah register.
+test("the local-agent upgrade survives alongside the client WebSocket handler", { timeout: 20_000 }, async () => {
+  const { runtime, httpUrl } = await start();
+  const echo = createServer((socket) => socket.pipe(socket));
+  await new Promise<void>((resolve) => echo.listen(0, "127.0.0.1", resolve));
+  const echoPort = (echo.address() as AddressInfo).port;
+  const agent = new WebSocket(`${httpUrl.replace("http", "ws")}/v1/agent`);
+  try {
+    await opened(agent);
+    agent.send(JSON.stringify({
+      type: "agent.register",
+      requestId: randomUUID(),
+      protocolVersion: 1,
+      mode: "dev-anonymous"
+    }));
+    const registered = await nextMessage(agent);
+    assert.equal(registered.type, "agent.registered");
+
+    const channels = new Map<string, ReturnType<typeof connect>>();
+    agent.on("message", (raw, isBinary) => {
+      if (isBinary) return;
+      const message = JSON.parse(raw.toString()) as Record<string, any>;
+      if (message.type !== "bridge.open") return;
+      const target = connect({ host: message.host, port: message.port });
+      target.once("connect", () => {
+        channels.set(message.channelId, target);
+        agent.send(JSON.stringify({ type: "bridge.opened", requestId: message.requestId, channelId: message.channelId }));
+      });
+      target.once("error", () => agent.send(JSON.stringify({ type: "bridge.failed", requestId: message.requestId, channelId: message.channelId, message: "unreachable" })));
+    });
+
+    const client = openSocket(`${httpUrl.replace("http", "ws")}/v1/ws`);
+    await opened(client);
+    client.send(JSON.stringify({ type: "auth", requestId: randomUUID(), protocolVersion: 1, mode: "dev-anonymous" }));
+    assert.equal((await nextMessage(client)).type, "auth.ok");
+    client.send(JSON.stringify({
+      type: "diagnostics.run",
+      requestId: randomUUID(),
+      target: { host: "127.0.0.1", port: echoPort },
+      egress: { mode: "client-agent" }
+    }));
+    const diagnostics = await nextMessage(client) as { type: string; phases: Array<{ name: string; ok: boolean }> };
+    assert.equal(diagnostics.type, "diagnostics.result");
+    assert.deepEqual(diagnostics.phases.map((phase) => [phase.name, phase.ok]), [["resolve", true], ["tcp", true]]);
+    for (const channel of channels.values()) channel.destroy();
+    client.close();
+  } finally {
+    agent.close();
+    echo.close();
+    await runtime.shutdown("test");
+  }
 });

@@ -191,6 +191,38 @@ export async function resumeWebSshGoogleRedirect(): Promise<User | null> {
   return credential?.user ?? null;
 }
 
+function base64Url(value: string): string {
+  const bytes = new TextEncoder().encode(value);
+  let binary = "";
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/**
+ * Kode pairing untuk `wan-ssh-agent`. Agent adalah proses Node tanpa sesi
+ * browser, jadi ia butuh refresh token untuk mencetak ID token sendiri —
+ * prefix dan bentuk payload harus sama dengan `decodePairing` di gateway.
+ */
+export async function webSshAgentPairingCode(): Promise<string> {
+  const { app, auth } = await webFirebaseServices();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Sign in before pairing a local agent.");
+  const apiKey = app.options.apiKey;
+  if (!apiKey) throw new Error("Firebase API key is unavailable for pairing.");
+  await user.getIdToken();
+  const emulator = import.meta.env.VITE_FIREBASE_AUTH_EMULATOR_HOST as string | undefined;
+  const payload = {
+    v: 1,
+    url: window.location.origin,
+    mode: "firebase",
+    apiKey,
+    refreshToken: user.refreshToken,
+    ...(emulator ? { tokenUrl: `${emulator.replace(/\/+$/, "")}/securetoken.googleapis.com/v1/token` } : {}),
+    ...(user.email ? { account: user.email } : {})
+  };
+  return `WANSSH1.${base64Url(JSON.stringify(payload))}`;
+}
+
 export async function resetWebSshPassword(email: string): Promise<void> {
   const { auth } = await webFirebaseServices();
   await sendPasswordResetEmail(auth, email);

@@ -123,6 +123,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete, cloudO
   const [password, setPassword] = useState("");
   const [keyId, setKeyId] = useState(initial?.keyId ?? "");
   const [jumpHostId, setJumpHostId] = useState(initial?.jumpHostId ?? "");
+  const [useLocalAgent, setUseLocalAgent] = useState(initial?.useLocalAgent ?? false);
   const [startupSnippetId, setStartupSnippetId] = useState(initial?.startupSnippetId ?? "");
   const [agentForwarding, setAgentForwarding] = useState(initial?.agentForwarding ?? false);
   const [autoReconnect, setAutoReconnect] = useState(initial?.autoReconnect ?? true);
@@ -153,6 +154,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete, cloudO
     keyId: keyId || null,
     jumpHostId: jumpHostId || null,
     startupSnippetId: startupSnippetId || null,
+    useLocalAgent,
     tags: tags.split(",").map((value) => value.trim()).filter(Boolean),
     environment,
     favorite,
@@ -242,6 +244,7 @@ export function HostDialog({ initial, catalog, onClose, onSave, onDelete, cloudO
           <label className="toggle-row"><input type="checkbox" checked={autoReconnect} onChange={(event) => setAutoReconnect(event.target.checked)} /><span><strong>Automatic reconnect</strong><small>Retry with bounded exponential backoff.</small></span></label>
           {autoReconnect && <Field label="Reconnect attempts"><input type="number" min="0" max="10" value={reconnectLimit} onChange={(event) => setReconnectLimit(event.target.value)} /></Field>}
           {supportsAgentForwarding && <label className="toggle-row"><input type="checkbox" checked={agentForwarding} onChange={(event) => setAgentForwarding(event.target.checked)} /><span><strong>Agent forwarding</strong><small>Enable only for servers you trust.</small></span></label>}
+          {cloudOnly && <label className="toggle-row"><input type="checkbox" checked={useLocalAgent} onChange={(event) => setUseLocalAgent(event.target.checked)} /><span><strong>Route through the local agent</strong><small>The gateway asks your paired machine to open the connection, so VPN-only targets stay reachable. Pair it from the account menu.</small></span></label>}
         </div>}
         {tab === "advanced" && <div className="form-grid single-column">
           <Field label="Startup snippet"><select value={startupSnippetId} onChange={(event) => setStartupSnippetId(event.target.value)}><option value="">None</option>{catalog.snippets.map((snippet) => <option key={snippet.id} value={snippet.id}>{snippet.label}</option>)}</select></Field>
@@ -379,6 +382,55 @@ export function HostKeyDialog({ prompt, onAnswer }: { prompt: any; onAnswer: (ac
     {changed && prompt.previous && <div className="fingerprint-block"><span>Previous</span><code>{prompt.previous}</code></div>}
     <div className="fingerprint-block current"><span>Presented now</span><code>{prompt.fingerprint}</code></div>
     <label className="verification-check"><input type="checkbox" checked={verified} onChange={(event) => setVerified(event.target.checked)} /><span>I verified this fingerprint using a trusted source.</span></label>
+  </Modal>;
+}
+
+/**
+ * Pairing code memuat refresh token Firebase, jadi ia baru dibuat setelah
+ * ditekan eksplisit, tidak pernah ikut tersimpan di state workspace, dan
+ * disertai peringatan bahwa nilainya setara sesi login penuh.
+ */
+export function LocalAgentDialog({ onClose, onCode }: { onClose: () => void; onCode: () => Promise<string> }) {
+  const [code, setCode] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const reveal = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setCode(await onCode());
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const copy = async () => {
+    await navigator.clipboard.writeText(`node wan-ssh-agent.cjs pair ${code}`);
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 2_000);
+  };
+
+  return <Modal title="Local agent" width={620} onClose={onClose} footer={<><button className="button" onClick={onClose}>Close</button><span className="modal-spacer" />{code
+    ? <button className="button primary" onClick={() => void copy()}>{copied ? <><Check size={15} /> Copied</> : <><Copy size={15} /> Copy pair command</>}</button>
+    : <button className="button primary" disabled={busy} onClick={() => void reveal()}>{busy ? "Preparing..." : "Show pairing code"}</button>}</>}>
+    <div className="security-note local-agent-note"><Laptop size={17} /><span>The gateway can ask a machine you own to open the SSH connection instead of dialling out itself. Run the agent on a machine that is already on the VPN and its targets become reachable — the server never needs VPN access.</span></div>
+    <ol className="agent-steps">
+      <li>Build the agent once: <code>npm run ssh-agent:bundle</code>, then copy <code>dist/wan-ssh-agent.cjs</code> to the machine that is on the VPN. It needs Node 22+, nothing else.</li>
+      <li>Pair it with the command below (the code is valid for this account only).</li>
+      <li>Start it: <code>node wan-ssh-agent.cjs run</code></li>
+      <li>Tick <strong>Route through the local agent</strong> on the hosts that need it.</li>
+    </ol>
+    {code
+      ? <>
+        <div className="fingerprint-block current pair"><span>Pair command</span><code>node wan-ssh-agent.cjs pair {code}</code></div>
+        <div className="host-key-warning changed"><ShieldAlert size={25} /><div><strong>Treat this code like a password</strong><p>It carries a Firebase refresh token, so anyone holding it can act as your account. Paste it only into a terminal on your own machine, and run <code>node wan-ssh-agent.cjs unpair</code> on machines you no longer use.</p></div></div>
+        <p className="agent-note">Limit what the agent may reach with <code>--allow</code>, for example <code>node wan-ssh-agent.cjs pair &lt;code&gt; --allow 10.8.0.0/24</code>.</p>
+      </>
+      : <p className="agent-note">{error || "The pairing code is generated on demand and is never stored in this browser."}</p>}
   </Modal>;
 }
 
